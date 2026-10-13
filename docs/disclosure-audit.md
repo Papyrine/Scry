@@ -851,7 +851,7 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 
 ## Open questions
 
-1. **What reading through runs costs.** A unit's place in an answer is added up from where its batch, its list and its run start, so a question that goes from an answer to its units reads three tables where it read one. Going from a row to who received it is still a seek. Neither has been measured on a record of any size. The in-memory store shares nothing: it keeps every answer's units as they arrived.
+1. **What reading through runs costs on a large record.** Measured over five hundred answers of a thousand rows and over ten thousand of one, [no question is slower for it](performance.md#asking-the-record). Nothing has been measured on a record of millions of answers, or on a server with other work to do. The in-memory store shares nothing: it keeps every answer's units as they arrived.
 2. **"Which version".** A version is the content address of the unit. A row-version column named by the host, as a cached policy takes one, would compare versions across different projections.
 3. **Retention.** Append-only ledger tables cannot be trimmed in place.
 4. **Caller detail.** One string today. An agent acting for a user over MCP may warrant both identities.

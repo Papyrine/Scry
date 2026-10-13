@@ -47,6 +47,8 @@ These arms carry no transport and no execution, so their absolute figures are th
 
 `DisclosureBenchmarks` measures what the [disclosure audit](../docs/disclosure-audit.md) adds to an answer. All three arms are the HTTP endpoint answering the same wide list, so they share the transport constant and can be read against each other directly, which the pair at the top cannot.
 
+`DisclosureReadBenchmarks` asks the SQL Server store the questions the record exists for, over three records it fills first. It is the one benchmark here that needs a database: LocalDB's default instance, in databases named `ScryDisclosureBench_*` that it makes once and finds again. What each record weighs, table by table, is written to `scry_bench_disclosure_*.txt` in the temporary directory.
+
 `Off` is a host that never turned the audit on, and the baseline. `Recorded` has it on over a sink that discards what it is handed, so the arm is the capture alone: each row hashed and copied into the batch, its key read and written, the batch built. `Journaled` puts the journal in front of that sink, which adds a write and a flush to disk before the answer is sent.
 
 The setup refuses to run unless all three answered with the same bytes. The hosts write no logs. A host's console lines for a request come to a few kilobytes, where recording adds under 8 KB to a one-row answer, so left on they would be a good part of the smallest difference here.

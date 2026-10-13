@@ -90,6 +90,8 @@ sealed class DisclosureSql
     /// <summary>
     /// The same, for the rows units were read from, each with the content of its unit — so that
     /// going from a row to what was sent of it is a seek within a run and not a search of an answer.
+    /// <c>Leading</c> is 1 for the first of a unit's rows that is that row, and 0 for a later one: a
+    /// row joined to itself is in a unit twice, and was sent once.
     /// </summary>
     public string Entities { get; }
 
@@ -324,10 +326,14 @@ sealed class DisclosureSql
              """);
         View(script, s, "DisclosureEntities",
             $"""
-             SELECT n.[EventId], n.[Ordinal], n.[Slot], n.[Sequence], n.[RowHash], n.[Source], n.[RowKey], n.[Via], u.[Content] FROM {s}.[DisclosureEntity] n
+             SELECT n.[EventId], n.[Ordinal], n.[Slot], n.[Sequence], n.[RowHash], n.[Source], n.[RowKey], n.[Via], u.[Content],
+             CASE WHEN EXISTS (SELECT 1 FROM {s}.[DisclosureEntity] m WHERE m.[EventId] = n.[EventId] AND m.[Ordinal] = n.[Ordinal] AND m.[Slot] < n.[Slot] AND m.[RowHash] = n.[RowHash] AND m.[Source] = n.[Source] AND m.[RowKey] = n.[RowKey]) THEN 0 ELSE 1 END AS [Leading]
+             FROM {s}.[DisclosureEntity] n
              JOIN {s}.[DisclosureUnit] u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
              UNION ALL
-             SELECT a.[EventId], a.[Start] + l.[Start] + r.[Offset] AS [Ordinal], r.[Slot], a.[Sequence], r.[RowHash], r.[Source], r.[RowKey], r.[Via], u.[Content] FROM {s}.[DisclosureAnswer] a
+             SELECT a.[EventId], a.[Start] + l.[Start] + r.[Offset] AS [Ordinal], r.[Slot], a.[Sequence], r.[RowHash], r.[Source], r.[RowKey], r.[Via], u.[Content],
+             CASE WHEN EXISTS (SELECT 1 FROM {s}.[DisclosureRunEntity] m WHERE m.[Run] = r.[Run] AND m.[Offset] = r.[Offset] AND m.[Slot] < r.[Slot] AND m.[RowHash] = r.[RowHash] AND m.[Source] = r.[Source] AND m.[RowKey] = r.[RowKey]) THEN 0 ELSE 1 END AS [Leading]
+             FROM {s}.[DisclosureAnswer] a
              JOIN {s}.[DisclosureManifestRun] l ON l.[Manifest] = a.[Manifest]
              JOIN {s}.[DisclosureRunEntity] r ON r.[Run] = l.[Run]
              JOIN {s}.[DisclosureRunUnit] u ON u.[Run] = r.[Run] AND u.[Offset] = r.[Offset]

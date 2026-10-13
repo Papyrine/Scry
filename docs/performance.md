@@ -15,7 +15,7 @@ dotnet run -c Release --project Benchmarks -- --filter '*'
 
 Release is mandatory — BenchmarkDotNet refuses a Debug build. The project is deliberately in no solution; see the note in `CLAUDE.md` for why.
 
-The sources are [`Benchmarks/ResponseBenchmarks.cs`](../Benchmarks/ResponseBenchmarks.cs), [`Benchmarks/PageBenchmarks.cs`](../Benchmarks/PageBenchmarks.cs), [`Benchmarks/BatchBenchmarks.cs`](../Benchmarks/BatchBenchmarks.cs), [`Benchmarks/TerminalBenchmarks.cs`](../Benchmarks/TerminalBenchmarks.cs), [`Benchmarks/PreparationBenchmarks.cs`](../Benchmarks/PreparationBenchmarks.cs) and [`Benchmarks/DisclosureBenchmarks.cs`](../Benchmarks/DisclosureBenchmarks.cs) for the server, and [`Benchmarks/ClientReadBenchmarks.cs`](../Benchmarks/ClientReadBenchmarks.cs) for the client. Rows come from an in-memory `[QueryablePoco]` source, so the measurement is shaping and serialization with no database and no I/O in it. The one exception is the journaled arm of the disclosure benchmark, which is there to price a flush to disk.
+The sources are [`Benchmarks/ResponseBenchmarks.cs`](../Benchmarks/ResponseBenchmarks.cs), [`Benchmarks/PageBenchmarks.cs`](../Benchmarks/PageBenchmarks.cs), [`Benchmarks/BatchBenchmarks.cs`](../Benchmarks/BatchBenchmarks.cs), [`Benchmarks/TerminalBenchmarks.cs`](../Benchmarks/TerminalBenchmarks.cs), [`Benchmarks/PreparationBenchmarks.cs`](../Benchmarks/PreparationBenchmarks.cs) and [`Benchmarks/DisclosureBenchmarks.cs`](../Benchmarks/DisclosureBenchmarks.cs) for the server, and [`Benchmarks/ClientReadBenchmarks.cs`](../Benchmarks/ClientReadBenchmarks.cs) for the client. Rows come from an in-memory `[QueryablePoco]` source, so the measurement is shaping and serialization with no database and no I/O in it. The exceptions are the journaled arm of the disclosure benchmark, which is there to price a flush to disk, and [`Benchmarks/DisclosureReadBenchmarks.cs`](../Benchmarks/DisclosureReadBenchmarks.cs), which asks its questions of a database.
 
 
 ## Writing a response
@@ -125,6 +125,31 @@ So the capture adds about half a kilobyte and three tenths of a microsecond to a
 **A durable accept is the disk's to price.** The journal adds a write and a flush before the answer is sent, and the flush is most of the third column at a small answer: a third of a millisecond on this machine in this run and two thirds in the one before it, with the rest in proportion to what is written. It is the one figure on this page that says more about the machine than about the code, and the least steady. The SQL outbox pays a committed insert in the same place, which nothing here measures: it is a round trip to a database, and the benchmark has none.
 
 Nor does the table show the database's share of recording. A key slot is a column added to the query, and a navigation a policy guards adds one correlated subquery for its key. The benchmark reads an in-memory source, where a key is a property read.
+
+### Asking the record
+
+What the questions the record exists for cost to ask of the SQL Server store, from `DisclosureReadBenchmarks`. This is the one benchmark with a database in it: LocalDB on the machine the rest ran on, over three records made by hand. `Repeated` is one answer of a thousand rows given five hundred times. `Drifting` is five hundred answers of a thousand rows, each one row different from the one before, which is what a live query leaves behind. `Small` is ten thousand answers of one row each. A question that is answered a page at a time is asked for its first page, two hundred lines.
+
+Each cell is the store as it kept a list whole, then the store as it keeps a list as [runs other lists share](disclosure-audit.md#sql-server):
+
+| Question | Repeated | Drifting | Small |
+| --- | --- | --- | --- |
+| Who received a row | 9.7 ms / 7.1 ms | 18.1 ms / 8.1 ms | 2.3 ms / 1.4 ms |
+| What a caller received | 0.6 ms / 0.5 ms | 0.8 ms / 0.5 ms | 15.4 ms / 13.2 ms |
+| Whether a caller was sent a member | 1.2 ms / 1.1 ms | 1.2 ms / 1.3 ms | 18.1 ms / 18.9 ms |
+| An answer put back together | 8.4 ms / 5.8 ms | 8.7 ms / 8.2 ms | 0.27 ms / 0.16 ms |
+
+**Reading through runs costs nothing that shows here.** A unit's place in an answer is added up from where its batch, its list and its run start, which is two more joins than a list kept whole needed, and no question is slower for it by more than the runs differ between themselves. These are timings of a database on a developer's machine and they move: the same build measured twice, a few minutes apart, gave figures a third apart and in one case two thirds apart. So the table says the two are alike, and does not say which is quicker. The one gain that is the code's is the first row of it. Asking who received a row has to count a row once where a unit was read from it twice, and that check now looks within the run the unit is in, where it used to search every answer the row was in.
+
+**What runs save is space, and only where answers are alike without being the same.**
+
+| Record | Kept as whole lists | Kept as runs | Moved on in |
+| --- | --- | --- | --- |
+| Repeated | 2.3 MB | 2.5 MB | 2.8 s / 1.5 s |
+| Drifting | 179 MB | 22 MB | 10.0 s / 2.8 s |
+| Small | 14 MB | 11 MB | 3.7 s / 3.7 s |
+
+The drifting record is five hundred thousand unit rows kept whole and thirty-two thousand kept as runs: the first answer's thousand, and for each answer after it the run or two its changed row disturbs, some sixty units, with a line for each of the twenty-five runs the list is made of. A repeated answer was already one list either way and gains nothing, and an answer of one row is a run of one unit. The last column is what the mover took to bring the whole record from the outbox into the tables, once each, and is as unsteady as the timings above.
 
 
 ## Reading a response

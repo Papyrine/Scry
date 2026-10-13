@@ -35,7 +35,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             $"""
              n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key
              AND (c.[Units] IS NULL OR n.[Ordinal] < c.[Units])
-             AND NOT EXISTS (SELECT 1 FROM {sql.Entities} m WHERE m.[EventId] = n.[EventId] AND m.[Ordinal] = n.[Ordinal] AND m.[Slot] < n.[Slot] AND m.[RowHash] = n.[RowHash] AND m.[Source] = n.[Source] AND m.[RowKey] = n.[RowKey])
+             AND n.[Leading] = 1
              """;
         var query =
             $"""
