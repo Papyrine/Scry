@@ -293,7 +293,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             return false;
         }
 
-        var recorded = await Recorded(connection, batch.EventId, batch.Sequence, cancel);
+        var recorded = await Recorded(connection, segment, batch.EventId, batch.Sequence, cancel);
         return DisclosureChain.Digest(recorded).AsSpan().SequenceEqual(digest);
     }
 
@@ -320,21 +320,24 @@ public sealed partial class ScrySqlServerDisclosureStore
     }
 
     // One batch as the record now holds it: the rows that batch added, read back into the shape they
-    // arrived in. What the chain's digest of it is made from again.
-    async Task<ScryDisclosureBatch> Recorded(SqlConnection connection, Guid id, int sequence, Cancel cancel)
+    // arrived in. What the chain's digest of it is made from again. Asked of the segment the batch
+    // went to, which its link says.
+    async Task<ScryDisclosureBatch> Recorded(SqlConnection connection, int segment, Guid id, int sequence, Cancel cancel)
     {
+        var read = sql.Reading(segment);
         await using var command = Command(
             connection,
             $"""
-             SELECT {sql.Columns} FROM {sql.Event} e {sql.Ended} WHERE e.[EventId] = @event AND e.[Sequence] = @sequence;
-             SELECT u.[Ordinal], u.[Content] FROM {sql.Units} u WHERE u.[EventId] = @event AND u.[Sequence] = @sequence ORDER BY u.[Ordinal];
-             SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {sql.Entities} n WHERE n.[EventId] = @event AND n.[Sequence] = @sequence ORDER BY n.[Ordinal], n.[Slot];
-             SELECT x.[Outcome], x.[Units], x.[At], x.[Response] FROM {sql.Close} x WHERE x.[EventId] = @event AND x.[Sequence] = @sequence;
-             SELECT r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node] FROM {sql.Review} r WHERE r.[ReviewId] = @event AND @sequence = 0;
-             SELECT v.[EventId] FROM {sql.ReviewEvent} v WHERE v.[ReviewId] = @event AND @sequence = 0;
+             SELECT {sql.Columns} FROM {read.Event} e {read.Ended} WHERE e.[EventId] = @event AND e.[Sequence] = @sequence AND e.[Segment] = @segment;
+             SELECT u.[Ordinal], u.[Content] FROM {read.Units} u WHERE u.[EventId] = @event AND u.[Sequence] = @sequence AND u.[Segment] = @segment ORDER BY u.[Ordinal];
+             SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {read.Entities} n WHERE n.[EventId] = @event AND n.[Sequence] = @sequence AND n.[Segment] = @segment ORDER BY n.[Ordinal], n.[Slot];
+             SELECT x.[Outcome], x.[Units], x.[At], x.[Response] FROM {read.Close} x WHERE x.[EventId] = @event AND x.[Sequence] = @sequence AND x.[Segment] = @segment;
+             SELECT r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node] FROM {read.Review} r WHERE r.[ReviewId] = @event AND @sequence = 0 AND r.[Segment] = @segment;
+             SELECT v.[EventId] FROM {read.ReviewEvent} v WHERE v.[ReviewId] = @event AND @sequence = 0 AND v.[Segment] = @segment;
              """);
         command.Parameters.AddWithValue("@event", id);
         command.Parameters.AddWithValue("@sequence", sequence);
+        command.Parameters.AddWithValue("@segment", segment);
         await using var reader = await command.ExecuteReaderAsync(cancel);
         ScryDisclosureEvent? begin = null;
         if (await reader.ReadAsync(cancel))

@@ -51,8 +51,10 @@ sealed class DisclosureSql
         Create = Creating(ledger);
 
         // How an event ended is the close written last: an answer accepted whole and then not sent
-        // is closed a second time.
-        Ended = $"OUTER APPLY (SELECT TOP (1) x.[Outcome], x.[Units], x.[At] AS [ClosedAt], x.[Response] FROM {Close} x WHERE x.[EventId] = e.[EventId] ORDER BY x.[Sequence] DESC) c";
+        // is closed a second time. Looked for in the segment the event is in, which is where every
+        // part of an answer is put: said of the view, that is what keeps the other segments from
+        // being looked in at all.
+        Ended = Ending(Close);
         Columns = "e.[EventId], e.[At], e.[Caller], e.[Kind], e.[Subscribed], e.[Delivery], e.[Source], e.[Request], e.[Shape], e.[Sensitive], e.[Stamp], e.[Correlation], e.[Node], e.[ContentType], c.[Outcome], c.[Units], c.[ClosedAt], c.[Response]";
     }
 
@@ -108,6 +110,34 @@ sealed class DisclosureSql
 
     /// <summary>The columns of an event and how it ended, in the order they are read back in.</summary>
     public string Columns { get; }
+
+    /// <summary>
+    /// One segment as the record is read: each table of it with the <c>[Segment]</c> the views give
+    /// a row, so that what is asked of the views can be asked of one segment in the same words. Asked
+    /// of the views with the segment as a condition, every segment is still looked in: the number
+    /// has to be in the statement for the others to be left out of it.
+    /// </summary>
+    public DisclosureReading Reading(int number)
+    {
+        var tables = Segment(number);
+        string Marked(string table) =>
+            $"(SELECT {number.ToString(CultureInfo.InvariantCulture)} AS [Segment], t.* FROM {table} t)";
+
+        var close = Marked(tables.Close);
+        return new(
+            Marked(tables.Event),
+            Marked(tables.Units),
+            Marked(tables.Entities),
+            Marked(tables.Field),
+            Marked(tables.Content),
+            close,
+            Marked(tables.Review),
+            Marked(tables.ReviewEvent),
+            Ending(close));
+    }
+
+    static string Ending(string close) =>
+        $"OUTER APPLY (SELECT TOP (1) x.[Outcome], x.[Units], x.[At] AS [ClosedAt], x.[Response] FROM {close} x WHERE x.[EventId] = e.[EventId] AND x.[Segment] = e.[Segment] ORDER BY x.[Sequence] DESC) c";
 
     /// <summary>The tables of one segment.</summary>
     public DisclosureTables Segment(int number) =>
@@ -282,3 +312,15 @@ sealed class DisclosureSql
         return SHA256.HashData(bytes);
     }
 }
+
+/// <summary>One segment's tables as they are read, and how an event in it ended.</summary>
+sealed record DisclosureReading(
+    string Event,
+    string Units,
+    string Entities,
+    string Field,
+    string Content,
+    string Close,
+    string Review,
+    string ReviewEvent,
+    string Ended);

@@ -19,16 +19,6 @@ public sealed partial class ScrySqlServerDisclosureStore
         await EnsureAsync(cancel);
         var text = ScryDisclosureEntity.KeyOf(key);
 
-        // A release of the row, and — for every reviewer since shown an event that released it — the
-        // showing. Both cut at how far the event really got: a unit accepted and never handed on is
-        // not a disclosure, to its caller or to anybody shown the event afterwards.
-        var releases =
-            $"""
-             FROM {sql.Entities} n
-             JOIN {sql.Event} e ON e.[EventId] = n.[EventId]
-             {sql.Ended}
-             """;
-
         // Found by the hash and then held to the text it is a hash of. And once for each unit, however
         // many of the unit's rows this one was: a row joined to itself is still sent once.
         var released =
@@ -37,32 +27,46 @@ public sealed partial class ScrySqlServerDisclosureStore
              AND (c.[Units] IS NULL OR n.[Ordinal] < c.[Units])
              AND n.[Leading] = 1
              """;
-        var query =
-            $"""
-             SELECT TOP (@page) q.* FROM
-             (
-                 SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
-                        CAST(NULL AS uniqueidentifier) AS [ReviewId], CAST(NULL AS datetimeoffset(7)) AS [ReviewedAt], CAST(NULL AS nvarchar(max)) AS [Reviewer],
-                        CAST(NULL AS tinyint) AS [Question], CAST(NULL AS binary(32)) AS [Parameters], CAST(NULL AS int) AS [Results], CAST(NULL AS nvarchar(max)) AS [ReviewNode],
-                        e.[At] AS [When], e.[EventId] AS [Mark]
-                 {releases}
-                 WHERE {released}
-                 UNION ALL
-                 SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
-                        r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node],
-                        r.[At], r.[ReviewId]
-                 {releases}
-                 JOIN {sql.ReviewEvent} v ON v.[EventId] = e.[EventId]
-                 JOIN {sql.Review} r ON r.[ReviewId] = v.[ReviewId]
-                 WHERE {released}
-             ) q
-             WHERE (@from IS NULL OR q.[When] >= @from) AND (@to IS NULL OR q.[When] <= @to)
-               AND (@afterAt IS NULL OR q.[When] < @afterAt OR (q.[When] = @afterAt AND (q.[Mark] < @afterId OR (q.[Mark] = @afterId AND q.[Ordinal] > @afterOrdinal))))
-             ORDER BY q.[When] DESC, q.[Mark] DESC, q.[Ordinal];
-             """;
 
         while (true)
         {
+            // A release of the row, and — for every reviewer since shown an event that released it —
+            // the showing. Both cut at how far the event really got: a unit accepted and never handed
+            // on is not a disclosure, to its caller or to anybody shown the event afterwards.
+            //
+            // Each looked for only in the segments its time can be in: a release by when the answer
+            // was given, a showing by when the reviewer was shown it. The answer a reviewer was shown
+            // may be in any segment, so that half reads the row from all of them.
+            var until = Earlier(to, after?.At);
+            var releases = await Within("e", from, until, cancel);
+            var showings = await Within("r", from, until, cancel);
+            var query =
+                $"""
+                 SELECT TOP (@page) q.* FROM
+                 (
+                     SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
+                            CAST(NULL AS uniqueidentifier) AS [ReviewId], CAST(NULL AS datetimeoffset(7)) AS [ReviewedAt], CAST(NULL AS nvarchar(max)) AS [Reviewer],
+                            CAST(NULL AS tinyint) AS [Question], CAST(NULL AS binary(32)) AS [Parameters], CAST(NULL AS int) AS [Results], CAST(NULL AS nvarchar(max)) AS [ReviewNode],
+                            e.[At] AS [When], e.[EventId] AS [Mark]
+                     FROM {sql.Entities} n
+                     JOIN {sql.Event} e ON e.[EventId] = n.[EventId] AND e.[Segment] = n.[Segment]
+                     {sql.Ended}
+                     WHERE {released}{releases}
+                     UNION ALL
+                     SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
+                            r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node],
+                            r.[At], r.[ReviewId]
+                     FROM {sql.Entities} n
+                     JOIN {sql.Event} e ON e.[EventId] = n.[EventId] AND e.[Segment] = n.[Segment]
+                     {sql.Ended}
+                     JOIN {sql.ReviewEvent} v ON v.[EventId] = e.[EventId]
+                     JOIN {sql.Review} r ON r.[ReviewId] = v.[ReviewId] AND r.[Segment] = v.[Segment]
+                     WHERE {released}{showings}
+                 ) q
+                 WHERE (@from IS NULL OR q.[When] >= @from) AND (@to IS NULL OR q.[When] <= @to)
+                   AND (@afterAt IS NULL OR q.[When] < @afterAt OR (q.[When] = @afterAt AND (q.[Mark] < @afterId OR (q.[Mark] = @afterId AND q.[Ordinal] > @afterOrdinal))))
+                 ORDER BY q.[When] DESC, q.[Mark] DESC, q.[Ordinal];
+                 """;
             var read = new List<ScryRowDisclosure>(page);
             await using (var connection = await OpenAsync(cancel))
             await using (var command = Command(connection, query))
@@ -124,6 +128,8 @@ public sealed partial class ScrySqlServerDisclosureStore
         Cancel cancel = default) =>
         Listed(
             caller,
+            from,
+            to,
             "AND e.[At] >= @from AND e.[At] <= @to",
             command =>
             {
@@ -142,15 +148,18 @@ public sealed partial class ScrySqlServerDisclosureStore
         Cancel cancel = default) =>
         Listed(
             caller,
+            null,
+            null,
             // The event's shape says the member was returned, and something of that source left: a
-            // row named by key, or — for a source with no key to name one by — any unit at all.
+            // row named by key, or — for a source with no key to name one by — any unit at all. Each
+            // looked for in the segment the event is in, where its shape and its units are.
             $"""
-             AND EXISTS (SELECT 1 FROM {sql.Field} f WHERE f.[Shape] = e.[Shape] AND f.[FieldHash] = @field AND f.[FieldUse] = @returned AND f.[Source] = @source AND f.[Member] = @member)
+             AND EXISTS (SELECT 1 FROM {sql.Field} f WHERE f.[Shape] = e.[Shape] AND f.[Segment] = e.[Segment] AND f.[FieldHash] = @field AND f.[FieldUse] = @returned AND f.[Source] = @source AND f.[Member] = @member)
              AND (
-                 EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Source] = @source AND n.[Ordinal] < ISNULL(c.[Units], 2147483647))
+                 EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Segment] = e.[Segment] AND n.[Source] = @source AND n.[Ordinal] < ISNULL(c.[Units], 2147483647))
                  OR (
-                     NOT EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Source] = @source)
-                     AND EXISTS (SELECT 1 FROM {sql.Units} u WHERE u.[EventId] = e.[EventId] AND u.[Ordinal] < ISNULL(c.[Units], 2147483647))
+                     NOT EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Segment] = e.[Segment] AND n.[Source] = @source)
+                     AND EXISTS (SELECT 1 FROM {sql.Units} u WHERE u.[EventId] = e.[EventId] AND u.[Segment] = e.[Segment] AND u.[Ordinal] < ISNULL(c.[Units], 2147483647))
                  )
              )
              """,
@@ -167,6 +176,8 @@ public sealed partial class ScrySqlServerDisclosureStore
     // A caller's events, newest first, less the ones withdrawn before anything of them left.
     async IAsyncEnumerable<ScryDisclosureEntry> Listed(
         string? caller,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
         string narrowing,
         Action<SqlCommand> bind,
         ScryDisclosureCursor? after,
@@ -200,7 +211,7 @@ public sealed partial class ScrySqlServerDisclosureStore
                  WHERE {who}
                    AND (c.[Outcome] IS NULL OR c.[Outcome] <> @retracted)
                    {narrowing}
-                   {rest}
+                   {rest}{await Within("e", from, Earlier(to, after?.At), cancel)}
                  ORDER BY e.[At] DESC, e.[EventId] DESC;
                  """;
             var read = new List<ScryDisclosureEntry>(page);
@@ -275,21 +286,36 @@ public sealed partial class ScrySqlServerDisclosureStore
     public async ValueTask<ScryDisclosedResponse?> Reconstruct(Guid eventId, Cancel cancel = default)
     {
         await EnsureAsync(cancel);
+
+        // Which segment the answer is in is asked first, of every segment, and everything after is
+        // asked of that one: an answer is in one segment, however many are kept.
         ScryDisclosureEvent disclosed;
         ScryDisclosureClose? closed;
         var fields = new List<ScryDisclosureField>();
         var units = new List<(int Ordinal, ScryDisclosureAddress Address, Kept? Kept)>();
         var entities = new List<ScryDisclosureEntity>();
         await using (var connection = await OpenAsync(cancel))
-        await using (var command = Command(
-                         connection,
-                         $"""
-                          SELECT {sql.Columns} FROM {sql.Event} e {sql.Ended} WHERE e.[EventId] = @event;
-                          SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {sql.Field} f JOIN {sql.Event} e ON e.[Shape] = f.[Shape] AND e.[Segment] = f.[Segment] WHERE e.[EventId] = @event ORDER BY f.[Position];
-                          SELECT u.[Ordinal], u.[Content], k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {sql.Units} u LEFT JOIN {sql.Content} k ON k.[Address] = u.[Content] AND k.[Segment] = u.[Segment] WHERE u.[EventId] = @event ORDER BY u.[Ordinal];
-                          SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {sql.Entities} n WHERE n.[EventId] = @event ORDER BY n.[Ordinal], n.[Slot];
-                          """))
         {
+            DisclosureReading read;
+            await using (var find = Command(connection, $"SELECT TOP (1) e.[Segment] FROM {sql.Event} e WHERE e.[EventId] = @event;"))
+            {
+                find.Parameters.AddWithValue("@event", eventId);
+                if (await find.ExecuteScalarAsync(cancel) is not int segment)
+                {
+                    return null;
+                }
+
+                read = sql.Reading(segment);
+            }
+
+            await using var command = Command(
+                connection,
+                $"""
+                 SELECT {sql.Columns} FROM {read.Event} e {read.Ended} WHERE e.[EventId] = @event;
+                 SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {read.Field} f JOIN {read.Event} e ON e.[Shape] = f.[Shape] AND e.[Segment] = f.[Segment] WHERE e.[EventId] = @event ORDER BY f.[Position];
+                 SELECT u.[Ordinal], u.[Content], k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {read.Units} u LEFT JOIN {read.Content} k ON k.[Address] = u.[Content] AND k.[Segment] = u.[Segment] WHERE u.[EventId] = @event ORDER BY u.[Ordinal];
+                 SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {read.Entities} n WHERE n.[EventId] = @event ORDER BY n.[Ordinal], n.[Slot];
+                 """);
             command.Parameters.AddWithValue("@event", eventId);
             await using var reader = await command.ExecuteReaderAsync(cancel);
             if (!await reader.ReadAsync(cancel))
@@ -480,7 +506,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         var query =
             $"""
              SELECT TOP (@page) r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node],
-                    (SELECT STRING_AGG(CONVERT(nvarchar(max), v.[EventId]), N',') FROM {sql.ReviewEvent} v WHERE v.[ReviewId] = r.[ReviewId])
+                    (SELECT STRING_AGG(CONVERT(nvarchar(max), v.[EventId]), N',') FROM {sql.ReviewEvent} v WHERE v.[ReviewId] = r.[ReviewId] AND v.[Segment] = r.[Segment])
              FROM {sql.Review} r
              WHERE (@afterAt IS NULL OR r.[At] < @afterAt OR (r.[At] = @afterAt AND r.[ReviewId] < @afterId))
              ORDER BY r.[At] DESC, r.[ReviewId] DESC;

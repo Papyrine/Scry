@@ -155,8 +155,8 @@ public sealed partial class ScrySqlServerDisclosureStore
             Retiring = true,
             Batches = reader.GetInt64(0),
             Events = reader.GetInt64(1),
-            From = from,
-            To = to,
+            From = oldest.From ?? from,
+            To = oldest.To ?? to,
             Bytes = reader.GetInt64(4)
         };
     }
@@ -256,6 +256,28 @@ public sealed partial class ScrySqlServerDisclosureStore
         var next = segments.Max(_ => _.Number) + 1;
         var (link, hash) = await Head(connection, transaction, cancel);
         var kept = segments.Where(_ => _.Retired is null).Select(_ => _.Number).Append(next);
+
+        // The span of time the segment covers, by when its answers were given and its reviewers
+        // shown them: said once, now that nothing more will be begun in it, and what lets a question
+        // about some other time leave it out.
+        var tables = sql.Segment(current.Number);
+        object from = DBNull.Value;
+        object to = DBNull.Value;
+        await using (var span = Command(
+                         connection,
+                         $"SELECT MIN(x.[At]), MAX(x.[At]) FROM (SELECT e.[At] FROM {tables.Event} e UNION ALL SELECT r.[At] FROM {tables.Review} r) x;",
+                         transaction))
+        {
+            span.CommandTimeout = 0;
+            await using var reader = await span.ExecuteReaderAsync(cancel);
+            await reader.ReadAsync(cancel);
+            if (!reader.IsDBNull(0))
+            {
+                from = reader.GetDateTimeOffset(0);
+                to = reader.GetDateTimeOffset(1);
+            }
+        }
+
         await using (var make = Command(connection, $"{sql.Segment(next).Creating()}\n{sql.Viewing(kept)}", transaction))
         {
             make.CommandTimeout = 120;
@@ -264,7 +286,7 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         await using (var enter = Command(
                          connection,
-                         $"INSERT INTO {sql.Segments} ([Segment], [What], [At], [Link], [Head]) VALUES (@segment, @what, @at, @link, @head);",
+                         $"INSERT INTO {sql.Segments} ([Segment], [What], [At], [Link], [Head], [From], [To]) VALUES (@segment, @what, @at, @link, @head, @from, @to);",
                          transaction))
         {
             enter.Parameters.AddWithValue("@segment", current.Number);
@@ -272,10 +294,15 @@ public sealed partial class ScrySqlServerDisclosureStore
             enter.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = now});
             enter.Parameters.AddWithValue("@link", link);
             enter.Parameters.Add(new("@head", SqlDbType.Binary, 32) {Value = hash});
+            enter.Parameters.Add(new("@from", SqlDbType.DateTimeOffset) {Value = from});
+            enter.Parameters.Add(new("@to", SqlDbType.DateTimeOffset) {Value = to});
             await enter.ExecuteNonQueryAsync(cancel);
         }
 
         await Enter(connection, transaction, next, DisclosureSegmentEntry.Opened, now, cancel);
+
+        // Asked again by the next question that has a span of time: there is now one more to leave out.
+        spans = null;
     }
 
     async Task Enter(SqlConnection connection, SqlTransaction transaction, int segment, DisclosureSegmentEntry what, DateTimeOffset at, Cancel cancel)
@@ -285,6 +312,80 @@ public sealed partial class ScrySqlServerDisclosureStore
         enter.Parameters.AddWithValue("@what", (byte) what);
         enter.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = at});
         await enter.ExecuteNonQueryAsync(cancel);
+    }
+
+    // The segments that have been rolled away from and are still kept, with the span of time each
+    // covers, as they stood when last asked. Asked again once a minute at most: a segment's span is
+    // said once and never changes, so all a stale answer costs is a segment looked in that need not
+    // have been.
+    (long Asked, int Newest, List<ScryDisclosureSegment> Sealed)? spans;
+
+    /// <summary>
+    /// What narrows a question to the segments its span of time can reach, as a condition on the
+    /// segment of the rows aliased <paramref name="alias"/>: empty where it reaches all of them.
+    /// </summary>
+    /// <remarks>
+    /// Every segment newer than the newest known to have been rolled away from is always among them:
+    /// the one being written to has no span yet, and one this node has not heard of may hold
+    /// anything. So nothing is ever left out for being new, only for being known not to cover the
+    /// time asked about.
+    /// </remarks>
+    async ValueTask<string> Within(string alias, DateTimeOffset? from, DateTimeOffset? to, Cancel cancel)
+    {
+        if (from is null &&
+            to is null)
+        {
+            return "";
+        }
+
+        var known = spans;
+        if (known is null ||
+            Environment.TickCount64 - known.Value.Asked > 60_000)
+        {
+            await using var connection = await OpenAsync(cancel);
+            var closed = (await Registry(connection, null, cancel)).Where(_ => _ is {Sealed: not null, Retired: null}).ToList();
+            var newest = 0;
+            if (closed.Count > 0)
+            {
+                newest = closed[^1].Number;
+            }
+
+            spans = known = (Environment.TickCount64, newest, closed);
+        }
+
+        var (_, last, rolled) = known.Value;
+        var reached = rolled
+            .Where(_ => _.From is { } first && _.To is { } final && (to is null || first <= to) && (from is null || final >= from))
+            .Select(_ => _.Number.ToString(CultureInfo.InvariantCulture))
+            .ToList();
+        if (reached.Count == rolled.Count)
+        {
+            return "";
+        }
+
+        if (reached.Count == 0)
+        {
+            return $" AND {alias}.[Segment] > {last}";
+        }
+
+        return $" AND ({alias}.[Segment] > {last} OR {alias}.[Segment] IN ({string.Join(", ", reached)}))";
+    }
+
+    // The earlier of two times, either of which may not have been said.
+    static DateTimeOffset? Earlier(DateTimeOffset? one, DateTimeOffset? other)
+    {
+        if (one is null)
+        {
+            return other;
+        }
+
+        if (other is null ||
+            one <= other)
+        {
+            return one;
+        }
+
+        return other;
     }
 
     // The segment being written to: the newest there is, which is never retired.
@@ -314,7 +415,9 @@ public sealed partial class ScrySqlServerDisclosureStore
                     {
                         Sealed = at,
                         Link = reader.GetInt64(3),
-                        Head = Address(reader, 4)
+                        Head = Address(reader, 4),
+                        From = When(reader, 8),
+                        To = When(reader, 9)
                     };
                     break;
                 case DisclosureSegmentEntry.Retiring:
@@ -330,8 +433,6 @@ public sealed partial class ScrySqlServerDisclosureStore
                         Batches = Number(reader, 5),
                         Events = Number(reader, 6),
                         Bytes = Number(reader, 7),
-                        From = When(reader, 8),
-                        To = When(reader, 9),
                         HandedOn = reader.GetBoolean(10)
                     };
                     break;
@@ -380,7 +481,7 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         foreach (var (id, sequence) in had)
         {
-            yield return await Whole(connection, tables, await Recorded(connection, id, sequence, cancel), cancel);
+            yield return await Whole(connection, tables, await Recorded(connection, segment.Number, id, sequence, cancel), cancel);
         }
     }
 

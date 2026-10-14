@@ -323,6 +323,65 @@ public class SqlStoreSegmentTests
         }
     }
 
+    // A question about a span of time is asked only of the segments that cover any of it, and is
+    // answered as it would be asked of all of them: whatever the span, the answer is the in-memory
+    // store's, which has no segments to leave out.
+    [Test]
+    public async Task AQuestionAboutASpanOfTimeIsAnsweredTheSameWhicheverSegmentsItReaches()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var processor = Processor(new Both(memory, kept), new());
+
+        foreach (var segment in Enumerable.Range(0, 3))
+        {
+            processor.Execute(Clinic.Names(), database.Context);
+            await Task.Delay(20);
+            processor.Execute(Clinic.Names(), database.Context);
+            await kept.DrainAsync();
+            if (segment < 2)
+            {
+                await kept.RollAsync();
+            }
+
+            await Task.Delay(20);
+        }
+
+        var all = await memory.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync();
+        var times = all.Select(_ => _.Event.At).Order().ToList();
+        var segments = await kept.SegmentsAsync();
+        (DateTimeOffset From, DateTimeOffset To)[] spans =
+        [
+            (times[0], times[1]),
+            (times[1], times[2]),
+            (times[2], times[3]),
+            (times[4], times[5]),
+            (times[0], times[5]),
+            (times[1].AddTicks(1), times[2].AddTicks(-1)),
+            (times[0].AddDays(-2), times[0].AddDays(-1)),
+            (times[5].AddDays(1), times[5].AddDays(2))
+        ];
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(all).Count().IsEqualTo(6);
+            await Assert.That(segments[0].From).IsEqualTo(times[0]);
+            await Assert.That(segments[0].To).IsEqualTo(times[1]);
+            await Assert.That(segments[1].From).IsEqualTo(times[2]);
+            await Assert.That(segments[2].From).IsNull();
+            foreach (var (from, to) in spans)
+            {
+                var told = await memory.ReceivedBy("dr.osei", from, to).ToListAsync();
+                var read = await kept.ReceivedBy("dr.osei", from, to).ToListAsync();
+                var sent = await memory.ReceiversOf("Patient", [1], from, to).ToListAsync();
+                var found = await kept.ReceiversOf("Patient", [1], from, to).ToListAsync();
+                await Assert.That(read.Select(_ => _.Event.Id)).IsEquivalentTo(told.Select(_ => _.Event.Id), CollectionOrdering.Matching);
+                await Assert.That(found.Select(_ => _.Event.Id)).IsEquivalentTo(sent.Select(_ => _.Event.Id), CollectionOrdering.Matching);
+            }
+        }
+    }
+
     // A clock that can be put forward, and is otherwise the machine's: the first segment is opened by
     // the database, at the database's own time.
     sealed class Shifted :

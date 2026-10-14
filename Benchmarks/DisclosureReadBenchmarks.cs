@@ -45,6 +45,7 @@ public class DisclosureReadBenchmarks
 
     ScrySqlServerDisclosureStore store = null!;
     Guid last;
+    DateTimeOffset lately;
     object?[] asked = null!;
 
     [Params("Repeated", "Drifting", "Small")]
@@ -89,6 +90,9 @@ public class DisclosureReadBenchmarks
         }
 
         last = received[0].Event.Id;
+
+        // Answers are a second apart, so this is the last twentieth of them.
+        lately = start.AddSeconds(expected * 0.95);
     }
 
     [GlobalCleanup]
@@ -114,6 +118,35 @@ public class DisclosureReadBenchmarks
     {
         var count = 0;
         await foreach (var _ in store.ReceivedBy("caller-0", DateTimeOffset.MinValue, DateTimeOffset.MaxValue))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Who received one row in the last twentieth of the time the record covers: a question with a
+    /// span of time, which only the segments that cover any of it are asked.
+    /// </summary>
+    [Benchmark]
+    public async Task<int> WhoReceivedARowLately()
+    {
+        var count = 0;
+        await foreach (var _ in store.ReceiversOf("Patient", asked, lately))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>What one caller received in that same last twentieth.</summary>
+    [Benchmark]
+    public async Task<int> WhatACallerReceivedLately()
+    {
+        var count = 0;
+        await foreach (var _ in store.ReceivedBy("caller-0", lately, DateTimeOffset.MaxValue))
         {
             count++;
         }
