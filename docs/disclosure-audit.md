@@ -882,7 +882,70 @@ public int ExportLimit { get; set; } = 1000;
 
 **How it is built.** `Scry.Disclosure.Ui` is a Blazor WASM app in no solution and referencing no project: the package is its only builder, publishing it and embedding the result as the query explorer's package does. It hosts no compiler, so it is trimmed and its JSON is generated at build time. The questions and answers the page and the server exchange are one set of types compiled into both. The four images on this page are Verify baselines of `DisclosureScreenshotTests` in `samples/Sample.Tests`, taken against a server whose clock is pinned.
 
-**Where it runs.** In a host that has the audit configured through `AddScry`, since recording what a reviewer saw goes through the same sink, address key and clock as recording an answer. That host need not be one that maps `MapScry`.
+**Where it runs.** On a host that serves queries, with the audit configured through `AddScry`, or on one that only reads the record: an admin application apart from the servers that answer, with no model and no `AddScry`. Such a host registers the record and nothing else, and the explorer records its questions through the store the serving nodes record to, under the audit settings it was registered with. The same settings lambda the serving nodes are given can be passed, so that the address key is the same; a different key addresses a question's parameters differently, and reads nothing wrongly for it.
+
+<!-- snippet: addSqlServerDisclosureRecord -->
+<a id='snippet-addSqlServerDisclosureRecord'></a>
+```cs
+/// <summary>
+/// Registers the record SQL Server keeps for a host that reads it and serves no queries: an admin
+/// application with the disclosure explorer on it, apart from the servers that answer. Needs no
+/// model and no <c>AddScry</c>.
+/// </summary>
+/// <param name="services">The host's services.</param>
+/// <param name="connectionString">The database the serving nodes keep the record in.</param>
+/// <param name="store">The schema, the timeout and where content is kept: as the serving nodes have them.</param>
+/// <param name="configure">
+/// The audit's settings. The same lambda the serving nodes are configured with can be passed, so
+/// that the address key is the same.
+/// </param>
+/// <remarks>
+/// <para>
+/// This host does not move the record on. What a reviewer asks here is accepted into the outbox
+/// before it is answered, as an answer is on a serving node, and is moved into the record by the
+/// serving nodes: so a reviewer's own questions show in the record a moment after they are asked.
+/// Starting segments and retiring them is theirs too, by their settings, so one host cannot roll
+/// the record on a schedule of its own. Those settings are refused here rather than ignored.
+/// </para>
+/// <para>
+/// Erasing is the one thing done here that moves the record on: what is waiting is moved first,
+/// so that an answer accepted a moment ago is erased with the rest. It starts no segment and
+/// retires none.
+/// </para>
+/// </remarks>
+public static IServiceCollection AddSqlServerDisclosureRecord(
+    this IServiceCollection services,
+    string connectionString,
+    Action<ScrySqlServerDisclosureOptions>? store = null,
+    Action<ScryDisclosureOptions>? configure = null)
+{
+    var settings = new ScrySqlServerDisclosureOptions
+    {
+        ConnectionString = connectionString
+    };
+    store?.Invoke(settings);
+    if (settings.RollAfter is not null ||
+        settings.RollAtBytes is not null ||
+        settings.Keep is not null ||
+        settings.Retire is not null)
+    {
+        throw new ArgumentException(
+            "A host that only reads the disclosure record does not move it on, " +
+            "so it neither starts segments nor retires them: RollAfter, RollAtBytes, " +
+            "Keep and Retire belong on the serving nodes, which are what move it.");
+    }
+
+    settings.DrainInterval = null;
+    var kept = new ScrySqlServerDisclosureStore(settings);
+    services.TryAddSingleton(kept);
+    services.AddScryDisclosureRecord(kept, configure);
+    return services;
+}
+```
+<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureExtensions.cs#L54-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-addSqlServerDisclosureRecord' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+A host that only reads does not move the record on. What a reviewer asks there is accepted into the outbox before it is answered, and moved into the record by the serving nodes, so a reviewer's own questions show a moment after they are asked. Starting and retiring segments is the serving nodes' too, and the settings for them are refused on a host that only reads. An erasure there does move what is waiting, so that nothing erased comes back, and starts and retires nothing. For a store other than SQL Server's, `AddScryDisclosureRecord` takes the sink the serving nodes record to.
 
 
 ## What it costs
@@ -899,4 +962,4 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 5. **The hub's subscription caller.** A hub subscription is counted against the connection's user identifier while commands go by `ScryOptions.Caller`. The audit records the same caller for both; the limit key is left alone.
 6. **Reading what was accepted a moment ago.** The SQL Server store answers from what has been moved on. A reader that waited for the outbox to empty would read its own writes, at the cost of a question waiting on the mover.
 7. **Checking a long chain.** A check of the whole chain can outlast a request. A bounded range is checked per call, and the last result is kept. The chain itself is never shortened: a link is some hundred bytes, and one is kept for every batch there has ever been.
-8. **A reader-only host.** The explorer records through the audit's own settings, so its host configures the audit as a serving node does, model included. An explorer over a reader and a sink alone would run where the model is not.
+8. **Segment settings belong to each node.** Every node that moves the record on starts and retires segments by its own `RollAfter`, `RollAtBytes`, `Keep` and `Retire`, so two serving nodes configured differently roll the record by whichever moved it last. A host that only reads moves nothing and cannot disagree. Keeping the settings in the record itself would give every node one set.

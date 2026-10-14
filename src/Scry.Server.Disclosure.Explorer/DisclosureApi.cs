@@ -569,10 +569,9 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
     // what went wrong is the host's to read in its own logs, and is not said to the browser.
     async Task<IResult?> Record(HttpContext context, ScryDisclosureQuestion asked, ReadOnlyMemory<byte> parameters, int results, IReadOnlyList<Guid> events)
     {
-        var processor = context.RequestServices.GetRequiredService<ScryProcessor>();
         try
         {
-            await processor.ReviewAsync(asked, options.Reviewer(context), parameters, results, events, context.RequestServices, context.RequestAborted);
+            await Reviews(context).RecordAsync(asked, options.Reviewer(context), parameters, results, events, context.RequestAborted);
             return null;
         }
         catch (ScryDisclosureException)
@@ -593,8 +592,13 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
         return null;
     }
 
+    // What records the questions, and the audit settings it records them under. On a serving host,
+    // the audit's own; on a host that only reads, the ones it was registered with.
+    static ScryDisclosureReviews Reviews(HttpContext context) =>
+        context.RequestServices.GetRequiredService<ScryDisclosureReviews>();
+
     static ScryDisclosureOptions Audit(HttpContext context) =>
-        context.RequestServices.GetRequiredService<ScryOptions>().Disclosure!;
+        Reviews(context).Settings;
 
     static IScryDisclosureReader Reader(HttpContext context) =>
         context.RequestServices.GetRequiredService<IScryDisclosureReader>();

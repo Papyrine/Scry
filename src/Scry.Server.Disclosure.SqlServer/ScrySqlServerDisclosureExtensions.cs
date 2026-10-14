@@ -50,6 +50,63 @@ public static class ScrySqlServerDisclosureExtensions
         return options;
     }
     // end-snippet
+
+    // begin-snippet: addSqlServerDisclosureRecord
+    /// <summary>
+    /// Registers the record SQL Server keeps for a host that reads it and serves no queries: an admin
+    /// application with the disclosure explorer on it, apart from the servers that answer. Needs no
+    /// model and no <c>AddScry</c>.
+    /// </summary>
+    /// <param name="services">The host's services.</param>
+    /// <param name="connectionString">The database the serving nodes keep the record in.</param>
+    /// <param name="store">The schema, the timeout and where content is kept: as the serving nodes have them.</param>
+    /// <param name="configure">
+    /// The audit's settings. The same lambda the serving nodes are configured with can be passed, so
+    /// that the address key is the same.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// This host does not move the record on. What a reviewer asks here is accepted into the outbox
+    /// before it is answered, as an answer is on a serving node, and is moved into the record by the
+    /// serving nodes: so a reviewer's own questions show in the record a moment after they are asked.
+    /// Starting segments and retiring them is theirs too, by their settings, so one host cannot roll
+    /// the record on a schedule of its own. Those settings are refused here rather than ignored.
+    /// </para>
+    /// <para>
+    /// Erasing is the one thing done here that moves the record on: what is waiting is moved first,
+    /// so that an answer accepted a moment ago is erased with the rest. It starts no segment and
+    /// retires none.
+    /// </para>
+    /// </remarks>
+    public static IServiceCollection AddSqlServerDisclosureRecord(
+        this IServiceCollection services,
+        string connectionString,
+        Action<ScrySqlServerDisclosureOptions>? store = null,
+        Action<ScryDisclosureOptions>? configure = null)
+    {
+        var settings = new ScrySqlServerDisclosureOptions
+        {
+            ConnectionString = connectionString
+        };
+        store?.Invoke(settings);
+        if (settings.RollAfter is not null ||
+            settings.RollAtBytes is not null ||
+            settings.Keep is not null ||
+            settings.Retire is not null)
+        {
+            throw new ArgumentException(
+                "A host that only reads the disclosure record does not move it on, " +
+                "so it neither starts segments nor retires them: RollAfter, RollAtBytes, " +
+                "Keep and Retire belong on the serving nodes, which are what move it.");
+        }
+
+        settings.DrainInterval = null;
+        var kept = new ScrySqlServerDisclosureStore(settings);
+        services.TryAddSingleton(kept);
+        services.AddScryDisclosureRecord(kept, configure);
+        return services;
+    }
+    // end-snippet
 }
 
 /// <summary>

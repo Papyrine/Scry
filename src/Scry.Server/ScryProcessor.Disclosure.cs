@@ -257,42 +257,8 @@ public sealed partial class ScryProcessor
             throw new ScryDisclosureException($"The disclosure audit is off, so there is no record for a review to be added to. {nameof(ScryOptions)}.{nameof(ScryOptions.UseDisclosureAudit)} turns it on.");
         }
 
-        if (reviewer is null &&
-            !disclosure.Settings.AllowAnonymous)
-        {
-            throw new ScryDisclosureException($"Nobody could be named as reading the disclosure record, so nothing of it was shown. Set {nameof(ScryDisclosureOptions)}.{nameof(ScryDisclosureOptions.AllowAnonymous)} where it may be read by nobody in particular.");
-        }
-
-        ScryDisclosureAddress? asked = null;
-        IReadOnlyList<ScryDisclosureContent> contents = [];
-        if (!parameters.IsEmpty)
-        {
-            // Addressed as content is: its kind, then its bytes, under the same key.
-            var tagged = new byte[parameters.Length + 1];
-            tagged[0] = (byte) ScryDisclosureContentKind.Parameters;
-            parameters.Span.CopyTo(tagged.AsSpan(1));
-            var address = disclosure.Address(tagged);
-            asked = address;
-            contents = [new(address, ScryDisclosureContentKind.Parameters, parameters.Length, parameters)];
-        }
-
-        var review = new ScryDisclosureReview(Guid.CreateVersion7(), disclosure.Now, question)
-        {
-            Reviewer = reviewer,
-            Parameters = asked,
-            Results = results,
-            Events = events,
-            Node = disclosure.Settings.Node
-        };
-        await disclosure.AppendAsync(
-            new()
-            {
-                EventId = review.Id,
-                Review = review,
-                Contents = contents
-            },
-            services,
-            cancel);
+        var (review, batch) = ScryDisclosureReviews.Make(disclosure.Settings, question, reviewer, parameters, results, events);
+        await disclosure.AppendAsync(batch, services, cancel);
         return review;
     }
 

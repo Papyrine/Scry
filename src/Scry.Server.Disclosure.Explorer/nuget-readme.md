@@ -19,4 +19,12 @@ The explorer is a window onto the most sensitive data the host holds, so every w
 
 `RequireAuthorization` on what `MapScryDisclosureExplorer` returns reaches every route it mapped.
 
+The host need not serve queries. An admin application apart from the servers that answer registers the record and nothing else, with no model and no `AddScry`:
+
+```cs
+builder.Services.AddSqlServerDisclosureRecord(connectionString);
+```
+
+`AddScryDisclosureRecord` does the same for any other store. Such a host records what is asked of it and leaves moving the record on to the serving nodes.
+
 Docs: [Disclosure audit](https://github.com/Papyrine/Scry/blob/main/docs/disclosure-audit.md)

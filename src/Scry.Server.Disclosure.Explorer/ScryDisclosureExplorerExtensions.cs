@@ -23,6 +23,11 @@ public static class ScryDisclosureExplorerExtensions
     /// Reading the record is recorded. Every question is written to the record, through the same
     /// sink the answers went through, before it is answered — and is not answered where that fails.
     /// </para>
+    /// <para>
+    /// The host need not serve queries. One that only reads the record registers it with
+    /// <c>AddScryDisclosureRecord</c> (or the SQL Server store's <c>AddSqlServerDisclosureRecord</c>)
+    /// and needs no model and no <c>AddScry</c>.
+    /// </para>
     /// </remarks>
     public static IEndpointConventionBuilder MapScryDisclosureExplorer(
         this IEndpointRouteBuilder endpoints,
@@ -67,11 +72,12 @@ public static class ScryDisclosureExplorerExtensions
     // time somebody opens the page.
     static void Require(IServiceProvider services)
     {
-        if (services.GetService<ScryOptions>()?.Disclosure is null)
+        if (services.GetService<ScryDisclosureReviews>() is null)
         {
             throw new InvalidOperationException(
-                "MapScryDisclosureExplorer shows the record the disclosure audit keeps, and this host keeps none. " +
-                "Turn the audit on in AddScry, with UseDisclosureAudit or UseSqlServerDisclosureAudit, before mapping the explorer.");
+                "MapScryDisclosureExplorer shows the record the disclosure audit keeps, and this host has nothing to record its own reading of it with. " +
+                "On a host that serves queries, turn the audit on in AddScry, with UseDisclosureAudit or UseSqlServerDisclosureAudit. " +
+                "On a host that only reads the record, register it with AddSqlServerDisclosureRecord, or AddScryDisclosureRecord for any other store.");
         }
 
         if (services.GetService<IScryDisclosureReader>() is null)

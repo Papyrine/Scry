@@ -511,7 +511,7 @@ public class ExplorerApiTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(none.Message).Contains("this host keeps none");
+            await Assert.That(none.Message).Contains("nothing to record its own reading of it with");
             await Assert.That(blind.Message).Contains("no IScryDisclosureReader is registered");
             await Assert.That(limitless.Message).Contains("ExportLimit must be greater than zero");
         }

@@ -139,12 +139,19 @@ sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions optio
         QueryRecorder.DisclosureAccepted(Stopwatch.GetElapsedTime(started), failure: null);
     }
 
-    public async ValueTask AppendAsync(ScryDisclosureBatch batch, IServiceProvider services, Cancel cancel)
+    public ValueTask AppendAsync(ScryDisclosureBatch batch, IServiceProvider services, Cancel cancel) =>
+        AppendAsync(Sink(services), batch, cancel);
+
+    /// <summary>
+    /// Hands a batch to a sink, and says so in the accept's measurements. A failure is the record not
+    /// being accepted, and is thrown as such — except the caller going away, which is nobody's.
+    /// </summary>
+    public static async ValueTask AppendAsync(IScryDisclosureSink sink, ScryDisclosureBatch batch, Cancel cancel)
     {
         var started = Stopwatch.GetTimestamp();
         try
         {
-            await Sink(services).AppendAsync(batch, cancel);
+            await sink.AppendAsync(batch, cancel);
         }
         // The caller going away while the sink was asked is the one failure that is nobody's: there
         // is nobody left to send to, and nothing was sent.
@@ -177,10 +184,14 @@ sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions optio
     /// The address of content already laid out as its kind byte followed by its bytes, which is how a
     /// row is written into the capture's scratch buffer — so a row is hashed where it lies.
     /// </summary>
-    public ScryDisclosureAddress Address(ReadOnlySpan<byte> tagged)
+    public ScryDisclosureAddress Address(ReadOnlySpan<byte> tagged) =>
+        Address(settings.AddressKey, tagged);
+
+    /// <summary>The same, under a key that is not this runtime's: a review recorded by a host with no processor.</summary>
+    public static ScryDisclosureAddress Address(byte[]? key, ReadOnlySpan<byte> tagged)
     {
         Span<byte> hash = stackalloc byte[ScryDisclosureAddress.Size];
-        if (settings.AddressKey is { } key)
+        if (key is not null)
         {
             HMACSHA256.HashData(key, tagged, hash);
         }

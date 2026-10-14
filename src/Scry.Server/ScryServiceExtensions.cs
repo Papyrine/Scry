@@ -83,8 +83,38 @@ public static partial class ScryServiceExtensions
             services.TryAddSingleton(verifier);
         }
 
+        // What records a reviewer's questions, over the same sink and under the same settings as
+        // the answers: so a screen over the record finds it whether or not the host serves queries.
+        services.TryAddSingleton(_ => new ScryDisclosureReviews(_.GetRequiredService<IScryDisclosureSink>(), disclosure));
+
         // Where a call's transport did not say who is asking, the current request is what does.
         services.AddHttpContextAccessor();
+    }
+
+    /// <summary>
+    /// Registers the disclosure record for a host that reads it and serves no queries: an admin
+    /// application with the disclosure explorer on it, apart from the servers that answer. Needs no
+    /// model and no <c>AddScry</c>: what it registers is the store, as whichever of reader, eraser,
+    /// status and verifier it is, and <see cref="ScryDisclosureReviews"/> to record what is read.
+    /// </summary>
+    /// <param name="services">The host's services.</param>
+    /// <param name="sink">
+    /// The store the serving nodes record to, or a sink in front of it. What a reviewer asks is
+    /// recorded with it, before it is answered.
+    /// </param>
+    /// <param name="configure">
+    /// The audit's settings. Of them only <see cref="ScryDisclosureOptions.AllowAnonymous"/>,
+    /// <see cref="ScryDisclosureOptions.AddressKey"/>, <see cref="ScryDisclosureOptions.Node"/> and
+    /// <see cref="ScryDisclosureOptions.Clock"/> are read here; the same lambda the serving nodes
+    /// are configured with can be passed, so that the key is the same.
+    /// </param>
+    public static IServiceCollection AddScryDisclosureRecord(this IServiceCollection services, IScryDisclosureSink sink, Action<ScryDisclosureOptions>? configure = null)
+    {
+        var disclosure = new ScryDisclosureOptions();
+        configure?.Invoke(disclosure);
+        disclosure.Sink = sink;
+        AddDisclosure(services, disclosure);
+        return services;
     }
 
     /// <summary>
