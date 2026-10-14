@@ -38,7 +38,7 @@ dotnet test --solution src/Scry.slnx --treenode-filter "/*/*/SecurityTests/Rejec
 
 - .NET SDK is pinned via `global.json` to the **.NET 11** SDK (`allowPrerelease: true`, `rollForward: latestFeature`). The **target framework is `net10.0`** — deliberately a major behind the SDK, so do not "fix" the mismatch. `LangVersion 14`; the source generator additionally multi-targets `netstandard2.0`.
 - `src/` builds with `TreatWarningsAsErrors` + `EnforceCodeStyleInBuild`, and NuGet audit (`NuGetAuditMode=all`) turns any package vulnerability advisory into a build error. Keep it clean.
-- Central Package Management: **never** put a version on a `PackageReference`; add/adjust the `PackageVersion` in the relevant `Directory.Packages.props`.
+- Central Package Management: **never** put a version on a `PackageReference`; add/adjust the `PackageVersion` in the relevant `Directory.Packages.props`. The one exception is `Microsoft.CodeAnalysis.CSharp` in `Scry.SourceGenerator.csproj`, which carries a `VersionOverride` per target framework: each must equal the `analyzers/dotnet/roslynX.Y` folder `Scry.Client.csproj` packs that build into, since a compiler skips (CS9057, a warning) a generator that references a newer Roslyn than its own. Neither follows a bump of the central version; `AnalyzerPackagingTests` in `Scry.Tests` reads the packed assemblies and is the guard, and it only runs in Release, where the build packs.
 
 ## Testing conventions
 

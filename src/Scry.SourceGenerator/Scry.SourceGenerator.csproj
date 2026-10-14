@@ -37,7 +37,21 @@
     <Compile Include="..\Shared\SupportedLinq.cs" Link="SupportedLinq.cs" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <!-- Each build is compiled against the compiler its package folder names, not the central
+         version: Scry.Client.csproj packs netstandard2.0 into analyzers/dotnet/roslyn5.0 and net10.0
+         into roslyn5.3, and the SDK hands a compiler the newest folder that is not newer than
+         itself. A compiler refuses an analyzer that references a newer Microsoft.CodeAnalysis than
+         its own, with a warning (CS9057) rather than an error: the generator is skipped, and what
+         the consumer sees is a missing Scry.Generated namespace, not the cause. These two are the
+         one place a PackageReference carries a version, because the central one answers a different
+         question (which Roslyn the explorer hosts in the browser) and will move on its own schedule.
+         Do NOT bump either along with it. Raising one means renaming its folder to match, which
+         drops every compiler older than the new name; roslyn5.0 is the compiler of the first
+         .NET 10 SDK, the oldest that can build a net10.0 consumer. AnalyzerPackagingTests in
+         Scry.Tests reads the references of the packed assemblies and fails when one is newer than
+         its folder. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.0.0" Condition="'$(TargetFramework)' == 'netstandard2.0'" Pinned="true" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.3.0" Condition="'$(TargetFramework)' == 'net10.0'" Pinned="true" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
     <!-- System.Reflection.Metadata / System.Collections.Immutable flow transitively from
          Microsoft.CodeAnalysis and are always provided by the analyzer host at runtime. -->
