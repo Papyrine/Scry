@@ -50,8 +50,8 @@
          .NET 10 SDK, the oldest that can build a net10.0 consumer. AnalyzerPackagingTests in
          Scry.Tests reads the references of the packed assemblies and fails when one is newer than
          its folder. -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.0.0" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.3.0" Condition="'$(TargetFramework)' == 'net10.0'" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.0.0" Condition="'$(TargetFramework)' == 'netstandard2.0'" Pinned="true" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.3.0" Condition="'$(TargetFramework)' == 'net10.0'" Pinned="true" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
     <!-- System.Reflection.Metadata / System.Collections.Immutable flow transitively from
          Microsoft.CodeAnalysis and are always provided by the analyzer host at runtime. -->
