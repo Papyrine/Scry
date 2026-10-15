@@ -382,6 +382,241 @@ public class SqlStoreSegmentTests
         }
     }
 
+    // A store told to catch up before reading finds an answer the moment it was accepted, with no
+    // move asked for: the question waits for it.
+    [Test]
+    public async Task AQuestionCanWaitForWhatWasJustAccepted()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var kept = Store(database, _ => _.CatchUpBeforeReading = true);
+        var batch = Clinic.Batch(1);
+        await kept.AppendAsync(batch, Cancel.None);
+
+        var found = await kept.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync();
+
+        await Assert.That(found.Select(_ => _.Event.Id)).IsEquivalentTo([batch.EventId]);
+    }
+
+    // A host that only reads does not move the record on, so catching up waits for the node that
+    // does, and gives up after the accept's own timeout where none does.
+    [Test]
+    public async Task AHostThatOnlyReadsWaitsForTheNodeThatMoves()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var serving = Store(database);
+        await using var reading = new ScrySqlServerDisclosureStore(
+            new()
+            {
+                ConnectionString = database.ConnectionString,
+                DrainInterval = null,
+                AcceptTimeout = TimeSpan.FromSeconds(5)
+            })
+        {
+            ReadsOnly = true
+        };
+        await serving.AppendAsync(Clinic.Batch(1), Cancel.None);
+
+        var timedOut = await Assert.ThrowsAsync<TimeoutException>(() => reading.CatchUpAsync());
+        var waiting = (await serving.Status()).Pending;
+        var caught = reading.CatchUpAsync();
+        await serving.DrainAsync();
+        await caught;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(timedOut).IsNotNull();
+            await Assert.That(waiting).IsEqualTo(1);
+            await Assert.That((await serving.Status()).Pending).IsEqualTo(0);
+        }
+    }
+
+    // Every node that moves the record goes by the settings the record holds, which are the last
+    // node to start's: a node configured to keep three retires down to the one a later node keeps.
+    [Test]
+    public async Task EveryNodeGoesByTheRecordsSettings()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var first = Store(database, _ => _.Keep = 3);
+        await using var second = Store(database, _ => _.Keep = 1);
+        var processor = Processor(first, new());
+
+        processor.Execute(Clinic.Names(), database.Context);
+        await first.DrainAsync();
+        var before = await first.RetentionAsync();
+        await first.RollAsync();
+        var kept = (await first.SegmentsAsync()).Count(_ => _.Retired is null);
+
+        processor.Execute(Clinic.Names(), database.Context);
+        await second.DrainAsync();
+        var after = await first.RetentionAsync();
+        await first.RollAsync();
+        var segments = await first.SegmentsAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(before.Keep).IsEqualTo(3);
+            await Assert.That(kept).IsEqualTo(2);
+            await Assert.That(after.Keep).IsEqualTo(1);
+            await Assert.That(segments.Count(_ => _.Retired is null)).IsEqualTo(1);
+        }
+    }
+
+    // A node with nothing to hand a segment to neither turns handing on off for the others nor
+    // drops a segment itself: what is retired is retired with a copy, or not at all.
+    [Test]
+    public async Task ANodeWithNoArchiveDropsNothingTheRecordHandsOn()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var handed = 0;
+        await using var archiving = Store(
+            database,
+            _ =>
+            {
+                _.Keep = 1;
+                _.Retire = (_, _) =>
+                {
+                    handed++;
+                    return Task.CompletedTask;
+                };
+            });
+        await using var bare = Store(database, _ => _.Keep = 1);
+        var processor = Processor(archiving, new());
+
+        processor.Execute(Clinic.Names(), database.Context);
+        await archiving.DrainAsync();
+        processor.Execute(Clinic.Names(), database.Context);
+        await bare.DrainAsync();
+        await bare.RollAsync();
+        var kept = (await bare.SegmentsAsync()).Count(_ => _.Retired is null);
+        var said = (await bare.Status()).Problem;
+        await archiving.RetireAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That((await bare.RetentionAsync()).HandsOn).IsTrue();
+            await Assert.That(kept).IsEqualTo(2);
+            await Assert.That(said).Contains("no ScrySqlServerDisclosureOptions.Retire");
+            await Assert.That(handed).IsEqualTo(1);
+            await Assert.That((await bare.SegmentsAsync()).Count(_ => _.Retired is null)).IsEqualTo(1);
+        }
+    }
+
+    // A segment is kept for as long as it is to be, counted from the last answer in it, and is then
+    // retired however few are kept. The one being written to is kept whatever its age.
+    [Test]
+    public async Task ASegmentKeptAsLongAsItIsToBeIsRetired()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var clock = new Shifted();
+        await using var kept = Store(
+            database,
+            _ =>
+            {
+                _.KeepFor = TimeSpan.FromDays(30);
+                _.Clock = clock;
+            });
+        var processor = Processor(kept, new());
+
+        processor.Execute(Clinic.Names(), database.Context);
+        await kept.DrainAsync();
+        await kept.RollAsync();
+        clock.By = TimeSpan.FromDays(29);
+        var young = await kept.RetireAsync();
+        clock.By = TimeSpan.FromDays(31);
+        var old = await kept.RetireAsync();
+        clock.By = TimeSpan.FromDays(400);
+        var current = await kept.RetireAsync();
+        var segments = await kept.SegmentsAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(young).IsEqualTo(0);
+            await Assert.That(old).IsEqualTo(1);
+            await Assert.That(current).IsEqualTo(0);
+            await Assert.That(segments[0].Retired).IsNotNull();
+            await Assert.That(segments[1].Retired).IsNull();
+            await Assert.That((await kept.RetentionAsync()).KeepFor).IsEqualTo(TimeSpan.FromDays(30));
+        }
+    }
+
+    // The whole chain is checked a stretch at a time, each stretch picking up where the one before
+    // ended, and finds a change made anywhere along it.
+    [Test]
+    public async Task TheWholeChainIsCheckedAStretchAtATime()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var kept = Store(database);
+        foreach (var index in Enumerable.Range(0, 7))
+        {
+            await kept.AppendAsync(Clinic.Batch(index), Cancel.None);
+        }
+
+        await kept.DrainAsync();
+        var reported = new List<long>();
+        var whole = await kept.VerifyWholeChainAsync(new Collect(reported), stretch: 3);
+        await SqlStores.Execute(database, "UPDATE [scry_000001].[DisclosureEvent] SET [Caller] = N'somebody.else' WHERE [EventId] = (SELECT [EventId] FROM [scry_000001].[DisclosureBatch] WHERE [Link] = 6)");
+        var broken = await kept.VerifyWholeChainAsync(stretch: 3);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(whole.Intact).IsTrue();
+            await Assert.That(whole.Records).IsEqualTo(7);
+            await Assert.That(reported).IsEquivalentTo([3L, 6L, 7L], CollectionOrdering.Matching);
+            await Assert.That(broken.Intact).IsFalse();
+            await Assert.That(broken.BrokenAt).IsEqualTo(6);
+            await Assert.That((await kept.Status()).LastVerification!.BrokenAt).IsEqualTo(6);
+        }
+    }
+
+    // Progress reported as it happens, rather than through a captured context.
+    sealed class Collect(List<long> into) :
+        IProgress<long>
+    {
+        public void Report(long value) =>
+            into.Add(value);
+    }
+
+    // What asked on the caller's behalf is recorded beside the caller, kept by the store, read back
+    // with the answer, and part of what the chain's link for it covers.
+    [Test]
+    public async Task WhatAskedOnTheCallersBehalfIsRecorded()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var processor = Processor(
+            new Both(memory, kept),
+            new(),
+            _ =>
+            {
+                _.Agent = _ => "ward-assistant";
+                _.Version<Patient>(_ => _.WardId);
+            });
+
+        processor.Execute(Clinic.Names(), database.Context);
+        await kept.DrainAsync();
+        var listed = await kept.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync();
+        var told = await memory.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync();
+        var rebuilt = await kept.Reconstruct(listed[0].Event.Id);
+        var row = await kept.ReceiversOf("Patient", [1]).ToListAsync();
+        var intact = (await kept.VerifyChainAsync()).Intact;
+        await SqlStores.Execute(database, "UPDATE [scry_000001].[DisclosureEvent] SET [Agent] = N'somebody.else'");
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(told[0].Event.Agent).IsEqualTo("ward-assistant");
+            await Assert.That(listed[0].Event.Agent).IsEqualTo("ward-assistant");
+            await Assert.That(rebuilt!.Event.Agent).IsEqualTo("ward-assistant");
+            await Assert.That(row[0].Event.Agent).IsEqualTo("ward-assistant");
+            await Assert.That(row[0].Ordinal).IsEqualTo(0);
+            await Assert.That(row[0].Version).IsNotNull();
+            await Assert.That(rebuilt.Units[0].Entities[0].Version).IsEqualTo(row[0].Version);
+            await Assert.That(told[0].Event.Id).IsEqualTo(listed[0].Event.Id);
+            await Assert.That(intact).IsTrue();
+            await Assert.That((await kept.VerifyChainAsync()).Intact).IsFalse();
+        }
+    }
+
     // A clock that can be put forward, and is otherwise the machine's: the first segment is opened by
     // the database, at the database's own time.
     sealed class Shifted :

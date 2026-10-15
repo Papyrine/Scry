@@ -55,7 +55,7 @@ sealed class DisclosureSql
         // part of an answer is put: said of the view, that is what keeps the other segments from
         // being looked in at all.
         Ended = Ending(Close);
-        Columns = "e.[EventId], e.[At], e.[Caller], e.[Kind], e.[Subscribed], e.[Delivery], e.[Source], e.[Request], e.[Shape], e.[Sensitive], e.[Stamp], e.[Correlation], e.[Node], e.[ContentType], c.[Outcome], c.[Units], c.[ClosedAt], c.[Response]";
+        Columns = "e.[EventId], e.[At], e.[Caller], e.[Kind], e.[Subscribed], e.[Delivery], e.[Source], e.[Request], e.[Shape], e.[Sensitive], e.[Stamp], e.[Correlation], e.[Node], e.[ContentType], c.[Outcome], c.[Units], c.[ClosedAt], c.[Response], e.[Agent]";
     }
 
     public string Schema { get; }
@@ -224,7 +224,12 @@ sealed class DisclosureSql
             [Bytes] bigint NULL,
             [From] datetimeoffset(7) NULL,
             [To] datetimeoffset(7) NULL,
-            [HandedOn] bit NULL
+            [HandedOn] bit NULL,
+            [RollAfter] bigint NULL,
+            [RollAtBytes] bigint NULL,
+            [Keep] int NULL,
+            [KeepFor] bigint NULL,
+            [HandsOn] bit NULL
             """);
 
         // The first segment, and the views over it. Later segments are made, and the views made

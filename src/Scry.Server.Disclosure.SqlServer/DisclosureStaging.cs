@@ -18,7 +18,8 @@ sealed class DisclosureStaging(DisclosureTables sql)
         ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("At", typeof(DateTimeOffset)), ("Caller", typeof(string)),
         ("CallerHash", typeof(byte[])), ("Kind", typeof(byte)), ("Subscribed", typeof(bool)), ("Delivery", typeof(byte)),
         ("Source", typeof(string)), ("Request", typeof(byte[])), ("Shape", typeof(byte[])), ("Sensitive", typeof(bool)),
-        ("Stamp", typeof(string)), ("Correlation", typeof(string)), ("Node", typeof(string)), ("ContentType", typeof(string)));
+        ("Stamp", typeof(string)), ("Correlation", typeof(string)), ("Node", typeof(string)), ("ContentType", typeof(string)),
+        ("Agent", typeof(string)));
     DataTable closes = Table(
         ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Outcome", typeof(byte)), ("Units", typeof(int)),
         ("At", typeof(DateTimeOffset)), ("Response", typeof(byte[])));
@@ -26,7 +27,8 @@ sealed class DisclosureStaging(DisclosureTables sql)
         ("EventId", typeof(Guid)), ("Ordinal", typeof(int)), ("Sequence", typeof(int)), ("Content", typeof(byte[])));
     DataTable entities = Table(
         ("EventId", typeof(Guid)), ("Ordinal", typeof(int)), ("Slot", typeof(int)), ("Sequence", typeof(int)),
-        ("RowHash", typeof(byte[])), ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)));
+        ("RowHash", typeof(byte[])), ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)),
+        ("Version", typeof(string)));
     DataTable manifests = Table(
         ("Manifest", typeof(byte[])), ("Units", typeof(int)));
     DataTable manifestRuns = Table(
@@ -37,7 +39,7 @@ sealed class DisclosureStaging(DisclosureTables sql)
         ("Run", typeof(byte[])), ("Offset", typeof(int)), ("Content", typeof(byte[])));
     DataTable runEntities = Table(
         ("Run", typeof(byte[])), ("Offset", typeof(int)), ("Slot", typeof(int)), ("RowHash", typeof(byte[])),
-        ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)));
+        ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)), ("Version", typeof(string)));
     DataTable answers = Table(
         ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Start", typeof(int)), ("Manifest", typeof(byte[])));
 
@@ -113,7 +115,8 @@ sealed class DisclosureStaging(DisclosureTables sql)
                 Value(begin.Stamp),
                 Value(begin.Correlation),
                 Value(begin.Node),
-                Value(begin.ContentType));
+                Value(begin.ContentType),
+                Value(begin.Agent));
         }
 
         if (batch.Shape is { } shape &&
@@ -177,7 +180,8 @@ sealed class DisclosureStaging(DisclosureTables sql)
                     DisclosureSql.RowHash(entity.Source, entity.Key),
                     entity.Source,
                     entity.Key,
-                    entity.Via);
+                    entity.Via,
+                    Value(entity.Version));
             }
         }
 
@@ -235,7 +239,8 @@ sealed class DisclosureStaging(DisclosureTables sql)
                     DisclosureSql.RowHash(entity.Source, entity.Key),
                     entity.Source,
                     entity.Key,
-                    entity.Via);
+                    entity.Via,
+                    Value(entity.Version));
             }
         }
     }
@@ -279,10 +284,10 @@ sealed class DisclosureStaging(DisclosureTables sql)
             transaction,
             events,
             "#event",
-            "[EventId] uniqueidentifier NOT NULL, [Sequence] int NOT NULL, [At] datetimeoffset(7) NOT NULL, [Caller] nvarchar(max) NULL, [CallerHash] binary(32) NULL, [Kind] tinyint NOT NULL, [Subscribed] bit NOT NULL, [Delivery] tinyint NOT NULL, [Source] nvarchar(max) NOT NULL, [Request] binary(32) NULL, [Shape] binary(32) NULL, [Sensitive] bit NOT NULL, [Stamp] nvarchar(max) NULL, [Correlation] nvarchar(max) NULL, [Node] nvarchar(max) NULL, [ContentType] nvarchar(max) NULL",
+            "[EventId] uniqueidentifier NOT NULL, [Sequence] int NOT NULL, [At] datetimeoffset(7) NOT NULL, [Caller] nvarchar(max) NULL, [CallerHash] binary(32) NULL, [Kind] tinyint NOT NULL, [Subscribed] bit NOT NULL, [Delivery] tinyint NOT NULL, [Source] nvarchar(max) NOT NULL, [Request] binary(32) NULL, [Shape] binary(32) NULL, [Sensitive] bit NOT NULL, [Stamp] nvarchar(max) NULL, [Correlation] nvarchar(max) NULL, [Node] nvarchar(max) NULL, [ContentType] nvarchar(max) NULL, [Agent] nvarchar(max) NULL",
             $"""
-             INSERT INTO {e} ([EventId], [Sequence], [At], [Caller], [CallerHash], [Kind], [Subscribed], [Delivery], [Source], [Request], [Shape], [Sensitive], [Stamp], [Correlation], [Node], [ContentType])
-             SELECT s.[EventId], s.[Sequence], s.[At], s.[Caller], s.[CallerHash], s.[Kind], s.[Subscribed], s.[Delivery], s.[Source], s.[Request], s.[Shape], s.[Sensitive], s.[Stamp], s.[Correlation], s.[Node], s.[ContentType]
+             INSERT INTO {e} ([EventId], [Sequence], [At], [Caller], [CallerHash], [Kind], [Subscribed], [Delivery], [Source], [Request], [Shape], [Sensitive], [Stamp], [Correlation], [Node], [ContentType], [Agent])
+             SELECT s.[EventId], s.[Sequence], s.[At], s.[Caller], s.[CallerHash], s.[Kind], s.[Subscribed], s.[Delivery], s.[Source], s.[Request], s.[Shape], s.[Sensitive], s.[Stamp], s.[Correlation], s.[Node], s.[ContentType], s.[Agent]
              FROM #event s WHERE NOT EXISTS (SELECT 1 FROM {e} x WHERE x.[EventId] = s.[EventId]);
              """,
             cancel);
@@ -315,10 +320,10 @@ sealed class DisclosureStaging(DisclosureTables sql)
             transaction,
             entities,
             "#entity",
-            "[EventId] uniqueidentifier NOT NULL, [Ordinal] int NOT NULL, [Slot] int NOT NULL, [Sequence] int NOT NULL, [RowHash] binary(32) NOT NULL, [Source] nvarchar(max) NOT NULL, [RowKey] nvarchar(max) NOT NULL, [Via] nvarchar(max) NOT NULL",
+            "[EventId] uniqueidentifier NOT NULL, [Ordinal] int NOT NULL, [Slot] int NOT NULL, [Sequence] int NOT NULL, [RowHash] binary(32) NOT NULL, [Source] nvarchar(max) NOT NULL, [RowKey] nvarchar(max) NOT NULL, [Via] nvarchar(max) NOT NULL, [Version] nvarchar(max) NULL",
             $"""
-             INSERT INTO {sql.Entity} ([EventId], [Ordinal], [Slot], [Sequence], [RowHash], [Source], [RowKey], [Via])
-             SELECT s.[EventId], s.[Ordinal], s.[Slot], s.[Sequence], s.[RowHash], s.[Source], s.[RowKey], s.[Via]
+             INSERT INTO {sql.Entity} ([EventId], [Ordinal], [Slot], [Sequence], [RowHash], [Source], [RowKey], [Via], [Version])
+             SELECT s.[EventId], s.[Ordinal], s.[Slot], s.[Sequence], s.[RowHash], s.[Source], s.[RowKey], s.[Via], s.[Version]
              FROM #entity s WHERE NOT EXISTS (SELECT 1 FROM {sql.Entity} x WHERE x.[EventId] = s.[EventId] AND x.[Ordinal] = s.[Ordinal] AND x.[Slot] = s.[Slot]);
              """,
             cancel);
@@ -465,7 +470,7 @@ sealed class DisclosureStaging(DisclosureTables sql)
             transaction,
             runEntities,
             "#rentity",
-            "[Run] binary(32) NOT NULL, [Offset] int NOT NULL, [Slot] int NOT NULL, [RowHash] binary(32) NOT NULL, [Source] nvarchar(max) NOT NULL, [RowKey] nvarchar(max) NOT NULL, [Via] nvarchar(max) NOT NULL",
+            "[Run] binary(32) NOT NULL, [Offset] int NOT NULL, [Slot] int NOT NULL, [RowHash] binary(32) NOT NULL, [Source] nvarchar(max) NOT NULL, [RowKey] nvarchar(max) NOT NULL, [Via] nvarchar(max) NOT NULL, [Version] nvarchar(max) NULL",
             cancel);
         await Stage(connection, transaction, manifests, "#manifest", "[Manifest] binary(32) NOT NULL PRIMARY KEY, [Units] int NOT NULL", cancel);
         await Stage(connection, transaction, manifestRuns, "#mrun", "[Manifest] binary(32) NOT NULL, [Start] int NOT NULL, [Run] binary(32) NOT NULL", cancel);
@@ -478,8 +483,8 @@ sealed class DisclosureStaging(DisclosureTables sql)
              WHERE NOT EXISTS (SELECT 1 FROM {sql.Run} x WHERE x.[Run] = s.[Run]);
              INSERT INTO {sql.RunUnit} ([Run], [Offset], [Content])
              SELECT s.[Run], s.[Offset], s.[Content] FROM #runit s JOIN #freshrun f ON f.[Run] = s.[Run];
-             INSERT INTO {sql.RunEntity} ([Run], [Offset], [Slot], [RowHash], [Source], [RowKey], [Via])
-             SELECT s.[Run], s.[Offset], s.[Slot], s.[RowHash], s.[Source], s.[RowKey], s.[Via] FROM #rentity s JOIN #freshrun f ON f.[Run] = s.[Run];
+             INSERT INTO {sql.RunEntity} ([Run], [Offset], [Slot], [RowHash], [Source], [RowKey], [Via], [Version])
+             SELECT s.[Run], s.[Offset], s.[Slot], s.[RowHash], s.[Source], s.[RowKey], s.[Via], s.[Version] FROM #rentity s JOIN #freshrun f ON f.[Run] = s.[Run];
              INSERT INTO {sql.Run} ([Run], [Units]) SELECT f.[Run], f.[Units] FROM #freshrun f;
              SELECT s.[Manifest], s.[Units] INTO #fresh FROM #manifest s
              WHERE NOT EXISTS (SELECT 1 FROM {sql.Manifest} x WHERE x.[Manifest] = s.[Manifest]);

@@ -19,7 +19,7 @@ static class SqlStores
         return new(options);
     }
 
-    public static ScryProcessor Processor(IScryDisclosureSink sink, Who who) =>
+    public static ScryProcessor Processor(IScryDisclosureSink sink, Who who, Action<ScryDisclosureOptions>? configure = null) =>
         ScryProcessor.Create<ClinicContext>(
             _ => _.UseDisclosureAudit(
                 sink,
@@ -29,6 +29,7 @@ static class SqlStores
                     audit.Node = "ward-1";
                     audit.Unkeyed<Note>();
                     audit.Key<WardCensus>(_ => _.Ward);
+                    configure?.Invoke(audit);
                 }));
 
     // Waits for a store that moves batches on by itself to have nothing left to move.

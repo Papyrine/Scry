@@ -119,6 +119,19 @@ public sealed class ScryDisclosureOptions
     public Func<IServiceProvider, string?>? Caller { get; set; }
 
     /// <summary>
+    /// What is asking on the caller's behalf, where something is: the application a token was issued
+    /// to, the agent a person is using over MCP. Recorded beside the caller on every answer, so the
+    /// record says both who received it and what asked for it. Null, the default, records nothing:
+    /// the caller is taken to be asking for themselves.
+    /// </summary>
+    /// <remarks>
+    /// Read from what authenticated the request, never from something the client supplied: a
+    /// token's client claim (<c>azp</c>, <c>client_id</c>) is the usual source. The current request
+    /// is reached through <c>IHttpContextAccessor</c>.
+    /// </remarks>
+    public Func<IServiceProvider, string?>? Agent { get; set; }
+
+    /// <summary>
     /// Whether an answer may be recorded with no caller. Off by default: an answer nobody can be
     /// named as having received is refused rather than sent, since "who received this" is the
     /// question the record exists to answer.
@@ -164,7 +177,7 @@ public sealed class ScryDisclosureOptions
     /// <summary>The clock events are timed by. The system's by default.</summary>
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 ```
-<sup><a href='/src/Scry.Server/ScryDisclosureOptions.cs#L8-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-disclosureOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryDisclosureOptions.cs#L8-L81' title='Snippet source file'>snippet source</a> | <a href='#snippet-disclosureOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Off, the audit costs one null check where a capture would be made: no hidden columns are read and nothing is hashed.
@@ -341,7 +354,8 @@ public interface IScryDisclosureReader
 
 How each question is answered:
 
-- **Who received a row** reads the entity refs by source and key, which lead to the events (caller, time) and the unit addresses (the version disclosed), cut at the close record's `Units`. Reviewers who opened or exported one of those events are answered too, marked as such. An event that carried the row in several units is listed once for each, and `ScryDisclosureCursor.After` takes a listing up from any one of them.
+- **Who received a row** reads the entity refs by source and key, which lead to the events (caller, time) and the unit addresses (the version disclosed, as what was sent of the row), cut at the close record's `Units`. Reviewers who opened or exported one of those events are answered too, marked as such. An event that carried the row in several units is listed once for each, and `ScryDisclosureCursor.After` takes a listing up from any one of them.
+- **Which version of a row** is the address of what was sent of it, unless the host names a member that holds the row's version: `Version<T>(_ => _.RowVersion)`, a `rowversion` column, a revision number. That member is read beside the key, never sent, and recorded on every row a unit was read from (`ScryDisclosureEntity.Version`, `ScryRowDisclosure.Version`). The address compares two releases that sent the same members of a row; the version compares any two, whatever was projected.
 - **What a caller received** reads the events by caller and time. `Reconstruct` reads the request, the shape and the units in order, with their content.
 - **Whether a caller received a member** reads the events of the caller whose shape has the member with the use `Returned`, and that released at least one row of that source, or one unit where the source has no key.
 
@@ -541,14 +555,15 @@ The accept is one committed `INSERT` of the serialized batch into an outbox tabl
 
 - **Kept in segments, as a log is kept in files.** A segment is a schema of its own, `scry_000001` and on, holding every table of the record: `DisclosureBatch` (which batches the record has had, and the link of the chain each is), `DisclosureEvent`, `DisclosureClose`, `DisclosureUnit`, `DisclosureEntity`, `DisclosureRun`, `DisclosureRunUnit`, `DisclosureRunEntity`, `DisclosureManifest`, `DisclosureManifestRun`, `DisclosureAnswer`, `DisclosureShape`, `DisclosureField`, `DisclosureReview`, `DisclosureReviewEvent`, `DisclosureErasure`, `DisclosureContent` and `DisclosureSource`. One segment is written to. A new one is started when something is about to be recorded and the one being written to is `RollAfter` old or `RollAtBytes` large, or when `RollAsync` is called. With neither set there is one segment, for good. Rows are only ever added to these tables, apart from the content an erasure removes, and they are plain tables: a segment has to be something that can be dropped.
 - **Read as one record.** The store's own schema holds a view of each table over every segment, and every question is asked of those. So an answer in the oldest segment is found as one in the newest is, a question with no span of time costs a seek for each segment kept, which [adds up](performance.md#asking-the-record), while one with a span is asked only of the segments that cover any of it, and a later part of an answer is put in the segment the answer began in, so that an answer is in one segment and leaves with it.
-- **The oldest is retired when there are more than `Keep`.** It is marked first, and from then nothing more is written to it. It is handed to `Retire` where that is set, as an archive of every batch it was made from, in the order the chain links them and each with its shape and its content: what every sink takes, so a copy can be put into another store and asked the same questions. Then its tables are dropped, with whatever content it kept outside the database that no other segment was also sent. If `Retire` throws, the segment stays, and is handed on again the next time the record is moved on. What a retired segment held can no longer be asked. With `Keep` unset nothing is ever retired.
+- **The oldest is retired when there are more than `Keep`, or once it is `KeepFor` old.** Age is counted from the last answer in a segment, so an answer is kept for at least `KeepFor` and at most that and one segment's span; a `RollAfter` of a fraction of it keeps the difference small. The segment being written to is never retired. It is marked first, and from then nothing more is written to it. It is handed to `Retire` where that is set, as an archive of every batch it was made from, in the order the chain links them and each with its shape and its content: what every sink takes, so a copy can be put into another store and asked the same questions. Then its tables are dropped, with whatever content it kept outside the database that no other segment was also sent. If `Retire` throws, the segment stays, and is handed on again the next time the record is moved on. What a retired segment held can no longer be asked. With `Keep` unset nothing is ever retired.
+- **One set of settings, held by the record.** `RollAfter`, `RollAtBytes`, `Keep`, `KeepFor` and whether segments are handed on are written into the record by a node the first time it moves it, where they differ from what is there, and every node that moves the record goes by what the record holds (`RetentionAsync`). So two nodes configured differently cannot roll and retire by turns, and each change is a line in the record. A node with no `Retire` never turns handing on off for the others, and never retires a segment the record hands on: what is dropped is dropped with a copy, or not at all.
 - **Kept for good**: `DisclosureChain`, a hash for every batch, and `DisclosureSegment`, a line for each thing that happens to a segment: opened, rolled away from with where the chain then stood, being retired, and retired with how many batches and answers it held, how large it was and the span of time it covered. Both are only ever added to, and are append-only ledger tables where the server has them, which `LedgerTables` can force either way. Neither names a caller, a row or an answer. They are the only ledger tables there are, because a row put into one is there until the database is dropped: a dropped ledger table is renamed and kept, and so is the history of an updatable one.
 - **Outside the segments**: `DisclosureOutbox`, which a batch leaves once it has been moved on, and `IScryDisclosureBlobStore` for content kept outside the database.
 - **An answer given again adds one row, and one that differs by a row adds little more.** The units a batch carries are kept as a list, and a list as the runs it is made of. A run is some thirty units on average, each with its content's address and the rows it was read from, and has an address over all of that; it is kept once (`DisclosureRun` and its two tables). A list has an address over its runs and is kept once as a line for each of them (`DisclosureManifest`, `DisclosureManifestRun`), and each batch names the list it carried and where in the answer the list starts (`DisclosureAnswer`). So the same thousand rows asked for every minute are a thousand unit rows once and one row a minute. The same rows with one changed, added or taken away are a list of their own that shares every run but the one the difference is in: that run's units, and a line for each of the other runs. Where a run ends is decided by the units in it and not by how far into the list they are, which is what keeps a row more near the start from making every later run a new one. A stream's chunks are lists like any other, so a stream read again adds a row for each chunk. How much of an answer was handed on is its close's to say, whichever way its units are kept. `DisclosureUnit` and `DisclosureEntity` hold a batch's units as they arrived only where they do not follow one another, which no answer the server records does. Everything that reads units reads the views `DisclosureUnits` and `DisclosureEntities`, which put each unit back at its place. Runs and lists are shared within a segment and not between two, so the first answers after a new one is started keep their units again.
 - **Nothing a caller chose is an index key.** A caller's name, a source, a member and a row's key are kept as text of any length and found by a SHA-256 of them (`CallerHash`, `RowHash` over the source and the key together, `FieldHash` over the source and the member), then held to the text itself. So no value is too long to record, and none is cut short to fit. Those columns have a binary collation: a name is the name of exactly those characters, whatever the database's own collation says of case and accents.
 - **The mover** takes outbox rows in the order they were accepted, writes the rows the record lacks in one transaction, and deletes exactly the outbox rows it read. One mover at a time across nodes, under an application lock that an erasure also takes. A batch is moved exactly once; one that arrives again, as a journal's does after a crash, is recognised by `(EventId, Sequence)` and dropped. Content crosses to the content table only where the table does not already hold its bytes, so a row sent a thousand times is written once. A batch that will not read back is set aside in the outbox and reported by the store's status, so it cannot hold up what was accepted after it.
-- **Reads are a step behind.** A question is answered from what has been moved on, which trails what was accepted by the time one move takes: milliseconds on the node that accepted it, up to `DrainInterval` for a batch another node accepted. The store's status says how much is waiting.
-- **The chain is what shows a change.** `Hash = SHA-256(Previous ‖ digest)` for every batch, numbered by the chain itself and going on through every segment, with `VerifyChainAsync` making each digest again from the rows as they now are. It shows a row changed, added or removed under a batch, and a link taken out. A link whose segment was retired has nothing left to be made from again, and holds by its place alone; its digest is what a batch read from an archive of the segment is checked against. With plain tables under it the chain shows a change and does not prevent one, which a ledger table would. It cannot show its own end cut off, which is what keeping `ChainHead` somewhere else and asking `FindLinkAsync` for it is for.
+- **Reads are a step behind.** A question is answered from what has been moved on, which trails what was accepted by the time one move takes: milliseconds on the node that accepted it, up to `DrainInterval` for a batch another node accepted. The store's status says how much is waiting. `CatchUpAsync` waits for everything accepted before it was called, and `CatchUpBeforeReading` makes every question do so, for as long as `AcceptTimeout` at most: then an answer is found the moment it was given, at the cost of every question waiting on the mover. A host that only reads waits for the nodes that move the record.
+- **The chain is what shows a change.** `Hash = SHA-256(Previous ‖ digest)` for every batch, numbered by the chain itself and going on through every segment, with `VerifyChainAsync` making each digest again from the rows as they now are. It shows a row changed, added or removed under a batch, and a link taken out. A link whose segment was retired has nothing left to be made from again, and holds by its place alone; its digest is what a batch read from an archive of the segment is checked against. With plain tables under it the chain shows a change and does not prevent one, which a ledger table would. It cannot show its own end cut off, which is what keeping `ChainHead` somewhere else and asking `FindLinkAsync` for it is for. `VerifyChainAsync` checks a bounded stretch, for a request; `VerifyWholeChainAsync` checks every link a stretch at a time, reporting how far it has got, for a job that runs as long as the chain is long. The chain is never shortened: a link is some hundred bytes, and one is kept for every batch there has been.
 
 <!-- snippet: sqlServerDisclosureOptions -->
 <a id='snippet-sqlServerDisclosureOptions'></a>
@@ -628,6 +643,18 @@ public sealed class ScrySqlServerDisclosureOptions
     public int? Keep { get; set; }
 
     /// <summary>
+    /// How long a segment is kept once nothing more is being written to it, by when the last answer
+    /// in it was given. Past it the segment is retired, as one past <see cref="Keep"/> is. Null, the
+    /// default, keeps a segment for its age.
+    /// </summary>
+    /// <remarks>
+    /// Retirement is of whole segments, so an answer is kept for at least this long and at most this
+    /// long and one segment's span more: set <see cref="RollAfter"/> to a fraction of it to keep the
+    /// difference small. The segment being written to is never retired.
+    /// </remarks>
+    public TimeSpan? KeepFor { get; set; }
+
+    /// <summary>
     /// What is done with a segment before it is dropped: written somewhere else, usually. Null, the
     /// default, drops it and keeps nothing.
     /// </summary>
@@ -649,6 +676,18 @@ public sealed class ScrySqlServerDisclosureOptions
     /// </remarks>
     public TimeSpan? DrainInterval { get; set; } = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// Whether a question waits, before it is answered, until everything accepted before it was asked
+    /// has been moved into the record. Off by default: a question is answered from what has been
+    /// moved on, which trails what was accepted by the time one move takes.
+    /// </summary>
+    /// <remarks>
+    /// On, a question asked straight after an answer was given finds it, at the cost of every
+    /// question waiting on the mover, for as long as <see cref="AcceptTimeout"/> at most.
+    /// <see cref="ScrySqlServerDisclosureStore.CatchUpAsync"/> does the same for one question.
+    /// </remarks>
+    public bool CatchUpBeforeReading { get; set; }
+
     /// <summary>How many batches are moved in one transaction. Default 200.</summary>
     public int DrainBatches { get; set; } = 200;
 
@@ -666,7 +705,7 @@ public sealed class ScrySqlServerDisclosureOptions
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 }
 ```
-<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureOptions.cs#L4-L117' title='Snippet source file'>snippet source</a> | <a href='#snippet-sqlServerDisclosureOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureOptions.cs#L4-L141' title='Snippet source file'>snippet source</a> | <a href='#snippet-sqlServerDisclosureOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The store creates its schema and tables the first time it is used. A deployment that creates its own objects turns `CreateTables` off and runs `ScrySqlServerDisclosureStore.Script`, which can be run any number of times.
@@ -715,11 +754,13 @@ What a `304` does not do is run the row policies, with or without the audit: a c
 
 The audit hook's entry has no caller, and a plain query needs none. The disclosure audit needs one on every path.
 
-- The transports Scry ships pass it: `ScryOptions.Caller` over HTTP and MCP, the connection's own over the hub.
+- The transports Scry ships pass it: `ScryOptions.Caller`, over HTTP, MCP and the hub alike. A live query over the hub is counted against the same caller, so one caller's subscriptions are one count whichever way they were opened.
 - A transport of a host's own, calling the processor directly, is resolved through `ScryDisclosureOptions.Caller`, which by default reads the current request through `IHttpContextAccessor`.
 - No caller means the answer is refused, unless `AllowAnonymous` is set.
 
 The name is read from the authenticated principal, never from something the client supplied: it is what every answer is recorded under.
+
+**What asked on the caller's behalf.** A caller is often a person, and what asks is something they use: an application a token was issued to, an agent working over MCP. `ScryDisclosureOptions.Agent` names it, read from the same principal — a token's `azp` or `client_id` claim is the usual source — and it is recorded on every event beside the caller (`ScryDisclosureEvent.Agent`), shown by the explorer, and covered by the chain. Unset, nothing is recorded, which reads as the caller asking for themselves.
 
 
 ## Leaving a source out
@@ -927,22 +968,26 @@ public static IServiceCollection AddSqlServerDisclosureRecord(
     if (settings.RollAfter is not null ||
         settings.RollAtBytes is not null ||
         settings.Keep is not null ||
+        settings.KeepFor is not null ||
         settings.Retire is not null)
     {
         throw new ArgumentException(
             "A host that only reads the disclosure record does not move it on, " +
             "so it neither starts segments nor retires them: RollAfter, RollAtBytes, " +
-            "Keep and Retire belong on the serving nodes, which are what move it.");
+            "Keep, KeepFor and Retire belong on the serving nodes, which are what move it.");
     }
 
     settings.DrainInterval = null;
-    var kept = new ScrySqlServerDisclosureStore(settings);
+    var kept = new ScrySqlServerDisclosureStore(settings)
+    {
+        ReadsOnly = true
+    };
     services.TryAddSingleton(kept);
     services.AddScryDisclosureRecord(kept, configure);
     return services;
 }
 ```
-<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureExtensions.cs#L54-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-addSqlServerDisclosureRecord' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureExtensions.cs#L54-L113' title='Snippet source file'>snippet source</a> | <a href='#snippet-addSqlServerDisclosureRecord' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A host that only reads does not move the record on. What a reviewer asks there is accepted into the outbox before it is answered, and moved into the record by the serving nodes, so a reviewer's own questions show a moment after they are asked. Starting and retiring segments is the serving nodes' too, and the settings for them are refused on a host that only reads. An erasure there does move what is waiting, so that nothing erased comes back, and starts and retires nothing. For a store other than SQL Server's, `AddScryDisclosureRecord` takes the sink the serving nodes record to.
@@ -955,11 +1000,5 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 
 ## Open questions
 
-1. **What reading costs across many segments, and on a large record.** An answer is put back together from its one segment, and a question about a span of time is asked only of the segments that cover any of it. A question with no span is asked of every segment kept and [grows with their number](performance.md#asking-the-record): who received a row is some four times dearer over twenty-four segments than over one, and whether a caller was sent a member some six times. What would mend the rest is a statement written segment by segment, in place of one over a view of them all. Nothing has been measured on a record of millions of answers, or on a server with other work to do. The in-memory store shares nothing: it keeps every answer's units as they arrived.
-2. **"Which version".** A version is the content address of the unit. A row-version column named by the host, as a cached policy takes one, would compare versions across different projections.
-3. **Retention elsewhere.** The SQL Server store retires its oldest segment. The in-memory store keeps everything, and a journal keeps what it has not shipped. A segment is retired whole and by count: nothing retires what is older than a date, and nothing retires one source's rows and keeps another's.
-4. **Caller detail.** One string today. An agent acting for a user over MCP may warrant both identities.
-5. **The hub's subscription caller.** A hub subscription is counted against the connection's user identifier while commands go by `ScryOptions.Caller`. The audit records the same caller for both; the limit key is left alone.
-6. **Reading what was accepted a moment ago.** The SQL Server store answers from what has been moved on. A reader that waited for the outbox to empty would read its own writes, at the cost of a question waiting on the mover.
-7. **Checking a long chain.** A check of the whole chain can outlast a request. A bounded range is checked per call, and the last result is kept. The chain itself is never shortened: a link is some hundred bytes, and one is kept for every batch there has ever been.
-8. **Segment settings belong to each node.** Every node that moves the record on starts and retires segments by its own `RollAfter`, `RollAtBytes`, `Keep` and `Retire`, so two serving nodes configured differently roll the record by whichever moved it last. A host that only reads moves nothing and cannot disagree. Keeping the settings in the record itself would give every node one set.
+1. **What reading costs across many segments.** An answer is put back together from its one segment, and a question about a span of time is asked only of the segments that cover any of it. A question over all time is asked of every segment kept and [grows with their number](performance.md#asking-the-record): who received a row is some four times dearer over twenty-four segments than over one, and whether a caller was sent a member some six times. Writing such a question as one statement per segment, so that what is asked of each row is asked of its own segment, was tried and was no quicker. Nothing has been measured on a record of millions of answers, or on a server with other work to do.
+2. **Retention by source.** A segment is retired whole, by count or by age, so every source's rows are kept as long as each other's. A source whose rows may be kept for less time than the rest has no setting of its own. The in-memory store keeps everything, and shares nothing between answers.

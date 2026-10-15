@@ -67,6 +67,12 @@ public sealed partial class ScrySqlServerDisclosureStore :
             throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.RollAtBytes)} must be greater than zero. Null never starts a new segment of the record for its size.");
         }
 
+        if (options.KeepFor is { } keepFor &&
+            keepFor <= TimeSpan.Zero)
+        {
+            throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.KeepFor)} must be greater than zero. Null keeps a segment whatever its age.");
+        }
+
         if (options.Keep is < 1)
         {
             throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.Keep)} must be at least one: the segment being written to is always kept. Null keeps every segment.");

@@ -187,7 +187,8 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
                     found.Add(
                         new(header, entity.Ordinal, recorded.Units.First(_ => _.Ordinal == entity.Ordinal).Content, entity.Via)
                         {
-                            Close = recorded.Close
+                            Close = recorded.Close,
+                            Version = entity.Version
                         });
                     opened.Add(id);
                 }

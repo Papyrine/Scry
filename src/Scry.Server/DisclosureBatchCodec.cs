@@ -12,8 +12,9 @@ using System.Buffers.Binary;
 /// </remarks>
 static class DisclosureBatchCodec
 {
-    // "SDB" and the version.
-    const uint magic = 0x01424453;
+    // "SDB" and the version. Version 2 records what asked on the caller's behalf, and the version
+    // each row was at.
+    const uint magic = 0x02424453;
 
     const byte hasBegin = 1;
     const byte hasShape = 2;
@@ -66,6 +67,7 @@ static class DisclosureBatchCodec
             writer.String(begin.Correlation);
             writer.String(begin.Node);
             writer.String(begin.ContentType);
+            writer.String(begin.Agent);
         }
 
         if (batch.Shape is { } shape)
@@ -110,6 +112,7 @@ static class DisclosureBatchCodec
             writer.Int32(table[entity.Source]);
             writer.String(entity.Key);
             writer.Int32(table[entity.Via]);
+            writer.String(entity.Version);
         }
 
         writer.Int32(batch.Contents.Count);
@@ -181,7 +184,8 @@ static class DisclosureBatchCodec
                 Stamp = reader.String(),
                 Correlation = reader.String(),
                 Node = reader.String(),
-                ContentType = reader.String()
+                ContentType = reader.String(),
+                Agent = reader.String()
             };
         }
 
@@ -217,7 +221,11 @@ static class DisclosureBatchCodec
             var slot = reader.Int32();
             var source = reader.Named(table);
             var key = reader.Text();
-            entities[index] = new(ordinal, slot, source, key, reader.Named(table));
+            var via = reader.Named(table);
+            entities[index] = new(ordinal, slot, source, key, via)
+            {
+                Version = reader.String()
+            };
         }
 
         var contents = new ScryDisclosureContent[reader.Count()];

@@ -25,6 +25,13 @@ public readonly record struct ScryDisclosureUnit(int Ordinal, ScryDisclosureAddr
 public readonly record struct ScryDisclosureEntity(int Ordinal, int Slot, string Source, string Key, string Via)
 {
     /// <summary>
+    /// The version the row was at when the unit was read from it, as the JSON value of the member
+    /// <see cref="ScryDisclosureOptions.Version{TSource}"/> named for its source. Null where none was
+    /// named, or the row had none.
+    /// </summary>
+    public string? Version { get; init; }
+
+    /// <summary>
     /// A key as <see cref="Key"/> holds it: the JSON array of its values, each written as a response
     /// writes a value of that type. What a store asked about a row turns the key it was given into,
     /// so the question and the record meet on the same text.

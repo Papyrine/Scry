@@ -136,7 +136,8 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
                     row.Content.ToString(),
                     row.Via,
                     await Left(reader, row.Event.Shape, shapes, cancel),
-                    review));
+                    review,
+                    row.Version));
         }
 
         PageMark? next = null;
@@ -733,7 +734,8 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             close?.Units,
             header.Node,
             header.Correlation,
-            header.ContentType);
+            header.ContentType,
+            header.Agent);
 
     static MemberLine Line(ScryDisclosureField field) =>
         new(field.Source, field.Member, field.Use.ToString(), field.Sensitive);

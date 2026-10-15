@@ -28,6 +28,13 @@ public sealed record ScryDisclosureEvent(Guid Id, DateTimeOffset At, ScryDisclos
     /// </summary>
     public string? Caller { get; init; }
 
+    /// <summary>
+    /// What asked on the caller's behalf, where the host names one: the application or the agent the
+    /// caller acts through, as <see cref="ScryDisclosureOptions.Agent"/> answered. Null where it named
+    /// nothing, which is a caller asking for themselves.
+    /// </summary>
+    public string? Agent { get; init; }
+
     /// <summary>Whether this was one answer of a live query rather than a query asked once.</summary>
     public bool Subscribed { get; init; }
 

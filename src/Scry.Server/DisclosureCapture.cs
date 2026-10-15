@@ -264,7 +264,11 @@ sealed class DisclosureCapture(
             var entity = slots[slot];
             if (Key(row, entity) is { } key)
             {
-                entities.Add(new(ordinal, slot, entity.Source, key, entity.Via));
+                entities.Add(
+                    new(ordinal, slot, entity.Source, key, entity.Via)
+                    {
+                        Version = Version(row, entity)
+                    });
             }
         }
     }
@@ -290,6 +294,22 @@ sealed class DisclosureCapture(
         }
 
         json.WriteEndArray();
+        json.Flush();
+        return Encoding.UTF8.GetString(scratch.WrittenMemory.Span);
+    }
+
+    // A row's version as the record holds one: the JSON value of the member named for it.
+    string? Version(object[] row, DisclosureSlot slot)
+    {
+        if (!slot.Versioned ||
+            row[slot.First + slot.Count] is not { } value)
+        {
+            return null;
+        }
+
+        scratch.Reset();
+        var json = Json();
+        PlanShapeWriter.WriteValue(json, value);
         json.Flush();
         return Encoding.UTF8.GetString(scratch.WrittenMemory.Span);
     }
@@ -677,6 +697,7 @@ sealed class DisclosureCapture(
         return new(Id, at, kind, source)
         {
             Caller = caller,
+            Agent = runtime.Settings.Agent?.Invoke(services),
             Subscribed = Subscribed,
             Delivery = Delivery,
             ContentType = ContentType,

@@ -5,6 +5,49 @@
 /// </summary>
 public class DisclosureAuditTests
 {
+    // A row's version is read beside its key and recorded on every row a unit was read from, so two
+    // answers that sent different members of the same row say it was the same version — which the
+    // addresses of what they sent cannot. A row reached through a navigation has its own.
+    [Test]
+    public async Task ARowsVersionIsRecordedWhateverWasSentOfIt()
+    {
+        var (processor, store) = Disclosures.Audited(
+            configure: _ =>
+            {
+                _.Version<Employee>(_ => _.Status);
+                _.Version<Department>(_ => _.Id);
+            });
+        var ids = Disclosures.From<Employee>("Employee")
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new
+            {
+                _.Id,
+                Department = _.Department!.Name
+            })
+            .ToScryRequest();
+
+        await Disclosures.Buffered(processor, Disclosures.Names());
+        await Disclosures.Buffered(processor, ids);
+
+        var events = await Disclosures.Events(store);
+        var names = (await store.Reconstruct(events[^1].Event.Id))!.Units;
+        var other = (await store.Reconstruct(events[^2].Event.Id))!.Units;
+        var root = names.Select(_ => _.Entities.Single(_ => _.Via.Length == 0)).ToList();
+        var again = other.Select(_ => _.Entities.Single(_ => _.Via.Length == 0)).ToList();
+        var reached = names.Concat(other).SelectMany(_ => _.Entities.Where(_ => _.Via.Length > 0)).ToList();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(root).IsNotEmpty();
+            await Assert.That(root.All(_ => _.Version is not null)).IsTrue();
+            await Assert.That(root.Select(_ => (_.Key, _.Version))).IsEquivalentTo(again.Select(_ => (_.Key, _.Version)), CollectionOrdering.Matching);
+            await Assert.That(names.Select(_ => _.Content.Address)).IsNotEquivalentTo(other.Select(_ => _.Content.Address));
+            await Assert.That(reached).IsNotEmpty();
+            await Assert.That(reached.All(_ => _.Version == _.Key.Trim('[', ']'))).IsTrue();
+        }
+    }
+
     [Test]
     public async Task AListIsRecordedRowByRow()
     {

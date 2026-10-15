@@ -116,6 +116,70 @@ public sealed partial class ScrySqlServerDisclosureStore
         return total;
     }
 
+    /// <summary>
+    /// Waits until everything accepted before it was called has been moved into the record, so that
+    /// what is read next includes it. Moves it on itself where this node moves the record, and
+    /// otherwise waits for the node that does.
+    /// </summary>
+    /// <exception cref="TimeoutException">
+    /// It was not all moved within <see cref="ScrySqlServerDisclosureOptions.AcceptTimeout"/>.
+    /// </exception>
+    public async Task CatchUpAsync(Cancel cancel = default)
+    {
+        await EnsureAsync(cancel);
+        var started = Stopwatch.GetTimestamp();
+        long? last;
+        await using (var connection = await OpenAsync(cancel))
+        await using (var command = Command(connection, $"SELECT MAX(o.[Position]) FROM {sql.Outbox} o WHERE o.[Unreadable] = 0;"))
+        {
+            last = await command.ExecuteScalarAsync(cancel) as long?;
+        }
+
+        if (last is not { } position)
+        {
+            return;
+        }
+
+        while (true)
+        {
+            if (!ReadsOnly)
+            {
+                await DrainAsync(cancel);
+            }
+
+            await using (var connection = await OpenAsync(cancel))
+            await using (var command = Command(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM {sql.Outbox} o WHERE o.[Unreadable] = 0 AND o.[Position] <= @last) THEN 1 ELSE 0 END;"))
+            {
+                command.Parameters.AddWithValue("@last", position);
+                if ((int) (await command.ExecuteScalarAsync(cancel))! == 0)
+                {
+                    return;
+                }
+            }
+
+            if (Stopwatch.GetElapsedTime(started) > options.AcceptTimeout)
+            {
+                throw new TimeoutException($"What was accepted before this question was not all moved into the disclosure record within {options.AcceptTimeout}, so it was not answered. The store's status says how much is waiting.");
+            }
+
+            await Task.Delay(20, cancel);
+        }
+    }
+
+    // Set for a host that only reads the record, which never moves it on and waits for the serving
+    // nodes to.
+    internal bool ReadsOnly { get; init; }
+
+    ValueTask Caught(Cancel cancel)
+    {
+        if (!options.CatchUpBeforeReading)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        return new(CatchUpAsync(cancel));
+    }
+
     async Task<int> DrainOnce(Cancel cancel)
     {
         await using var connection = await OpenAsync(cancel);
@@ -192,7 +256,11 @@ public sealed partial class ScrySqlServerDisclosureStore
         // record rolls when something is about to be added to it, and not on a timer of its own.
         var segments = await Registry(connection, transaction, cancel);
         var now = options.Clock.GetUtcNow();
-        if (await Due(connection, transaction, Current(segments), now, cancel))
+        // By the record's settings, which this node writes its own into the first time it moves it.
+        // A host that only reads starts no segment, whatever moves the record on there.
+        var retention = await Settle(connection, transaction, cancel);
+        if (!ReadsOnly &&
+            await Due(connection, transaction, Current(segments), now, retention, cancel))
         {
             await Roll(connection, transaction, segments, now, cancel);
             segments = await Registry(connection, transaction, cancel);

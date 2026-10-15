@@ -60,12 +60,27 @@ public sealed partial class ScrySqlServerDisclosureStore
     /// </remarks>
     public async Task<int> RetireAsync(Cancel cancel = default)
     {
-        if (options.Keep is not { } keep)
+        await EnsureAsync(cancel);
+        ScryDisclosureRetention retention;
+        await using (var connection = await OpenAsync(cancel))
+        {
+            retention = await Retention(connection, null, cancel);
+        }
+
+        if (retention is {Keep: null, KeepFor: null})
         {
             return 0;
         }
 
-        await EnsureAsync(cancel);
+        // A record whose segments are handed on before they are dropped is never dropped by a node
+        // with nothing to hand them to: what it held would be gone with no copy anywhere.
+        if (retention is {HandsOn: true} &&
+            options.Retire is null)
+        {
+            problem = $"The disclosure record's segments are handed on before they are retired, and this node has no {nameof(ScrySqlServerDisclosureOptions)}.{nameof(ScrySqlServerDisclosureOptions.Retire)} to hand them to, so it retires none. A node that has one will.";
+            return 0;
+        }
+
         var resource = $"Scry.Disclosure.Retire.{sql.Schema}";
         await using var guard = await OpenAsync(cancel);
         await using (var locking = Command(guard, "DECLARE @held int; EXEC @held = sp_getapplock @Resource = @resource, @LockMode = N'Exclusive', @LockOwner = N'Session', @LockTimeout = 0; SELECT @held;"))
@@ -80,7 +95,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         try
         {
             var retired = 0;
-            while (await Oldest(keep, cancel) is { } oldest)
+            while (await Oldest(retention, cancel) is { } oldest)
             {
                 var handedOn = false;
                 if (options.Retire is { } retire)
@@ -106,7 +121,7 @@ public sealed partial class ScrySqlServerDisclosureStore
     // The oldest segment, where there are more than are to be kept: marked as being retired, so that
     // nothing more is written to it, and described as it then stands. Never the one being written
     // to, since at least one is always kept.
-    async Task<ScryDisclosureSegment?> Oldest(int keep, Cancel cancel)
+    async Task<ScryDisclosureSegment?> Oldest(ScryDisclosureRetention retention, Cancel cancel)
     {
         await using var connection = await OpenAsync(cancel);
         ScryDisclosureSegment oldest;
@@ -118,12 +133,12 @@ public sealed partial class ScrySqlServerDisclosureStore
             }
 
             var kept = (await Registry(connection, transaction, cancel)).Where(_ => _.Retired is null).ToList();
-            if (kept.Count <= keep)
+            oldest = kept[0];
+            if (!Due(retention, kept.Count, oldest))
             {
                 return null;
             }
 
-            oldest = kept[0];
             if (!oldest.Retiring)
             {
                 await Enter(connection, transaction, oldest.Number, DisclosureSegmentEntry.Retiring, options.Clock.GetUtcNow(), cancel);
@@ -229,16 +244,158 @@ public sealed partial class ScrySqlServerDisclosureStore
         await transaction.CommitAsync(cancel);
     }
 
-    // Whether the segment being written to has had its time or reached its size.
-    async Task<bool> Due(SqlConnection connection, SqlTransaction transaction, ScryDisclosureSegment current, DateTimeOffset now, Cancel cancel)
+    // Whether the oldest segment kept is to be retired: one too many are kept, or it has been kept
+    // as long as it is to be. Never the one being written to, which has not been rolled away from.
+    bool Due(ScryDisclosureRetention retention, int kept, ScryDisclosureSegment oldest)
     {
-        if (options.RollAfter is { } after &&
+        if (oldest.Sealed is not { } sealedAt)
+        {
+            return false;
+        }
+
+        if (retention.Keep is { } keep &&
+            kept > keep)
+        {
+            return true;
+        }
+
+        return retention.KeepFor is { } keepFor &&
+               (oldest.To ?? sealedAt) <= options.Clock.GetUtcNow() - keepFor;
+    }
+
+    /// <summary>
+    /// When the record starts a new segment and how many it keeps, as the record itself holds them:
+    /// what every node that moves it on goes by, whatever its own settings say.
+    /// </summary>
+    /// <remarks>
+    /// A node that moves the record on writes its own settings into it the first time it moves it,
+    /// where they differ from what is there, so the record's are those of the node that started most
+    /// recently, and each change is a line in the record of when it was made. A host that only reads
+    /// writes none.
+    /// </remarks>
+    public async Task<ScryDisclosureRetention> RetentionAsync(Cancel cancel = default)
+    {
+        await EnsureAsync(cancel);
+        await using var connection = await OpenAsync(cancel);
+        return await Retention(connection, null, cancel);
+    }
+
+    // What this node was configured with.
+    ScryDisclosureRetention Own =>
+        new(options.RollAfter, options.RollAtBytes, options.Keep, options.Retire is not null)
+        {
+            KeepFor = options.KeepFor
+        };
+
+    // Whether this node has written its settings into the record yet. Once: after that, another
+    // node's are the record's until that node is gone and this one starts again.
+    bool settled;
+
+    // The record's settings, or this node's where the record has none and this node moves it on.
+    async Task<ScryDisclosureRetention> Retention(SqlConnection connection, SqlTransaction? transaction, Cancel cancel)
+    {
+        await using var command = Command(
+            connection,
+            $"SELECT TOP (1) s.[RollAfter], s.[RollAtBytes], s.[Keep], s.[HandsOn], s.[KeepFor] FROM {sql.Segments} s WHERE s.[What] = @what ORDER BY s.[Entry] DESC;",
+            transaction);
+        command.Parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Settings);
+        await using var reader = await command.ExecuteReaderAsync(cancel);
+        if (!await reader.ReadAsync(cancel))
+        {
+            if (ReadsOnly)
+            {
+                return new(null, null, null, false);
+            }
+
+
+            return Own;
+        }
+
+        TimeSpan? after = null;
+        if (!reader.IsDBNull(0))
+        {
+            after = TimeSpan.FromTicks(reader.GetInt64(0));
+        }
+
+        int? keep = null;
+        if (!reader.IsDBNull(2))
+        {
+            keep = reader.GetInt32(2);
+        }
+
+        TimeSpan? keepFor = null;
+        if (!reader.IsDBNull(4))
+        {
+            keepFor = TimeSpan.FromTicks(reader.GetInt64(4));
+        }
+
+        return new(after, Number(reader, 1), keep, reader.GetBoolean(3))
+        {
+            KeepFor = keepFor
+        };
+    }
+
+    // The record's settings, after this node has written its own into it where this is the first
+    // time it moves the record on and they differ. Under the lock that makes it the only writer.
+    async Task<ScryDisclosureRetention> Settle(SqlConnection connection, SqlTransaction transaction, Cancel cancel)
+    {
+        var recorded = await Retention(connection, transaction, cancel);
+        if (settled ||
+            ReadsOnly)
+        {
+            return recorded;
+        }
+
+        settled = true;
+        var own = Own;
+        if (recorded == own &&
+            await Recorded(connection, transaction, cancel))
+        {
+            return recorded;
+        }
+
+        // A node with nothing to hand a segment to does not turn handing on off for every node: a
+        // host started without its archive would otherwise have the record dropped with no copy.
+        if (recorded.HandsOn &&
+            !own.HandsOn)
+        {
+            problem = $"The disclosure record's segments are handed on before they are retired, and this node has no {nameof(ScrySqlServerDisclosureOptions)}.{nameof(ScrySqlServerDisclosureOptions.Retire)}, so it goes by the record's settings rather than its own.";
+            return recorded;
+        }
+
+        await using var enter = Command(
+            connection,
+            $"INSERT INTO {sql.Segments} ([Segment], [What], [At], [RollAfter], [RollAtBytes], [Keep], [KeepFor], [HandsOn]) VALUES (0, @what, @at, @after, @bytes, @keep, @keepFor, @handsOn);",
+            transaction);
+        enter.Parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Settings);
+        enter.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = options.Clock.GetUtcNow()});
+        enter.Parameters.Add(new("@after", SqlDbType.BigInt) {Value = Value(own.RollAfter?.Ticks)});
+        enter.Parameters.Add(new("@bytes", SqlDbType.BigInt) {Value = Value(own.RollAtBytes)});
+        enter.Parameters.Add(new("@keep", SqlDbType.Int) {Value = Value(own.Keep)});
+        enter.Parameters.Add(new("@keepFor", SqlDbType.BigInt) {Value = Value(own.KeepFor?.Ticks)});
+        enter.Parameters.AddWithValue("@handsOn", own.HandsOn);
+        await enter.ExecuteNonQueryAsync(cancel);
+        return own;
+    }
+
+    // Whether the record holds settings at all, as opposed to holding none and this node's standing in.
+    async Task<bool> Recorded(SqlConnection connection, SqlTransaction transaction, Cancel cancel)
+    {
+        await using var command = Command(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM {sql.Segments} s WHERE s.[What] = @what) THEN 1 ELSE 0 END;", transaction);
+        command.Parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Settings);
+        return (int) (await command.ExecuteScalarAsync(cancel))! == 1;
+    }
+
+    // Whether the segment being written to has had its time or reached its size, by the record's settings.
+    async Task<bool> Due(SqlConnection connection, SqlTransaction transaction, ScryDisclosureSegment current, DateTimeOffset now, ScryDisclosureRetention retention, Cancel cancel)
+    {
+        if (retention.RollAfter is { } after &&
             now - current.Opened >= after)
         {
             return true;
         }
 
-        if (options.RollAtBytes is not { } bytes)
+        if (retention.RollAtBytes is not { } bytes)
         {
             return false;
         }
@@ -551,5 +708,8 @@ enum DisclosureSegmentEntry : byte
     Opened = 1,
     Sealed = 2,
     Retiring = 3,
-    Retired = 4
+    Retired = 4,
+
+    // Not about a segment: the settings every segment is started and retired by, from then on.
+    Settings = 5
 }

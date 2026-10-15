@@ -11,18 +11,18 @@ sealed class DisclosureTables
     static (string Name, string[] Columns)[] objects =
     [
         ("DisclosureBatch", ["EventId", "Sequence", "Position", "AcceptedAt", "Link"]),
-        ("DisclosureEvent", ["EventId", "Sequence", "At", "Caller", "CallerHash", "Kind", "Subscribed", "Delivery", "Source", "Request", "Shape", "Sensitive", "Stamp", "Correlation", "Node", "ContentType"]),
+        ("DisclosureEvent", ["EventId", "Sequence", "At", "Caller", "CallerHash", "Kind", "Subscribed", "Delivery", "Source", "Request", "Shape", "Sensitive", "Stamp", "Correlation", "Node", "ContentType", "Agent"]),
         ("DisclosureClose", ["EventId", "Sequence", "Outcome", "Units", "At", "Response"]),
         ("DisclosureUnit", ["EventId", "Ordinal", "Sequence", "Content"]),
-        ("DisclosureEntity", ["EventId", "Ordinal", "Slot", "Sequence", "RowHash", "Source", "RowKey", "Via"]),
+        ("DisclosureEntity", ["EventId", "Ordinal", "Slot", "Sequence", "RowHash", "Source", "RowKey", "Via", "Version"]),
         ("DisclosureRun", ["Run", "Units"]),
         ("DisclosureRunUnit", ["Run", "Offset", "Content"]),
-        ("DisclosureRunEntity", ["Run", "Offset", "Slot", "RowHash", "Source", "RowKey", "Via"]),
+        ("DisclosureRunEntity", ["Run", "Offset", "Slot", "RowHash", "Source", "RowKey", "Via", "Version"]),
         ("DisclosureManifest", ["Manifest", "Units"]),
         ("DisclosureManifestRun", ["Manifest", "Start", "Run"]),
         ("DisclosureAnswer", ["EventId", "Sequence", "Start", "Manifest"]),
         ("DisclosureUnits", ["EventId", "Ordinal", "Sequence", "Content"]),
-        ("DisclosureEntities", ["EventId", "Ordinal", "Slot", "Sequence", "RowHash", "Source", "RowKey", "Via", "Content", "Leading"]),
+        ("DisclosureEntities", ["EventId", "Ordinal", "Slot", "Sequence", "RowHash", "Source", "RowKey", "Via", "Content", "Leading", "Version"]),
         ("DisclosureShape", ["Address"]),
         ("DisclosureField", ["Shape", "Position", "FieldHash", "FieldUse", "Source", "Member", "Sensitive"]),
         ("DisclosureContent", ["Address", "Kind", "Length", "Bytes", "Elsewhere", "Erased"]),
@@ -173,7 +173,8 @@ sealed class DisclosureTables
             [Stamp] nvarchar(max) NULL,
             [Correlation] nvarchar(max) NULL,
             [Node] nvarchar(max) NULL,
-            [ContentType] nvarchar(max) NULL
+            [ContentType] nvarchar(max) NULL,
+            [Agent] nvarchar(max) COLLATE Latin1_General_100_BIN2 NULL
             """);
         Index(script, s, "DisclosureEvent", "IX_DisclosureEvent_Caller", "([CallerHash], [At] DESC, [EventId] DESC)");
         Table(script, s, "DisclosureClose",
@@ -204,6 +205,7 @@ sealed class DisclosureTables
             [Source] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
             [RowKey] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
             [Via] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
+            [Version] nvarchar(max) COLLATE Latin1_General_100_BIN2 NULL,
             CONSTRAINT [PK_DisclosureEntity] PRIMARY KEY CLUSTERED ([EventId], [Ordinal], [Slot])
             """);
         Index(script, s, "DisclosureEntity", "IX_DisclosureEntity_Row", "([RowHash]) INCLUDE ([EventId], [Ordinal])");
@@ -236,6 +238,7 @@ sealed class DisclosureTables
             [Source] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
             [RowKey] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
             [Via] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
+            [Version] nvarchar(max) COLLATE Latin1_General_100_BIN2 NULL,
             CONSTRAINT [PK_DisclosureRunEntity] PRIMARY KEY CLUSTERED ([Run], [Offset], [Slot])
             """);
         Index(script, s, "DisclosureRunEntity", "IX_DisclosureRunEntity_Row", "([RowHash])");
@@ -272,12 +275,12 @@ sealed class DisclosureTables
         View(script, s, "DisclosureEntities",
             $"""
              SELECT n.[EventId], n.[Ordinal], n.[Slot], n.[Sequence], n.[RowHash], n.[Source], n.[RowKey], n.[Via], u.[Content],
-             CASE WHEN EXISTS (SELECT 1 FROM {s}.[DisclosureEntity] m WHERE m.[EventId] = n.[EventId] AND m.[Ordinal] = n.[Ordinal] AND m.[Slot] < n.[Slot] AND m.[RowHash] = n.[RowHash] AND m.[Source] = n.[Source] AND m.[RowKey] = n.[RowKey]) THEN 0 ELSE 1 END AS [Leading]
+             CASE WHEN EXISTS (SELECT 1 FROM {s}.[DisclosureEntity] m WHERE m.[EventId] = n.[EventId] AND m.[Ordinal] = n.[Ordinal] AND m.[Slot] < n.[Slot] AND m.[RowHash] = n.[RowHash] AND m.[Source] = n.[Source] AND m.[RowKey] = n.[RowKey]) THEN 0 ELSE 1 END AS [Leading], n.[Version]
              FROM {s}.[DisclosureEntity] n
              JOIN {s}.[DisclosureUnit] u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
              UNION ALL
              SELECT a.[EventId], a.[Start] + l.[Start] + r.[Offset] AS [Ordinal], r.[Slot], a.[Sequence], r.[RowHash], r.[Source], r.[RowKey], r.[Via], u.[Content],
-             CASE WHEN EXISTS (SELECT 1 FROM {s}.[DisclosureRunEntity] m WHERE m.[Run] = r.[Run] AND m.[Offset] = r.[Offset] AND m.[Slot] < r.[Slot] AND m.[RowHash] = r.[RowHash] AND m.[Source] = r.[Source] AND m.[RowKey] = r.[RowKey]) THEN 0 ELSE 1 END AS [Leading]
+             CASE WHEN EXISTS (SELECT 1 FROM {s}.[DisclosureRunEntity] m WHERE m.[Run] = r.[Run] AND m.[Offset] = r.[Offset] AND m.[Slot] < r.[Slot] AND m.[RowHash] = r.[RowHash] AND m.[Source] = r.[Source] AND m.[RowKey] = r.[RowKey]) THEN 0 ELSE 1 END AS [Leading], r.[Version]
              FROM {s}.[DisclosureAnswer] a
              JOIN {s}.[DisclosureManifestRun] l ON l.[Manifest] = a.[Manifest]
              JOIN {s}.[DisclosureRunEntity] r ON r.[Run] = l.[Run]

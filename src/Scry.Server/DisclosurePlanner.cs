@@ -53,7 +53,7 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     IReadOnlyList<IReadOnlyList<ScryDisclosureField>> groupKeys = [];
 
     // The rows the projection now being built reaches, in the order they were first reached.
-    List<(string Source, string Via, IReadOnlyList<Expression> Key)> reached = [];
+    List<(string Source, string Via, IReadOnlyList<Expression> Key, Expression? Version)> reached = [];
 
     /// <summary>Says the query reads rows of a type: its root, another source it names, a navigation's far end.</summary>
     public void Reads(Type type) =>
@@ -411,7 +411,7 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
 
         // Able to carry a null: a navigation that leads nowhere, or to a row a policy hides, reads
         // as no key, and no key is recorded as no row.
-        reached.Add((SourceName(origin.Row.Type), origin.Via, [.. key.Select(_ => Widened(Expression.Property(origin.Row, _)))]));
+        reached.Add((SourceName(origin.Row.Type), origin.Via, [.. key.Select(_ => Widened(Expression.Property(origin.Row, _)))], Version(origin.Row, widen: true)));
     }
 
     /// <summary>
@@ -456,7 +456,29 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
 
                             return value;
                         })
-                ]));
+                ],
+                Version(row, optional)));
+    }
+
+    // The row's version, where the host named a member that holds one: read as its key is, and able
+    // to carry a null wherever the key is.
+    Expression? Version(Expression row, bool widen)
+    {
+        for (var declared = row.Type; declared is not null; declared = declared.BaseType)
+        {
+            if (settings.Versions.TryGetValue(declared, out var member))
+            {
+                Expression value = Expression.Property(row, member);
+                if (widen)
+                {
+                    return Widened(value);
+                }
+
+                return value;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -471,10 +493,15 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         }
 
         var slots = new List<DisclosureSlot>(reached.Count);
-        foreach (var (source, via, key) in reached)
+        foreach (var (source, via, key, version) in reached)
         {
-            slots.Add(new(source, via, leaves.Count, key.Count));
+            slots.Add(new(source, via, leaves.Count, key.Count, version is not null));
             leaves.AddRange(key);
+            if (version is not null)
+            {
+                // Boxed, as every leaf of a selector is.
+                leaves.Add(Expression.Convert(version, typeof(object)));
+            }
         }
 
         reached.Clear();
@@ -630,4 +657,5 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
 /// <param name="Via">How the answer's row reaches it: empty for the row itself.</param>
 /// <param name="First">The first slot of the key.</param>
 /// <param name="Count">How many slots the key takes.</param>
-readonly record struct DisclosureSlot(string Source, string Via, int First, int Count);
+/// <param name="Versioned">Whether the row's version follows its key, in the slot after it.</param>
+readonly record struct DisclosureSlot(string Source, string Via, int First, int Count, bool Versioned = false);

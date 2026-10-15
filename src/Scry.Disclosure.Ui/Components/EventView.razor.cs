@@ -110,6 +110,11 @@ public partial class EventView
 
     string Caller => Show.Caller(answer!.Event.Caller);
 
+    // What asked on the caller's behalf, where the host recorded one.
+    bool HasAgent => answer!.Event.Agent is not null;
+
+    string Agent => answer!.Event.Agent ?? "";
+
     string When => Show.When(answer!.Event.At);
 
     string Id => answer!.Event.Id.ToString("D");

@@ -17,6 +17,10 @@
 
         <dl class="facts">
             <div><dt>Sent to</dt><dd data-testid="event-caller">@Caller</dd></div>
+            @if (HasAgent)
+            {
+                <div><dt>Asked for by</dt><dd data-testid="event-agent">@Agent</dd></div>
+            }
             <div><dt>When (UTC)</dt><dd class="mono" data-testid="event-when">@When</dd></div>
             <div><dt>Answer</dt><dd data-testid="event-kind">@Kind</dd></div>
             <div><dt>How it ended</dt><dd data-testid="event-outcome">@Ended</dd></div>

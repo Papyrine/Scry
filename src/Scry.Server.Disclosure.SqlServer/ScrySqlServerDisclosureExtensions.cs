@@ -92,16 +92,20 @@ public static class ScrySqlServerDisclosureExtensions
         if (settings.RollAfter is not null ||
             settings.RollAtBytes is not null ||
             settings.Keep is not null ||
+            settings.KeepFor is not null ||
             settings.Retire is not null)
         {
             throw new ArgumentException(
                 "A host that only reads the disclosure record does not move it on, " +
                 "so it neither starts segments nor retires them: RollAfter, RollAtBytes, " +
-                "Keep and Retire belong on the serving nodes, which are what move it.");
+                "Keep, KeepFor and Retire belong on the serving nodes, which are what move it.");
         }
 
         settings.DrainInterval = null;
-        var kept = new ScrySqlServerDisclosureStore(settings);
+        var kept = new ScrySqlServerDisclosureStore(settings)
+        {
+            ReadsOnly = true
+        };
         services.TryAddSingleton(kept);
         services.AddScryDisclosureRecord(kept, configure);
         return services;

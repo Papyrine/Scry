@@ -122,3 +122,16 @@ public sealed class ScryDisclosureArchive
         }
     }
 }
+
+/// <summary>
+/// When the disclosure record starts a new segment, and how many it keeps, as the record holds them.
+/// </summary>
+/// <param name="RollAfter">How long a segment is written to, or null for no limit.</param>
+/// <param name="RollAtBytes">How large a segment grows, or null for no limit.</param>
+/// <param name="Keep">How many segments are kept, or null for all of them.</param>
+/// <param name="HandsOn">Whether a segment is handed on before it is dropped. No node without something to hand it to retires one.</param>
+public sealed record ScryDisclosureRetention(TimeSpan? RollAfter, long? RollAtBytes, int? Keep, bool HandsOn)
+{
+    /// <summary>How long a segment is kept once it is rolled away from, or null for no limit.</summary>
+    public TimeSpan? KeepFor { get; init; }
+}

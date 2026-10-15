@@ -1,4 +1,4 @@
-namespace Scry;
+﻿namespace Scry;
 
 public sealed partial class ScrySqlServerDisclosureStore
 {
@@ -17,6 +17,7 @@ public sealed partial class ScrySqlServerDisclosureStore
     {
         // A question can arrive before the first answer has: the tables are made by whichever comes first.
         await EnsureAsync(cancel);
+        await Caught(cancel);
         var text = ScryDisclosureEntity.KeyOf(key);
 
         // Found by the hash and then held to the text it is a hash of. And once for each unit, however
@@ -47,7 +48,7 @@ public sealed partial class ScrySqlServerDisclosureStore
                      SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
                             CAST(NULL AS uniqueidentifier) AS [ReviewId], CAST(NULL AS datetimeoffset(7)) AS [ReviewedAt], CAST(NULL AS nvarchar(max)) AS [Reviewer],
                             CAST(NULL AS tinyint) AS [Question], CAST(NULL AS binary(32)) AS [Parameters], CAST(NULL AS int) AS [Results], CAST(NULL AS nvarchar(max)) AS [ReviewNode],
-                            e.[At] AS [When], e.[EventId] AS [Mark]
+                            e.[At] AS [When], e.[EventId] AS [Mark], n.[Version]
                      FROM {sql.Entities} n
                      JOIN {sql.Event} e ON e.[EventId] = n.[EventId] AND e.[Segment] = n.[Segment]
                      {sql.Ended}
@@ -55,7 +56,7 @@ public sealed partial class ScrySqlServerDisclosureStore
                      UNION ALL
                      SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
                             r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node],
-                            r.[At], r.[ReviewId]
+                            r.[At], r.[ReviewId], n.[Version]
                      FROM {sql.Entities} n
                      JOIN {sql.Event} e ON e.[EventId] = n.[EventId] AND e.[Segment] = n.[Segment]
                      {sql.Ended}
@@ -82,21 +83,22 @@ public sealed partial class ScrySqlServerDisclosureStore
                 while (await reader.ReadAsync(cancel))
                 {
                     var disclosed = Event(reader);
-                    var row = new ScryRowDisclosure(disclosed, reader.GetInt32(18), ScryDisclosureAddress.From((byte[]) reader[19]), reader.GetString(20))
+                    var row = new ScryRowDisclosure(disclosed, reader.GetInt32(19), ScryDisclosureAddress.From((byte[]) reader[20]), reader.GetString(21))
                     {
-                        Close = Closed(reader)
+                        Close = Closed(reader),
+                        Version = Text(reader, 31)
                     };
-                    if (!reader.IsDBNull(21))
+                    if (!reader.IsDBNull(22))
                     {
                         row = row with
                         {
-                            Review = new(reader.GetGuid(21), reader.GetDateTimeOffset(22), (ScryDisclosureQuestion) reader.GetByte(24))
+                            Review = new(reader.GetGuid(22), reader.GetDateTimeOffset(23), (ScryDisclosureQuestion) reader.GetByte(25))
                             {
-                                Reviewer = Text(reader, 23),
-                                Parameters = Address(reader, 25),
-                                Results = reader.GetInt32(26),
+                                Reviewer = Text(reader, 24),
+                                Parameters = Address(reader, 26),
+                                Results = reader.GetInt32(27),
                                 Events = [disclosed.Id],
-                                Node = Text(reader, 27)
+                                Node = Text(reader, 28)
                             }
                         };
                     }
@@ -184,6 +186,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         [EnumeratorCancellation] Cancel cancel)
     {
         await EnsureAsync(cancel);
+        await Caught(cancel);
 
         // Found by the hash and then held to the name it is a hash of. Written as one or the other
         // rather than as a choice the database makes per row, so that either is a seek on the index.
@@ -265,7 +268,8 @@ public sealed partial class ScrySqlServerDisclosureStore
             Stamp = Text(reader, 10),
             Correlation = Text(reader, 11),
             Node = Text(reader, 12),
-            ContentType = Text(reader, 13)
+            ContentType = Text(reader, 13),
+            Agent = Text(reader, 18)
         };
 
     static ScryDisclosureClose? Closed(SqlDataReader reader)
@@ -286,6 +290,7 @@ public sealed partial class ScrySqlServerDisclosureStore
     public async ValueTask<ScryDisclosedResponse?> Reconstruct(Guid eventId, Cancel cancel = default)
     {
         await EnsureAsync(cancel);
+        await Caught(cancel);
 
         // Which segment the answer is in is asked first, of every segment, and everything after is
         // asked of that one: an answer is in one segment, however many are kept.
@@ -314,7 +319,7 @@ public sealed partial class ScrySqlServerDisclosureStore
                  SELECT {sql.Columns} FROM {read.Event} e {read.Ended} WHERE e.[EventId] = @event;
                  SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {read.Field} f JOIN {read.Event} e ON e.[Shape] = f.[Shape] AND e.[Segment] = f.[Segment] WHERE e.[EventId] = @event ORDER BY f.[Position];
                  SELECT u.[Ordinal], u.[Content], k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {read.Units} u LEFT JOIN {read.Content} k ON k.[Address] = u.[Content] AND k.[Segment] = u.[Segment] WHERE u.[EventId] = @event ORDER BY u.[Ordinal];
-                 SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {read.Entities} n WHERE n.[EventId] = @event ORDER BY n.[Ordinal], n.[Slot];
+                 SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via], n.[Version] FROM {read.Entities} n WHERE n.[EventId] = @event ORDER BY n.[Ordinal], n.[Slot];
                  """);
             command.Parameters.AddWithValue("@event", eventId);
             await using var reader = await command.ExecuteReaderAsync(cancel);
@@ -346,7 +351,11 @@ public sealed partial class ScrySqlServerDisclosureStore
             await reader.NextResultAsync(cancel);
             while (await reader.ReadAsync(cancel))
             {
-                entities.Add(new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), reader.GetString(4)));
+                entities.Add(
+                    new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), reader.GetString(4))
+                    {
+                        Version = Text(reader, 5)
+                    });
             }
         }
 

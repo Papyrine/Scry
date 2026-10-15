@@ -306,8 +306,18 @@ public partial class RowView
         return $"{row.Event.Kind} of {row.Event.Source}";
     }
 
-    static string Version(RowLine row) =>
-        Show.Short(row.Content);
+    // The row's own version where its source names one, which compares across answers that sent
+    // different members of it; otherwise the address of what was sent, which compares only answers
+    // that sent the same ones.
+    static string Version(RowLine row)
+    {
+        if (row.Version is { } named)
+        {
+            return named;
+        }
+
+        return Show.Short(row.Content);
+    }
 
     static string Reached(RowLine row)
     {

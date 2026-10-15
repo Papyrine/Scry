@@ -21,6 +21,19 @@ public sealed class ScryDisclosureOptions
     public Func<IServiceProvider, string?>? Caller { get; set; }
 
     /// <summary>
+    /// What is asking on the caller's behalf, where something is: the application a token was issued
+    /// to, the agent a person is using over MCP. Recorded beside the caller on every answer, so the
+    /// record says both who received it and what asked for it. Null, the default, records nothing:
+    /// the caller is taken to be asking for themselves.
+    /// </summary>
+    /// <remarks>
+    /// Read from what authenticated the request, never from something the client supplied: a
+    /// token's client claim (<c>azp</c>, <c>client_id</c>) is the usual source. The current request
+    /// is reached through <c>IHttpContextAccessor</c>.
+    /// </remarks>
+    public Func<IServiceProvider, string?>? Agent { get; set; }
+
+    /// <summary>
     /// Whether an answer may be recorded with no caller. Off by default: an answer nobody can be
     /// named as having received is refused rather than sent, since "who received this" is the
     /// question the record exists to answer.
@@ -112,6 +125,22 @@ public sealed class ScryDisclosureOptions
         Keys[typeof(TSource)] = [.. members.Select(_ => Member(_, "A key member"))];
         Acknowledged.Remove(typeof(TSource));
     }
+
+    /// <summary>
+    /// Names the member that says which version of a row of a source this is — a <c>rowversion</c>
+    /// column, a revision number, a last-modified time — so that every time a row is recorded as
+    /// sent, the version it was at is recorded with it.
+    /// </summary>
+    /// <param name="member">The member, read straight off the row: <c>_ =&gt; _.RowVersion</c>.</param>
+    /// <remarks>
+    /// Without one, what says which version of a row was sent is the address of what was sent: two
+    /// answers that sent the same members of the same row the same way are the same version. That
+    /// cannot compare an answer that sent a row's name with one that sent its address. A version
+    /// read from the row can: it is the row's, whatever was projected from it. Read beside the key,
+    /// never sent, and held to whatever a policy would have kept the row's key from.
+    /// </remarks>
+    public void Version<TSource>(Expression<Func<TSource, object?>> member) =>
+        Versions[typeof(TSource)] = Member(member, "A version member");
 
     /// <summary>
     /// Acknowledges that a source has nothing to identify a row by, so what is sent from it is
@@ -257,6 +286,8 @@ public sealed class ScryDisclosureOptions
     internal Dictionary<Type, IReadOnlyList<PropertyInfo>> Keys { get; } = [];
 
     internal HashSet<Type> Acknowledged { get; } = [];
+
+    internal Dictionary<Type, PropertyInfo> Versions { get; } = [];
 
     internal string? JournalDirectory { get; private set; }
 

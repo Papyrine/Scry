@@ -150,6 +150,12 @@ public sealed record ScryRowDisclosure(ScryDisclosureEvent Event, int Ordinal, S
     /// that opened or exported <see cref="Event"/>. Its reviewer saw what the event's caller did.
     /// </summary>
     public ScryDisclosureReview? Review { get; init; }
+
+    /// <summary>
+    /// The version the row was at, where its source has a version member named: what compares two
+    /// releases of a row that sent different members of it.
+    /// </summary>
+    public string? Version { get; init; }
 }
 
 /// <summary>One event as the store holds it: its header, how it ended, and its units with their content.</summary>

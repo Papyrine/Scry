@@ -109,6 +109,16 @@ sealed class DisclosureManifest
             Text(hash, number, row.Source);
             Text(hash, number, row.Key);
             Text(hash, number, row.Via);
+
+            // A version where there is one, and a length no text has where there is none.
+            if (row.Version is { } version)
+            {
+                Text(hash, number, version);
+            }
+            else
+            {
+                Number(hash, number, -1);
+            }
         }
 
         hash.GetHashAndReset(digest);

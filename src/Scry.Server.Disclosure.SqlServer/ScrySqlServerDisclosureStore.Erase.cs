@@ -297,6 +297,57 @@ public sealed partial class ScrySqlServerDisclosureStore
         return DisclosureChain.Digest(recorded).AsSpan().SequenceEqual(digest);
     }
 
+    /// <summary>
+    /// Checks the whole chain, from its first link to its last, a stretch at a time: each stretch is
+    /// a bounded read, so a chain of any length is checked without one read holding the database for
+    /// the length of it. For a background job rather than a request: it takes as long as the chain is
+    /// long, which <paramref name="progress"/> reports as it goes, a link count at a time.
+    /// </summary>
+    /// <param name="progress">Told how many links have been checked so far, after each stretch.</param>
+    /// <param name="stretch">How many links are read and checked at a time.</param>
+    /// <param name="cancel">Stops the check where it is.</param>
+    /// <remarks>
+    /// What it finds is what <see cref="ScryDisclosureStoreStatus.LastVerification"/> says afterwards:
+    /// every link checked, or the first one that did not hold.
+    /// </remarks>
+    public async Task<ScryDisclosureChainCheck> VerifyWholeChainAsync(IProgress<long>? progress = null, int stretch = 10_000, Cancel cancel = default)
+    {
+        if (stretch < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(stretch), "A stretch is at least one link.");
+        }
+
+        long? from = null;
+        long checkedSoFar = 0;
+        while (true)
+        {
+            var part = await VerifyChainAsync(from, stretch, cancel);
+            checkedSoFar += part.Records;
+            progress?.Report(checkedSoFar);
+            if (!part.Intact ||
+                part.Records < stretch)
+            {
+                verified = part with
+                {
+                    Records = checkedSoFar
+                };
+                return verified;
+            }
+
+            // Links are numbered one after another by the chain, so the next stretch starts where
+            // this one ended. A link taken out of the middle is a break the stretch it was in finds.
+            from = (from ?? await First(cancel)) + part.Records;
+        }
+    }
+
+    // The number of the chain's first link.
+    async Task<long> First(Cancel cancel)
+    {
+        await using var connection = await OpenAsync(cancel);
+        await using var command = Command(connection, $"SELECT ISNULL(MIN(l.[Link]), 1) FROM {sql.Chain} l;");
+        return (long) (await command.ExecuteScalarAsync(cancel))!;
+    }
+
     async ValueTask<ScryDisclosureChainCheck> IScryDisclosureVerifier.Verify(long? from, int count, Cancel cancel) =>
         await VerifyChainAsync(from, count, cancel);
 
@@ -330,7 +381,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             $"""
              SELECT {sql.Columns} FROM {read.Event} e {read.Ended} WHERE e.[EventId] = @event AND e.[Sequence] = @sequence AND e.[Segment] = @segment;
              SELECT u.[Ordinal], u.[Content] FROM {read.Units} u WHERE u.[EventId] = @event AND u.[Sequence] = @sequence AND u.[Segment] = @segment ORDER BY u.[Ordinal];
-             SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {read.Entities} n WHERE n.[EventId] = @event AND n.[Sequence] = @sequence AND n.[Segment] = @segment ORDER BY n.[Ordinal], n.[Slot];
+             SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via], n.[Version] FROM {read.Entities} n WHERE n.[EventId] = @event AND n.[Sequence] = @sequence AND n.[Segment] = @segment ORDER BY n.[Ordinal], n.[Slot];
              SELECT x.[Outcome], x.[Units], x.[At], x.[Response] FROM {read.Close} x WHERE x.[EventId] = @event AND x.[Sequence] = @sequence AND x.[Segment] = @segment;
              SELECT r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node] FROM {read.Review} r WHERE r.[ReviewId] = @event AND @sequence = 0 AND r.[Segment] = @segment;
              SELECT v.[EventId] FROM {read.ReviewEvent} v WHERE v.[ReviewId] = @event AND @sequence = 0 AND v.[Segment] = @segment;
@@ -356,7 +407,11 @@ public sealed partial class ScrySqlServerDisclosureStore
         await reader.NextResultAsync(cancel);
         while (await reader.ReadAsync(cancel))
         {
-            entities.Add(new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), reader.GetString(4)));
+            entities.Add(
+                new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), reader.GetString(4))
+                {
+                    Version = Text(reader, 5)
+                });
         }
 
         ScryDisclosureClose? close = null;

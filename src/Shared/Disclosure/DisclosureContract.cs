@@ -46,7 +46,8 @@ sealed record RowAnswer(string Key, IReadOnlyList<RowLine> Rows, PageMark? Next)
 /// <param name="Via">How the unit reached the row: empty for the root, else a navigation or a join's side.</param>
 /// <param name="Members">What the event returned: the members that left in its rows.</param>
 /// <param name="Review">Set where this is a reviewer being shown the event, rather than the release itself.</param>
-sealed record RowLine(EventLine Event, int Ordinal, string Content, string Via, IReadOnlyList<MemberLine> Members, ReviewLine? Review);
+/// <param name="Version">The version the row was at, where its source names a member that holds one.</param>
+sealed record RowLine(EventLine Event, int Ordinal, string Content, string Via, IReadOnlyList<MemberLine> Members, ReviewLine? Review, string? Version = null);
 
 sealed record MemberLine(string Source, string Member, string Use, bool Sensitive);
 
@@ -84,7 +85,8 @@ sealed record EventLine(
     int? Units,
     string? Node,
     string? Correlation,
-    string? ContentType);
+    string? ContentType,
+    string? Agent = null);
 
 /// <summary>One event with everything recorded under it, content included.</summary>
 /// <remarks>

@@ -77,6 +77,18 @@ public sealed class ScrySqlServerDisclosureOptions
     public int? Keep { get; set; }
 
     /// <summary>
+    /// How long a segment is kept once nothing more is being written to it, by when the last answer
+    /// in it was given. Past it the segment is retired, as one past <see cref="Keep"/> is. Null, the
+    /// default, keeps a segment for its age.
+    /// </summary>
+    /// <remarks>
+    /// Retirement is of whole segments, so an answer is kept for at least this long and at most this
+    /// long and one segment's span more: set <see cref="RollAfter"/> to a fraction of it to keep the
+    /// difference small. The segment being written to is never retired.
+    /// </remarks>
+    public TimeSpan? KeepFor { get; set; }
+
+    /// <summary>
     /// What is done with a segment before it is dropped: written somewhere else, usually. Null, the
     /// default, drops it and keeps nothing.
     /// </summary>
@@ -97,6 +109,18 @@ public sealed class ScrySqlServerDisclosureOptions
     /// accepted may wait, and how soon a failed move is tried again.
     /// </remarks>
     public TimeSpan? DrainInterval { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Whether a question waits, before it is answered, until everything accepted before it was asked
+    /// has been moved into the record. Off by default: a question is answered from what has been
+    /// moved on, which trails what was accepted by the time one move takes.
+    /// </summary>
+    /// <remarks>
+    /// On, a question asked straight after an answer was given finds it, at the cost of every
+    /// question waiting on the mover, for as long as <see cref="AcceptTimeout"/> at most.
+    /// <see cref="ScrySqlServerDisclosureStore.CatchUpAsync"/> does the same for one question.
+    /// </remarks>
+    public bool CatchUpBeforeReading { get; set; }
 
     /// <summary>How many batches are moved in one transaction. Default 200.</summary>
     public int DrainBatches { get; set; } = 200;
