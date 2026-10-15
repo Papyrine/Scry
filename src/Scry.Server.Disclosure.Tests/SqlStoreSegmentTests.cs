@@ -404,21 +404,16 @@ public class SqlStoreSegmentTests
     {
         await using var database = await Clinic.Instance.Build();
         await using var serving = Store(database);
-        await using var reading = new ScrySqlServerDisclosureStore(
-            new()
-            {
-                ConnectionString = database.ConnectionString,
-                DrainInterval = null,
-                AcceptTimeout = TimeSpan.FromSeconds(5)
-            })
-        {
-            ReadsOnly = true
-        };
+
+        // Two hosts that only read: one that gives up soon, to see it give up, and one that waits as
+        // long as a move on a busy machine can take, to see it see the move.
+        await using var impatient = Reader(database, TimeSpan.FromSeconds(3));
+        await using var patient = Reader(database, TimeSpan.FromMinutes(1));
         await serving.AppendAsync(Clinic.Batch(1), Cancel.None);
 
-        var timedOut = await Assert.ThrowsAsync<TimeoutException>(() => reading.CatchUpAsync());
+        var timedOut = await Assert.ThrowsAsync<TimeoutException>(() => impatient.CatchUpAsync());
         var waiting = (await serving.Status()).Pending;
-        var caught = reading.CatchUpAsync();
+        var caught = patient.CatchUpAsync();
         await serving.DrainAsync();
         await caught;
 
@@ -429,6 +424,18 @@ public class SqlStoreSegmentTests
             await Assert.That((await serving.Status()).Pending).IsEqualTo(0);
         }
     }
+
+    static ScrySqlServerDisclosureStore Reader(SqlDatabase<ClinicContext> database, TimeSpan patience) =>
+        new(
+            new()
+            {
+                ConnectionString = database.ConnectionString,
+                DrainInterval = null,
+                AcceptTimeout = patience
+            })
+        {
+            ReadsOnly = true
+        };
 
     // Every node that moves the record goes by the settings the record holds, which are the last
     // node to start's: a node configured to keep three retires down to the one a later node keeps.

@@ -120,8 +120,16 @@ public class DisclosureJournalTests
 
         var store = new ScryMemoryDisclosureStore();
         var tap = new TappedSink(store);
-        await using var journal = new ScryDisclosureJournal(directory.Path, tap);
+
+        // Down until what was found has been counted: a journal starts shipping as soon as it opens,
+        // and on a busy machine some would be gone before the count was taken.
+        var sink = new SwitchedSink(tap)
+        {
+            Down = true
+        };
+        await using var journal = new ScryDisclosureJournal(directory.Path, sink, Quick());
         var found = await journal.Status();
+        sink.Down = false;
         await journal.DrainAsync().WaitAsync(patience);
 
         using (Assert.Multiple())
