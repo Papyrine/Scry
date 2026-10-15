@@ -321,6 +321,100 @@ public class SqlStoreTests
         }
     }
 
+    // A record kept whole in ledger tables: every table it is only ever added to refuses a change,
+    // and what an erasure removes is in the one table that does not. Read back, it says what the
+    // in-memory store says. A server with no ledger tables refuses to make one rather than make it
+    // of plain tables.
+    [Test]
+    public async Task ARecordKeptWholeInLedgerTablesCannotBeRewritten()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var kept = Store(database, _ => _.LedgerScope = ScryDisclosureLedgerScope.Record);
+        if (!await Ledgers(database))
+        {
+            var refused = await Assert.ThrowsAsync<SqlException>(() => kept.EnsureCreatedAsync());
+            await Assert.That(refused!.Message).Contains("this server has none");
+            return;
+        }
+
+        var memory = new ScryMemoryDisclosureStore();
+        var processor = Processor(new Both(memory, kept), new());
+        processor.Execute(Clinic.Names(), database.Context);
+        await kept.DrainAsync();
+
+        var update = await Assert.ThrowsExactlyAsync<SqlException>(() => Execute(database, "UPDATE [scry_000001].[DisclosureEvent] SET [Caller] = N'somebody.else'"));
+        var delete = await Assert.ThrowsExactlyAsync<SqlException>(() => Execute(database, "DELETE FROM [scry_000001].[DisclosureRunUnit]"));
+        var erased = await kept.EraseAsync("Patient", [1], by: "records.officer");
+        await memory.EraseAsync("Patient", [1], by: "records.officer");
+
+        using (Assert.Multiple())
+        {
+            // Every table of the segment the record only adds to, the chain, and the segment log.
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(18);
+
+            // The outbox, the content an erasure removes, and the summary of sources named by key.
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 0")).IsEqualTo(3);
+            await Assert.That(update!.Message).Contains("append only Ledger table");
+            await Assert.That(delete!.Message).Contains("append only Ledger table");
+            await Assert.That(erased.Units).IsEqualTo(1);
+            await Assert.That(await Told(kept)).IsEqualTo(await Told(memory));
+            await Assert.That((await kept.SegmentsAsync())[0].Ledgered).IsTrue();
+            await Assert.That((await kept.VerifyChainAsync()).Intact).IsTrue();
+        }
+    }
+
+    // A record kept whole in ledger tables can never be dropped, so it is never rolled or retired,
+    // and is not told how to be.
+    [Test]
+    public async Task ARecordKeptWholeIsNeverRolledOrRetired()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var keep = Assert.Throws<ArgumentException>(() => Store(database, _ =>
+        {
+            _.LedgerScope = ScryDisclosureLedgerScope.Record;
+            _.Keep = 12;
+        }));
+        var plain = Assert.Throws<ArgumentException>(() => Store(database, _ =>
+        {
+            _.LedgerScope = ScryDisclosureLedgerScope.Record;
+            _.LedgerTables = false;
+        }));
+        await using var kept = Store(database, _ => _.LedgerScope = ScryDisclosureLedgerScope.Record);
+        var roll = await Assert.ThrowsAsync<InvalidOperationException>(() => kept.RollAsync());
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(keep!.Message).Contains("never rolled or retired");
+            await Assert.That(plain!.Message).Contains("LedgerTables is false");
+            await Assert.That(roll!.Message).Contains("never rolled");
+        }
+    }
+
+    // How a record is kept is decided by whichever node makes it. A node told otherwise accepts what
+    // it is handed, so nothing is refused to a caller, and moves none of it on: what it accepted waits
+    // for a node configured as the record is.
+    [Test]
+    public async Task ANodeToldToKeepTheRecordAnotherWayMovesNothing()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var hashes = Store(database);
+        await hashes.AppendAsync(Clinic.Batch(1), Cancel.None);
+        await hashes.DrainAsync();
+        await using var whole = Store(database, _ => _.LedgerScope = ScryDisclosureLedgerScope.Record);
+
+        await whole.AppendAsync(Clinic.Batch(2), Cancel.None);
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => whole.DrainAsync());
+        var waiting = (await hashes.Status()).Pending;
+        await hashes.DrainAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(refused!.Message).Contains("keeps Hashes in ledger tables");
+            await Assert.That(waiting).IsEqualTo(1);
+            await Assert.That((await hashes.Status()).Events).IsEqualTo(2);
+        }
+    }
+
     // A host that wants plain tables gets them on any server, and they are then its own to change.
     [Test]
     public async Task TheHostSaysWhetherTheTablesAreLedgerTables()

@@ -117,11 +117,17 @@ sealed class DisclosureTables
     public string Source { get; }
 
     /// <summary>
-    /// Makes the schema and every table of it that is missing. Plain tables, whatever the server has:
-    /// a segment has to be something that can be dropped, and a ledger table cannot be.
+    /// Makes the schema and every table of it that is missing. Plain tables, so that the segment can
+    /// be dropped — or, where <paramref name="ledgered"/>, every table the record only ever inserts
+    /// into made as an append-only ledger table, which nothing but dropping the database removes.
     /// </summary>
-    public string Creating()
+    /// <param name="ledgered">
+    /// Whether the record is kept whole in ledger tables. The statements then read <c>@ledger</c>,
+    /// which the script they are part of declares.
+    /// </param>
+    public string Creating(bool ledgered = false)
     {
+        this.ledgered = ledgered;
         var s = $"[{Schema}]";
         var script = new StringBuilder();
         script.Append(
@@ -369,10 +375,28 @@ sealed class DisclosureTables
         return script.ToString();
     }
 
-    static void Table(StringBuilder script, string schema, string name, string columns)
+    // Set while a script is made: whether the tables only ever inserted into are made ledger tables.
+    bool ledgered;
+
+    // The two tables a segment changes in place: the content an erasure removes, and the summary of
+    // which sources have been named by key. Plain in either case.
+    static HashSet<string> changed = ["DisclosureContent", "DisclosureSource"];
+
+    void Table(StringBuilder script, string schema, string name, string columns)
     {
+        var listed = string.Join(' ', columns.Split('\n').Select(_ => _.Trim()));
         script.AppendLine($"    IF OBJECT_ID(N'{schema}.[{name}]', N'U') IS NULL");
-        script.AppendLine($"        CREATE TABLE {schema}.[{name}] ({string.Join(' ', columns.Split('\n').Select(_ => _.Trim()))});");
+        if (ledgered &&
+            !changed.Contains(name))
+        {
+            // Through EXEC, so that what @ledger says decides it.
+            script.AppendLine($"        EXEC(N'CREATE TABLE {schema}.[{name}] ({listed})' + @ledger);");
+        }
+        else
+        {
+            script.AppendLine($"        CREATE TABLE {schema}.[{name}] ({listed});");
+        }
+
         script.AppendLine();
     }
 

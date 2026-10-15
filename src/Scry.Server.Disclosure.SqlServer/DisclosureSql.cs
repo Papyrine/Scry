@@ -31,7 +31,7 @@ sealed class DisclosureSql
 
     DisclosureTables read;
 
-    public DisclosureSql(string schema, bool? ledger)
+    public DisclosureSql(string schema, bool? ledger, ScryDisclosureLedgerScope scope = ScryDisclosureLedgerScope.Hashes)
     {
         if (!IsIdentifier(schema))
         {
@@ -48,7 +48,7 @@ sealed class DisclosureSql
         // A duplicate is not an error: the unique index is made to drop it, so a batch handed over
         // twice is kept once in a single statement and without a race between asking and inserting.
         Accept = $"INSERT INTO {Outbox} ([EventId], [Sequence], [Batch]) VALUES (@event, @sequence, @batch);";
-        Create = Creating(ledger);
+        Create = Creating(ledger, scope);
 
         // How an event ended is the close written last: an answer accepted whole and then not sent
         // is closed a second time. Looked for in the segment the event is in, which is where every
@@ -150,8 +150,10 @@ sealed class DisclosureSql
     // Under an application lock, since two nodes starting together would otherwise both find nothing
     // there and both try to make it. Each object is made only where it is missing, so the whole of it
     // can be run again — by a deployment that reruns its scripts, or after a version that adds a table.
-    string Creating(bool? ledger)
+    string Creating(bool? ledger, ScryDisclosureLedgerScope scope)
     {
+        var whole = scope == ScryDisclosureLedgerScope.Record;
+
         // 1 makes the chain's tables ledger tables, 0 never does, and 2 does where the server has
         // them: SQL Server 2022 on, and Azure SQL.
         var mode = ledger switch
@@ -229,15 +231,24 @@ sealed class DisclosureSql
             [RollAtBytes] bigint NULL,
             [Keep] int NULL,
             [KeepFor] bigint NULL,
-            [HandsOn] bit NULL
+            [HandsOn] bit NULL,
+            [Ledgered] bit NULL
             """);
 
         // The first segment, and the views over it. Later segments are made, and the views made
         // again, by whichever node rolls the record on.
         script.AppendLine($"    IF NOT EXISTS (SELECT 1 FROM {Segments})");
         script.AppendLine("    BEGIN");
-        script.Append(Segment(1).Creating());
-        script.AppendLine($"    INSERT INTO {Segments} ([Segment], [What], [At]) VALUES (1, {(byte) DisclosureSegmentEntry.Opened}, SYSDATETIMEOFFSET());");
+        if (whole)
+        {
+            // Kept whole in ledger tables or not at all: a record asked to be one cannot quietly be
+            // made of plain tables on a server that has none.
+            script.AppendLine("        IF @ledger = N''");
+            script.AppendLine("            RAISERROR(N'The disclosure record is to be kept whole in ledger tables, and this server has none: they are SQL Server 2022 on, and Azure SQL.', 16, 1);");
+        }
+
+        script.Append(Segment(1).Creating(whole));
+        script.AppendLine($"    INSERT INTO {Segments} ([Segment], [What], [At], [Ledgered]) VALUES (1, {(byte) DisclosureSegmentEntry.Opened}, SYSDATETIMEOFFSET(), {(whole ? 1 : 0)});");
         script.AppendLine("    END;");
         script.AppendLine();
         script.AppendLine($"    IF OBJECT_ID(N'{Event}', N'V') IS NULL");

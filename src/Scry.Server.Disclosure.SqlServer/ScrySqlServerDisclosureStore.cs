@@ -78,8 +78,27 @@ public sealed partial class ScrySqlServerDisclosureStore :
             throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.Keep)} must be at least one: the segment being written to is always kept. Null keeps every segment.");
         }
 
+        if (options.LedgerScope == ScryDisclosureLedgerScope.Record)
+        {
+            if (options.LedgerTables == false)
+            {
+                throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.LedgerScope)} keeps the record whole in ledger tables, and {nameof(options.LedgerTables)} is false.");
+            }
+
+            // A row put into a ledger table is there until the database is dropped, so a record kept
+            // whole in them is kept whole for good.
+            if (options.RollAfter is not null ||
+                options.RollAtBytes is not null ||
+                options.Keep is not null ||
+                options.KeepFor is not null ||
+                options.Retire is not null)
+            {
+                throw new ArgumentException($"A disclosure record kept whole in ledger tables ({nameof(options.LedgerScope)} {nameof(ScryDisclosureLedgerScope.Record)}) can never be dropped, so it is never rolled or retired: {nameof(options.RollAfter)}, {nameof(options.RollAtBytes)}, {nameof(options.Keep)}, {nameof(options.KeepFor)} and {nameof(options.Retire)} have nothing to do. Keep only the hashes in ledger tables ({nameof(ScryDisclosureLedgerScope.Hashes)}) to retire segments.");
+            }
+        }
+
         this.options = options;
-        sql = new(options.Schema, options.LedgerTables);
+        sql = new(options.Schema, options.LedgerTables, options.LedgerScope);
     }
 
     /// <summary>

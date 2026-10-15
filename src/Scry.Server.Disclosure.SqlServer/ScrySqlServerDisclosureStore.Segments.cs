@@ -26,6 +26,11 @@ public sealed partial class ScrySqlServerDisclosureStore
     /// </exception>
     public async Task<ScryDisclosureSegment> RollAsync(Cancel cancel = default)
     {
+        if (options.LedgerScope == ScryDisclosureLedgerScope.Record)
+        {
+            throw new InvalidOperationException($"A disclosure record kept whole in ledger tables is never rolled: a segment of it could never be retired. ({nameof(ScrySqlServerDisclosureOptions.LedgerScope)} is {nameof(ScryDisclosureLedgerScope.Record)}.)");
+        }
+
         await EnsureAsync(cancel);
         ScryDisclosureSegment started;
         await using (var connection = await OpenAsync(cancel))
@@ -253,6 +258,14 @@ public sealed partial class ScrySqlServerDisclosureStore
             return false;
         }
 
+        // Dropping a ledger table renames it and keeps every row, so a segment in them is never
+        // said to be retired: the record would say it was gone while all of it stayed.
+        if (oldest.Ledgered)
+        {
+            problem = $"Segment {oldest.Number} of the disclosure record is kept in ledger tables, which no retirement can drop, so it is kept.";
+            return false;
+        }
+
         if (retention.Keep is { } keep &&
             kept > keep)
         {
@@ -333,6 +346,32 @@ public sealed partial class ScrySqlServerDisclosureStore
         {
             KeepFor = keepFor
         };
+    }
+
+    // Refuses to move on a record kept another way than this node was told: a node keeping hashes
+    // alone would otherwise start plain segments of a record kept whole in ledger tables, and one
+    // keeping it whole would add ledger rows to a record that retires its segments.
+    void Agrees(List<ScryDisclosureSegment> segments)
+    {
+        if (ReadsOnly)
+        {
+            return;
+        }
+
+        var whole = options.LedgerScope == ScryDisclosureLedgerScope.Record;
+        if (segments[0].Ledgered == whole)
+        {
+            return;
+        }
+
+        var kept = nameof(ScryDisclosureLedgerScope.Hashes);
+        var told = nameof(ScryDisclosureLedgerScope.Record);
+        if (segments[0].Ledgered)
+        {
+            (kept, told) = (told, kept);
+        }
+
+        throw new InvalidOperationException($"The disclosure record keeps {kept} in ledger tables and this node is told {nameof(ScrySqlServerDisclosureOptions.LedgerScope)} {told}, so it moves nothing on. What is accepted waits in the outbox for a node configured as the record is.");
     }
 
     // The record's settings, after this node has written its own into it where this is the first
@@ -555,7 +594,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         var segments = new SortedDictionary<int, ScryDisclosureSegment>();
         await using var command = Command(
             connection,
-            $"SELECT s.[Segment], s.[What], s.[At], s.[Link], s.[Head], s.[Batches], s.[Events], s.[Bytes], s.[From], s.[To], s.[HandedOn] FROM {sql.Segments} s ORDER BY s.[Entry];",
+            $"SELECT s.[Segment], s.[What], s.[At], s.[Link], s.[Head], s.[Batches], s.[Events], s.[Bytes], s.[From], s.[To], s.[HandedOn], s.[Ledgered] FROM {sql.Segments} s ORDER BY s.[Entry];",
             transaction);
         await using var reader = await command.ExecuteReaderAsync(cancel);
         while (await reader.ReadAsync(cancel))
@@ -565,7 +604,10 @@ public sealed partial class ScrySqlServerDisclosureStore
             switch ((DisclosureSegmentEntry) reader.GetByte(1))
             {
                 case DisclosureSegmentEntry.Opened:
-                    segments[number] = new(number, sql.Segment(number).Schema, at);
+                    segments[number] = new(number, sql.Segment(number).Schema, at)
+                    {
+                        Ledgered = !reader.IsDBNull(11) && reader.GetBoolean(11)
+                    };
                     break;
                 case DisclosureSegmentEntry.Sealed:
                     segments[number] = segments[number] with

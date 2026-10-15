@@ -255,7 +255,9 @@ public sealed partial class ScrySqlServerDisclosureStore
         // Rolled on, where it is due, before anything of the round is written: like a log file, the
         // record rolls when something is about to be added to it, and not on a timer of its own.
         var segments = await Registry(connection, transaction, cancel);
+        Agrees(segments);
         var now = options.Clock.GetUtcNow();
+
         // By the record's settings, which this node writes its own into the first time it moves it.
         // A host that only reads starts no segment, whatever moves the record on there.
         var retention = await Settle(connection, transaction, cancel);

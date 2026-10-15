@@ -47,6 +47,29 @@ public sealed class ScrySqlServerDisclosureOptions
     public bool? LedgerTables { get; set; }
 
     /// <summary>
+    /// What is kept in ledger tables: the chain of hashes alone, the default, or the whole record.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="ScryDisclosureLedgerScope.Hashes"/> keeps the record in plain tables, so that the
+    /// oldest of it can be dropped, and the chain is what shows a change to it. The database does
+    /// not refuse one.
+    /// </para>
+    /// <para>
+    /// <see cref="ScryDisclosureLedgerScope.Record"/> keeps every table the record is only ever added
+    /// to in ledger tables, and the database refuses any change to them. Nothing but dropping the
+    /// database removes a row of them, so such a record is never rolled or retired, and the
+    /// settings for that are refused. Content stays in a plain table, so an erasure still removes it.
+    /// Needs ledger tables: SQL Server 2022 on, or Azure SQL.
+    /// </para>
+    /// <para>
+    /// Decided by whichever node makes the record, and held by it: a node that moves the record on
+    /// and was told otherwise refuses to.
+    /// </para>
+    /// </remarks>
+    public ScryDisclosureLedgerScope LedgerScope { get; set; }
+
+    /// <summary>
     /// How long a segment of the record is written to before a new one is started. Null, the
     /// default, never starts one for its age.
     /// </summary>

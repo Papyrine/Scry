@@ -19,6 +19,11 @@ public sealed record ScryDisclosureSegment(int Number, string Schema, DateTimeOf
     /// <summary>That link's hash: where the chain stood when this segment was left.</summary>
     public ScryDisclosureAddress? Head { get; init; }
 
+    /// <summary>
+    /// Whether its tables are ledger tables: the record is kept whole in them, and it is never retired.
+    /// </summary>
+    public bool Ledgered { get; init; }
+
     /// <summary>Whether it is being retired: still read, and no longer written to.</summary>
     public bool Retiring { get; init; }
 

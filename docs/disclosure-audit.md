@@ -557,7 +557,8 @@ The accept is one committed `INSERT` of the serialized batch into an outbox tabl
 - **Read as one record.** The store's own schema holds a view of each table over every segment, and every question is asked of those. So an answer in the oldest segment is found as one in the newest is, a question with no span of time costs a seek for each segment kept, which [adds up](performance.md#asking-the-record), while one with a span is asked only of the segments that cover any of it, and a later part of an answer is put in the segment the answer began in, so that an answer is in one segment and leaves with it.
 - **The oldest is retired when there are more than `Keep`, or once it is `KeepFor` old.** Age is counted from the last answer in a segment, so an answer is kept for at least `KeepFor` and at most that and one segment's span; a `RollAfter` of a fraction of it keeps the difference small. The segment being written to is never retired. It is marked first, and from then nothing more is written to it. It is handed to `Retire` where that is set, as an archive of every batch it was made from, in the order the chain links them and each with its shape and its content: what every sink takes, so a copy can be put into another store and asked the same questions. Then its tables are dropped, with whatever content it kept outside the database that no other segment was also sent. If `Retire` throws, the segment stays, and is handed on again the next time the record is moved on. What a retired segment held can no longer be asked. With `Keep` unset nothing is ever retired.
 - **One set of settings, held by the record.** `RollAfter`, `RollAtBytes`, `Keep`, `KeepFor` and whether segments are handed on are written into the record by a node the first time it moves it, where they differ from what is there, and every node that moves the record goes by what the record holds (`RetentionAsync`). So two nodes configured differently cannot roll and retire by turns, and each change is a line in the record. A node with no `Retire` never turns handing on off for the others, and never retires a segment the record hands on: what is dropped is dropped with a copy, or not at all.
-- **Kept for good**: `DisclosureChain`, a hash for every batch, and `DisclosureSegment`, a line for each thing that happens to a segment: opened, rolled away from with where the chain then stood, being retired, and retired with how many batches and answers it held, how large it was and the span of time it covered. Both are only ever added to, and are append-only ledger tables where the server has them, which `LedgerTables` can force either way. Neither names a caller, a row or an answer. They are the only ledger tables there are, because a row put into one is there until the database is dropped: a dropped ledger table is renamed and kept, and so is the history of an updatable one.
+- **Kept for good**: `DisclosureChain`, a hash for every batch, and `DisclosureSegment`, a line for each thing that happens to a segment: opened, rolled away from with where the chain then stood, being retired, and retired with how many batches and answers it held, how large it was and the span of time it covered. Both are only ever added to, and are append-only ledger tables where the server has them, which `LedgerTables` can force either way. Neither names a caller, a row or an answer. By default they are the only ledger tables, because a row put into one is there until the database is dropped: a dropped ledger table is renamed and kept, and so is the history of an updatable one.
+- **Or the whole record in ledger tables.** `LedgerScope` says what is kept in them: `Hashes`, the default, or `Record`. With `Record`, every table of the segment that the record is only ever added to is an append-only ledger table too, and the database itself refuses a change to any of it, where with `Hashes` the chain shows one and does not stop it. The price is that nothing of it is ever retired: `RollAfter`, `RollAtBytes`, `Keep`, `KeepFor` and `Retire` are refused, and `RollAsync` throws. Content and the summary of sources stay in plain tables, so an erasure still removes what was sent. A server with no ledger tables refuses to make such a record rather than make it of plain tables. How a record is kept is decided by the node that makes it and written into its segment log; a node told otherwise records what it is handed into the outbox, so no answer is refused, and moves none of it on, and no segment kept in ledger tables is ever said to be retired.
 - **Outside the segments**: `DisclosureOutbox`, which a batch leaves once it has been moved on, and `IScryDisclosureBlobStore` for content kept outside the database.
 - **An answer given again adds one row, and one that differs by a row adds little more.** The units a batch carries are kept as a list, and a list as the runs it is made of. A run is some thirty units on average, each with its content's address and the rows it was read from, and has an address over all of that; it is kept once (`DisclosureRun` and its two tables). A list has an address over its runs and is kept once as a line for each of them (`DisclosureManifest`, `DisclosureManifestRun`), and each batch names the list it carried and where in the answer the list starts (`DisclosureAnswer`). So the same thousand rows asked for every minute are a thousand unit rows once and one row a minute. The same rows with one changed, added or taken away are a list of their own that shares every run but the one the difference is in: that run's units, and a line for each of the other runs. Where a run ends is decided by the units in it and not by how far into the list they are, which is what keeps a row more near the start from making every later run a new one. A stream's chunks are lists like any other, so a stream read again adds a row for each chunk. How much of an answer was handed on is its close's to say, whichever way its units are kept. `DisclosureUnit` and `DisclosureEntity` hold a batch's units as they arrived only where they do not follow one another, which no answer the server records does. Everything that reads units reads the views `DisclosureUnits` and `DisclosureEntities`, which put each unit back at its place. Runs and lists are shared within a segment and not between two, so the first answers after a new one is started keep their units again.
 - **Nothing a caller chose is an index key.** A caller's name, a source, a member and a row's key are kept as text of any length and found by a SHA-256 of them (`CallerHash`, `RowHash` over the source and the key together, `FieldHash` over the source and the member), then held to the text itself. So no value is too long to record, and none is cut short to fit. Those columns have a binary collation: a name is the name of exactly those characters, whatever the database's own collation says of case and accents.
@@ -611,6 +612,29 @@ public sealed class ScrySqlServerDisclosureOptions
     /// </para>
     /// </remarks>
     public bool? LedgerTables { get; set; }
+
+    /// <summary>
+    /// What is kept in ledger tables: the chain of hashes alone, the default, or the whole record.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="ScryDisclosureLedgerScope.Hashes"/> keeps the record in plain tables, so that the
+    /// oldest of it can be dropped, and the chain is what shows a change to it. The database does
+    /// not refuse one.
+    /// </para>
+    /// <para>
+    /// <see cref="ScryDisclosureLedgerScope.Record"/> keeps every table the record is only ever added
+    /// to in ledger tables, and the database refuses any change to them. Nothing but dropping the
+    /// database removes a row of them, so such a record is never rolled or retired, and the
+    /// settings for that are refused. Content stays in a plain table, so an erasure still removes it.
+    /// Needs ledger tables: SQL Server 2022 on, or Azure SQL.
+    /// </para>
+    /// <para>
+    /// Decided by whichever node makes the record, and held by it: a node that moves the record on
+    /// and was told otherwise refuses to.
+    /// </para>
+    /// </remarks>
+    public ScryDisclosureLedgerScope LedgerScope { get; set; }
 
     /// <summary>
     /// How long a segment of the record is written to before a new one is started. Null, the
@@ -705,7 +729,7 @@ public sealed class ScrySqlServerDisclosureOptions
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 }
 ```
-<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureOptions.cs#L4-L141' title='Snippet source file'>snippet source</a> | <a href='#snippet-sqlServerDisclosureOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureOptions.cs#L4-L164' title='Snippet source file'>snippet source</a> | <a href='#snippet-sqlServerDisclosureOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The store creates its schema and tables the first time it is used. A deployment that creates its own objects turns `CreateTables` off and runs `ScrySqlServerDisclosureStore.Script`, which can be run any number of times.
