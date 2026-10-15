@@ -129,7 +129,30 @@ sealed record StatusAnswer(
     CheckLine? LastVerification,
     string? Problem,
     IReadOnlyList<ErasureLine> Erasures,
-    IReadOnlyList<ReviewLine> Reviews);
+    IReadOnlyList<ReviewLine> Reviews,
+    IReadOnlyList<SegmentLine>? Segments = null,
+    RetentionLine? Retention = null);
+
+/// <summary>One segment of a record kept in segments, oldest first.</summary>
+/// <remarks>
+/// <c>Events</c> and <c>Bytes</c> are said of a segment once it is retired, and <c>From</c> and
+/// <c>To</c>, the span of time its answers cover, once it is rolled away from.
+/// </remarks>
+sealed record SegmentLine(
+    int Number,
+    DateTimeOffset Opened,
+    DateTimeOffset? Sealed,
+    bool Retiring,
+    DateTimeOffset? Retired,
+    bool HandedOn,
+    bool Ledgered,
+    DateTimeOffset? From,
+    DateTimeOffset? To,
+    long? Events,
+    long? Bytes);
+
+/// <summary>When a record kept in segments starts a new one, and how many it keeps.</summary>
+sealed record RetentionLine(TimeSpan? RollAfter, long? RollAtBytes, int? Keep, TimeSpan? KeepFor, bool HandsOn);
 
 sealed record CheckLine(DateTimeOffset At, long Records, bool Intact, long? BrokenAt);
 

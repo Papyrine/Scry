@@ -464,7 +464,7 @@ public class ExplorerApiTests
         {
             await Assert.That(csv.Headers.Contains("Scry-Export-Cut")).IsTrue();
             await Assert.That(lines).Count().IsEqualTo(4);
-            await Assert.That(lines[1]).StartsWith("2026-03-01T09:03:00.0000000+00:00,dr.osei,List,Patient,");
+            await Assert.That(lines[1]).StartsWith("2026-03-01T09:03:00.0000000+00:00,dr.osei,,List,Patient,");
             await Assert.That(lines[2]).StartsWith("2026-03-01T09:02:00.0000000+00:00,");
             await Assert.That(lines[3]).IsEqualTo("(cut short: only the newest 2 events are here)");
             await Assert.That(await json.Content.ReadAsStringAsync()).Contains("\"cut\": true");

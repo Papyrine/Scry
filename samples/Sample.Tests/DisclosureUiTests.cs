@@ -274,9 +274,9 @@ public class DisclosureUiTests :
         {
             await Assert.That(csv.GetProperty("name").GetString()!).Matches("^disclosures-\\d{8}-\\d{6}\\.csv$");
             await Assert.That(csv.GetProperty("type").GetString()).IsEqualTo("text/csv");
-            await Assert.That(lines[0].TrimStart('﻿')).IsEqualTo("When,Caller,Kind,Source,Event,Outcome,Unit,Released,Rows,Content");
+            await Assert.That(lines[0].TrimStart('﻿')).IsEqualTo("When,Caller,Agent,Kind,Source,Event,Outcome,Unit,Released,Rows,Content");
             await Assert.That(lines).Count().IsEqualTo(5);
-            await Assert.That(lines.Skip(1).All(_ => _.Contains(",ivy.export,List,Employee,"))).IsTrue();
+            await Assert.That(lines.Skip(1).All(_ => _.Contains(",ivy.export,,List,Employee,"))).IsTrue();
             await Assert.That(lines[2]).Contains("Employee[1],\"{\"\"name\"\":\"\"Alice\"\"}\"");
             await Assert.That(json.GetProperty("name").GetString()!).EndsWith(".json");
             await Assert.That(document.RootElement.GetProperty("events")[0].GetProperty("units").GetArrayLength()).IsEqualTo(4);

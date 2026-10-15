@@ -322,7 +322,9 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             verified,
             stands?.Problem,
             erasures,
-            [.. reviews.Select(Line)]);
+            [.. reviews.Select(Line)],
+            stands?.Segments?.Select(Line).ToList(),
+            Line(stands?.Retention));
         if (await Record(context, ScryDisclosureQuestion.Status, parameters: default, results: 1, events: []) is { } refused)
         {
             return refused;
@@ -748,6 +750,30 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
 
     static CheckLine Line(ScryDisclosureChainCheck check) =>
         new(check.At, check.Records, check.Intact, check.BrokenAt);
+
+    static SegmentLine Line(ScryDisclosureSegment segment) =>
+        new(
+            segment.Number,
+            segment.Opened,
+            segment.Sealed,
+            segment.Retiring,
+            segment.Retired,
+            segment.HandedOn,
+            segment.Ledgered,
+            segment.From,
+            segment.To,
+            segment.Events,
+            segment.Bytes);
+
+    static RetentionLine? Line(ScryDisclosureRetention? retention)
+    {
+        if (retention is null)
+        {
+            return null;
+        }
+
+        return new(retention.RollAfter, retention.RollAtBytes, retention.Keep, retention.KeepFor, retention.HandsOn);
+    }
 }
 
 /// <summary>One event an export writes, and which of its units where it is not all of them.</summary>

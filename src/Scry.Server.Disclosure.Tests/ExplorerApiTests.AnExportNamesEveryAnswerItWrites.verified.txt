@@ -1,18 +1,18 @@
 ﻿--- what dr.osei received, as csv
-When,Caller,Kind,Source,Event,Outcome,Unit,Released,Rows,Content
-2026-03-01T09:03:00.0000000+00:00,dr.osei,Stream,Patient,Guid_1,Truncated,0,yes,Patient[1],"{""name"":""Ada""}"
-2026-03-01T09:03:00.0000000+00:00,dr.osei,Stream,Patient,Guid_1,Truncated,1,no,Patient[2],"{""name"":""Brook""}"
-2026-03-01T09:01:00.0000000+00:00,dr.osei,List,Patient,Guid_2,Released,0,yes,Patient[1],"{""name"":""Ada""}"
-2026-03-01T09:01:00.0000000+00:00,dr.osei,List,Patient,Guid_2,Released,1,yes,Patient[2],"{""name"":""Brook""}"
-2026-03-01T09:01:00.0000000+00:00,dr.osei,List,Patient,Guid_2,Released,2,yes,Patient[3],"{""name"":""Chidi""}"
+When,Caller,Agent,Kind,Source,Event,Outcome,Unit,Released,Rows,Content
+2026-03-01T09:03:00.0000000+00:00,dr.osei,,Stream,Patient,Guid_1,Truncated,0,yes,Patient[1],"{""name"":""Ada""}"
+2026-03-01T09:03:00.0000000+00:00,dr.osei,,Stream,Patient,Guid_1,Truncated,1,no,Patient[2],"{""name"":""Brook""}"
+2026-03-01T09:01:00.0000000+00:00,dr.osei,,List,Patient,Guid_2,Released,0,yes,Patient[1],"{""name"":""Ada""}"
+2026-03-01T09:01:00.0000000+00:00,dr.osei,,List,Patient,Guid_2,Released,1,yes,Patient[2],"{""name"":""Brook""}"
+2026-03-01T09:01:00.0000000+00:00,dr.osei,,List,Patient,Guid_2,Released,2,yes,Patient[3],"{""name"":""Chidi""}"
 
 --- who received Patient[2], as csv
-When,Caller,Kind,Source,Event,Outcome,Unit,Released,Rows,Content
-2026-03-01T09:01:00.0000000+00:00,dr.osei,List,Patient,Guid_2,Released,1,yes,Patient[2],"{""name"":""Brook""}"
+When,Caller,Agent,Kind,Source,Event,Outcome,Unit,Released,Rows,Content
+2026-03-01T09:01:00.0000000+00:00,dr.osei,,List,Patient,Guid_2,Released,1,yes,Patient[2],"{""name"":""Brook""}"
 
 --- a caller named as a formula, as csv
-When,Caller,Kind,Source,Event,Outcome,Unit,Released,Rows,Content
-2026-03-01T09:04:00.0000000+00:00,'=cmd|' /C calc'!A0,SqlPreview,Patient,Guid_3,Released,0,yes,,"'-- the patients of one ward
+When,Caller,Agent,Kind,Source,Event,Outcome,Unit,Released,Rows,Content
+2026-03-01T09:04:00.0000000+00:00,'=cmd|' /C calc'!A0,,SqlPreview,Patient,Guid_3,Released,0,yes,,"'-- the patients of one ward
 SELECT [p].[Name] FROM [Patients] AS [p]"
 
 --- one answer, as json

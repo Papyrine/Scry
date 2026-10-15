@@ -874,7 +874,7 @@ It needs a host with the audit on and something registered as `IScryDisclosureRe
 | Caller | A caller, a range of time | Every answer sent to that caller, newest first: its kind, its source, how many units left, whether it returned a sensitive member, how it ended |
 | Member | A caller, a source, a member | A yes or a no, and the answers that make it a yes |
 | Answer | One event, from any list | The payload rebuilt from the store, each unit with the rows it was read from, the members the answer read with their use, and the request |
-| Record | | What is waiting to be moved on, the chain head with a way to check the chain, what has been erased, and who has been reading |
+| Record | | What is waiting to be moved on, the chain head with a way to check the chain, the segments the record is kept in and when it starts and retires them, what has been erased, and who has been reading |
 
 Opening an answer is the one view that shows content:
 
@@ -939,7 +939,7 @@ public int ExportLimit { get; set; } = 1000;
 
 **Erase** is an action on the Row view, shown only where `EnableErase` says so. It asks for the key to be typed again, is recorded as a question before anything is removed, and leaves an `Erasure` naming the reviewer.
 
-**Export** writes a row's history, a caller's range, a member's answers or one answer as CSV or JSON, with the content each unit carried. It is made on the server, so it is not limited to what is on screen, and it is cut at `ExportLimit` answers and says so where it was. Every answer it is about to write is named in the record before the first byte of the file is. A CSV cell a spreadsheet would read as a formula is made text, the rule the query explorer's exporter applies.
+**Export** writes a row's history, a caller's range, a member's answers or one answer as CSV or JSON, with the content each unit carried, what asked on the caller's behalf, and the version each row was at where its source names one. It is made on the server, so it is not limited to what is on screen, and it is cut at `ExportLimit` answers and says so where it was. Every answer it is about to write is named in the record before the first byte of the file is. A CSV cell a spreadsheet would read as a formula is made text, the rule the query explorer's exporter applies.
 
 **The API** sits under `{Route}/api/`: `GET catalog`, `POST rows`, `POST callers`, `POST members`, `GET events/{id}`, `GET status`, `POST verify`, `POST erase`, `POST export`. Every `POST` has to be `application/json`, the rule the query endpoints apply against a cross-site form, and a request a browser says came from another site's page is refused, so that nothing can be recorded in a reviewer's name that the reviewer did not ask. Every answer is `Cache-Control: no-store`.
 

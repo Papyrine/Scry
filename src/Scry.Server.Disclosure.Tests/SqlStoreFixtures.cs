@@ -117,7 +117,7 @@ static class SqlStores
         foreach (var entry in events.OrderBy(_ => _.Event.At))
         {
             var answer = (await reader.Reconstruct(entry.Event.Id))!;
-            told.AppendLine($"{answer.Event.Kind} of {answer.Event.Source} for {Named(answer.Event.Caller)} on {answer.Event.Node}, sensitive {answer.Event.Sensitive}, {Ended(answer.Close)}");
+            told.AppendLine($"{answer.Event.Kind} of {answer.Event.Source} for {Named(answer.Event.Caller)}{Through(answer.Event.Agent)} on {answer.Event.Node}, sensitive {answer.Event.Sensitive}, {Ended(answer.Close)}");
             if (answer.Request is { } request)
             {
                 told.AppendLine($"  asked {Encoding.UTF8.GetString(request.Span)}");
@@ -126,7 +126,7 @@ static class SqlStores
             told.AppendLine($"  read {string.Join("; ", answer.Shape?.Fields.Select(_ => $"{_.Source}.{_.Member} {_.Use} {_.Sensitive}") ?? [])}");
             foreach (var unit in answer.Units)
             {
-                told.AppendLine($"  {unit.Ordinal}: {Sent(unit)} <- {string.Join(", ", unit.Entities.Select(_ => $"{_.Source}{_.Key} via '{_.Via}'"))}");
+                told.AppendLine($"  {unit.Ordinal}: {Sent(unit)} <- {string.Join(", ", unit.Entities.Select(_ => $"{_.Source}{_.Key} via '{_.Via}'{At(_.Version)}"))}");
             }
         }
 
@@ -168,7 +168,29 @@ static class SqlStores
             to = $"{Named(review.Reviewer)} shown {to}'s";
         }
 
-        return $"{to} #{row.Ordinal} via '{row.Via}' {row.Content}";
+        return $"{to}{Through(row.Event.Agent)} #{row.Ordinal} via '{row.Via}'{At(row.Version)} {row.Content}";
+    }
+
+    // What asked on a caller's behalf, and the version a row was at: said only where there is one,
+    // so a record of neither reads as it always has.
+    static string Through(string? agent)
+    {
+        if (agent is null)
+        {
+            return "";
+        }
+
+        return $" through {agent}";
+    }
+
+    static string At(string? version)
+    {
+        if (version is null)
+        {
+            return "";
+        }
+
+        return $" at {version}";
     }
 
     static string Sent(ScryDisclosedUnit unit)

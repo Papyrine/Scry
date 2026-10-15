@@ -33,6 +33,31 @@
             <p class="muted" data-testid="status-unknown">This store does not say how it stands.</p>
         }
 
+        @if (HasSegments)
+        {
+            <h2>Segments</h2>
+            <p data-testid="status-retention">@Retention</p>
+            <table class="grid" data-testid="segments">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Answers given (UTC)</th>
+                        <th>Where it stands</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var segment in Segments)
+                    {
+                        <tr>
+                            <td class="mono">@segment.Number</td>
+                            <td class="mono">@Span(segment)</td>
+                            <td>@Stands(segment)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
         @if (CanVerify)
         {
             <header class="results-head">

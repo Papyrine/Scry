@@ -607,6 +607,8 @@ public class SqlStoreSegmentTests
         var rebuilt = await kept.Reconstruct(listed[0].Event.Id);
         var row = await kept.ReceiversOf("Patient", [1]).ToListAsync();
         var intact = (await kept.VerifyChainAsync()).Intact;
+        var toldKept = await Told(kept);
+        var toldMemory = await Told(memory);
         await SqlStores.Execute(database, "UPDATE [scry_000001].[DisclosureEvent] SET [Agent] = N'somebody.else'");
 
         using (Assert.Multiple())
@@ -619,6 +621,8 @@ public class SqlStoreSegmentTests
             await Assert.That(row[0].Version).IsNotNull();
             await Assert.That(rebuilt.Units[0].Entities[0].Version).IsEqualTo(row[0].Version);
             await Assert.That(told[0].Event.Id).IsEqualTo(listed[0].Event.Id);
+            await Assert.That(toldKept).IsEqualTo(toldMemory);
+            await Assert.That(toldKept).Contains("through ward-assistant");
             await Assert.That(intact).IsTrue();
             await Assert.That((await kept.VerifyChainAsync()).Intact).IsFalse();
         }

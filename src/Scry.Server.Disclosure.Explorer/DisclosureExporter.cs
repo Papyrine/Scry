@@ -112,7 +112,7 @@ static class DisclosureExporter
         // With a byte-order mark, which is what tells a spreadsheet the file is UTF-8 and not the
         // machine's own code page: names in the record are whatever names are.
         await using var writer = new StreamWriter(output, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true), leaveOpen: true);
-        await writer.WriteLineAsync("When,Caller,Kind,Source,Event,Outcome,Unit,Released,Rows,Content");
+        await writer.WriteLineAsync("When,Caller,Agent,Kind,Source,Event,Outcome,Unit,Released,Rows,Content");
         foreach (var exported in wanted)
         {
             if (await reader.Reconstruct(exported.Event, cancel) is not { } answer)
@@ -127,6 +127,7 @@ static class DisclosureExporter
                 [
                     answer.Event.At.ToString("O", CultureInfo.InvariantCulture),
                     answer.Event.Caller ?? "",
+                    answer.Event.Agent ?? "",
                     answer.Event.Kind.ToString(),
                     answer.Event.Source,
                     answer.Event.Id.ToString("D"),
@@ -174,6 +175,11 @@ static class DisclosureExporter
             json.WriteString("id", answer.Event.Id);
             json.WriteString("at", answer.Event.At);
             json.WriteString("caller", answer.Event.Caller);
+            if (answer.Event.Agent is { } agent)
+            {
+                json.WriteString("agent", agent);
+            }
+
             json.WriteString("kind", answer.Event.Kind.ToString());
             json.WriteString("source", answer.Event.Source);
             json.WriteString("outcome", Outcome(answer));
@@ -243,14 +249,22 @@ static class DisclosureExporter
         return "no";
     }
 
+    // A row as an export names it: its source and key, how the unit reached it, and the version it
+    // was at where its source names one.
     static string Row(ScryDisclosureEntity entity)
     {
-        if (entity.Via.Length == 0)
+        var row = $"{entity.Source}{entity.Key}";
+        if (entity.Via.Length > 0)
         {
-            return $"{entity.Source}{entity.Key}";
+            row += $" via {entity.Via}";
         }
 
-        return $"{entity.Source}{entity.Key} via {entity.Via}";
+        if (entity.Version is { } version)
+        {
+            row += $" at version {version}";
+        }
+
+        return row;
     }
 
     // One field, quoted where it has to be — and made text where a spreadsheet would run it. A cell

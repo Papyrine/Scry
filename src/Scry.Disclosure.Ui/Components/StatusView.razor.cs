@@ -74,6 +74,120 @@ public partial class StatusView
 
     bool NoErasures => status!.Erasures.Count == 0;
 
+    // Shown only for a store that keeps its record in segments.
+    bool HasSegments => status!.Segments is {Count: > 0};
+
+    IReadOnlyList<SegmentLine> Segments => status!.Segments ?? [];
+
+    // When a new segment is started, and how long what is in one is kept, as the record says.
+    string Retention
+    {
+        get
+        {
+            if (status!.Retention is not { } kept)
+            {
+                return "";
+            }
+
+            var rolls = new List<string>();
+            if (kept.RollAfter is { } after)
+            {
+                rolls.Add($"every {Show.Span(after)}");
+            }
+
+            if (kept.RollAtBytes is { } bytes)
+            {
+                rolls.Add($"at {Show.Bytes(bytes)}");
+            }
+
+            var limits = new List<string>();
+            if (kept.Keep is { } keep)
+            {
+                limits.Add($"the newest {keep.ToString(CultureInfo.InvariantCulture)} are kept");
+            }
+
+            if (kept.KeepFor is { } keepFor)
+            {
+                limits.Add($"a segment is kept for {Show.Span(keepFor)} after its last answer");
+            }
+
+            var started = "One segment, written to for good.";
+            if (rolls.Count > 0)
+            {
+                started = $"A new segment is started {string.Join(" or ", rolls)}.";
+            }
+
+            if (limits.Count == 0)
+            {
+                return $"{started} None is retired.";
+            }
+
+            var past = "One past that is dropped.";
+            if (kept.HandsOn)
+            {
+                past = "One past that is handed on, then dropped.";
+            }
+
+            return $"{started} {Capital(string.Join(", and ", limits))}. {past}";
+        }
+    }
+
+    static string Capital(string text) =>
+        string.Concat(char.ToUpperInvariant(text[0]), text[1..]);
+
+    static string Span(SegmentLine segment)
+    {
+        if (segment is {From: { } from, To: { } to})
+        {
+            return $"{Show.When(from)} to {Show.When(to)}";
+        }
+
+        if (segment.Sealed is null)
+        {
+            return "—";
+        }
+
+        return "none";
+    }
+
+    static string Stands(SegmentLine segment)
+    {
+        var stands = Kept(segment);
+        if (segment.Ledgered)
+        {
+            return $"{stands}, in ledger tables";
+        }
+
+        return stands;
+    }
+
+    static string Kept(SegmentLine segment)
+    {
+        if (segment.Retired is { } retired)
+        {
+            var how = "dropped";
+            if (segment.HandedOn)
+            {
+                how = "handed on and dropped";
+            }
+
+            var held = (segment.Events ?? 0).ToString("N0", CultureInfo.InvariantCulture);
+            return $"Retired {Show.When(retired)} UTC, {how}: it held {held} answers";
+        }
+
+        if (segment.Retiring)
+        {
+            return "Being retired";
+        }
+
+        if (segment.Sealed is null)
+        {
+            return "Being written to";
+        }
+
+        return "Kept";
+    }
+
     bool NoReviews => status!.Reviews.Count == 0;
 
     string Events => (status!.Events ?? 0).ToString("N0", CultureInfo.InvariantCulture);

@@ -28,6 +28,8 @@ public class ExplorerReaderHostTests
         var answer = await asked.Content.ReadAsStringAsync();
         var waiting = (await serving.Status()).Pending;
         var before = await serving.Reviews().ToListAsync();
+        using var standing = await Ask(client, "api/status", "");
+        var stands = await standing.Content.ReadAsStringAsync();
 
         await serving.DrainAsync();
         var after = await serving.Reviews().ToListAsync();
@@ -40,11 +42,14 @@ public class ExplorerReaderHostTests
             // Accepted before it was answered, and not moved on by the host that accepted it.
             await Assert.That(waiting).IsEqualTo(1);
             await Assert.That(before).IsEmpty();
-            await Assert.That(after).Count().IsEqualTo(1);
-            await Assert.That(after[0].Reviewer).IsEqualTo("auditor.lee");
-            await Assert.That(after[0].Question).IsEqualTo(ScryDisclosureQuestion.Row);
-            await Assert.That(after[0].Node).IsEqualTo("admin");
+            // The question about the row, and the look at how the record stands.
+            await Assert.That(after.Select(_ => _.Question)).IsEquivalentTo([ScryDisclosureQuestion.Row, ScryDisclosureQuestion.Status], CollectionOrdering.Any);
+            await Assert.That(after.All(_ => _ is {Reviewer: "auditor.lee", Node: "admin"})).IsTrue();
             await Assert.That(await serving.SegmentsAsync()).Count().IsEqualTo(1);
+
+            // The record says how it is kept, and the explorer shows it.
+            await Assert.That(stands).Contains("\"segments\":[{\"number\":1");
+            await Assert.That(stands).Contains("\"retention\":{");
         }
     }
 
@@ -66,6 +71,52 @@ public class ExplorerReaderHostTests
             await Assert.That(asked.StatusCode).IsEqualTo(HttpStatusCode.OK);
             await Assert.That(reviews).Count().IsEqualTo(1);
             await Assert.That(reviews[0].Question).IsEqualTo(ScryDisclosureQuestion.Caller);
+        }
+    }
+
+    // An export says what asked on the caller's behalf, and the version each row was at, where the
+    // record has them.
+    [Test]
+    public async Task AnExportSaysWhatAskedAndWhichVersion()
+    {
+        var store = new ScryMemoryDisclosureStore();
+        var id = Guid.CreateVersion7();
+        var row = Clinic.Content(ScryDisclosureContentKind.Row, "{\"name\":\"Ada\"}");
+        var batch = Clinic.Part(
+            id,
+            0,
+            new(id, DateTimeOffset.UtcNow, ScryDisclosureKind.List, "Patient")
+            {
+                Caller = "dr.osei",
+                Agent = "ward-assistant"
+            },
+            close: new(ScryDisclosureOutcome.Released, 1),
+            rows: [(0, row, "Patient", "[1]")]);
+        batch = new()
+        {
+            EventId = batch.EventId,
+            Begin = batch.Begin,
+            Units = batch.Units,
+            Entities = [batch.Entities[0] with {Version = "7"}],
+            Contents = batch.Contents,
+            Close = batch.Close
+        };
+        await store.AppendAsync(batch, Cancel.None);
+
+        await using var app = await Reader(_ => _.AddScryDisclosureRecord(store), export: true);
+        using var client = app.GetTestClient();
+        using var csv = await Ask(client, "api/export", $$"""{"format":"csv","event":"{{id:D}}"}""");
+        using var json = await Ask(client, "api/export", $$"""{"format":"json","event":"{{id:D}}"}""");
+        var csvText = await csv.Content.ReadAsStringAsync();
+        var jsonText = await json.Content.ReadAsStringAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(csvText).Contains("When,Caller,Agent,Kind");
+            await Assert.That(csvText).Contains("dr.osei,ward-assistant,List");
+            await Assert.That(csvText).Contains("Patient[1] at version 7");
+            await Assert.That(jsonText).Contains("\"agent\": \"ward-assistant\"");
+            await Assert.That(jsonText).Contains("Patient[1] at version 7");
         }
     }
 
@@ -108,7 +159,7 @@ public class ExplorerReaderHostTests
         await Assert.That(thrown!.Message).Contains("serving nodes");
     }
 
-    static async Task<WebApplication> Reader(Action<IServiceCollection> register)
+    static async Task<WebApplication> Reader(Action<IServiceCollection> register, bool export = false)
     {
         var builder = WebApplication.CreateBuilder(
             new WebApplicationOptions
@@ -124,6 +175,7 @@ public class ExplorerReaderHostTests
                 _ =>
                 {
                     _.EnableGuard = _ => true;
+                    _.EnableExport = _ => export;
                     _.Reviewer = context => context.Request.Headers["X-Reviewer"].FirstOrDefault();
                 });
             await app.StartAsync();
@@ -138,10 +190,14 @@ public class ExplorerReaderHostTests
 
     static async Task<HttpResponseMessage> Ask(HttpClient client, string path, string body, string? reviewer = "auditor.lee")
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/scry-disclosures/{path}")
+        // Asked for with no body, as the status is; posted with one, as a question is.
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/scry-disclosures/{path}");
+        if (body.Length > 0)
         {
-            Content = new StringContent(body, Encoding.UTF8, "application/json")
-        };
+            request.Method = HttpMethod.Post;
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        }
+
         if (reviewer is not null)
         {
             request.Headers.Add("X-Reviewer", reviewer);

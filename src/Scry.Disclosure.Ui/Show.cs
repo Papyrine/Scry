@@ -47,6 +47,38 @@ static class Show
         return $"{(count / (1024d * 1024)).ToString("0.#", CultureInfo.InvariantCulture)} MB";
     }
 
+    /// <summary>A length of time in the largest whole unit it is: days, hours, minutes or seconds.</summary>
+    public static string Span(TimeSpan span)
+    {
+        if (span.Ticks % TimeSpan.TicksPerDay == 0)
+        {
+            return Count((long) span.TotalDays, "day");
+        }
+
+        if (span.Ticks % TimeSpan.TicksPerHour == 0)
+        {
+            return Count((long) span.TotalHours, "hour");
+        }
+
+        if (span.Ticks % TimeSpan.TicksPerMinute == 0)
+        {
+            return Count((long) span.TotalMinutes, "minute");
+        }
+
+        return Count((long) Math.Ceiling(span.TotalSeconds), "second");
+    }
+
+    static string Count(long count, string unit)
+    {
+        var number = count.ToString("N0", CultureInfo.InvariantCulture);
+        if (count == 1)
+        {
+            return $"{number} {unit}";
+        }
+
+        return $"{number} {unit}s";
+    }
+
     /// <summary>Who an answer was recorded under, with a name for nobody.</summary>
     public static string Caller(string? caller) =>
         caller ?? "(nobody)";

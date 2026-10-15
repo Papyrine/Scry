@@ -169,11 +169,14 @@ public sealed partial class ScrySqlServerDisclosureStore
             head = ScryDisclosureAddress.From((byte[]) reader[0]);
         }
 
+        await reader.CloseAsync();
         return new(pending, bytes, oldest, events)
         {
             ChainHead = head,
             LastVerification = verified,
-            Problem = Problem(unreadable)
+            Problem = Problem(unreadable),
+            Segments = await Registry(connection, null, cancel),
+            Retention = await Retention(connection, null, cancel)
         };
     }
 

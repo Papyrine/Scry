@@ -239,6 +239,15 @@ public sealed record ScryDisclosureStoreStatus(long Pending, long PendingBytes, 
     /// to move on what it accepted, a batch that will not read back. Null where nothing is.
     /// </summary>
     public string? Problem { get; init; }
+
+    /// <summary>
+    /// Every segment the record has had, oldest first, where it is kept in segments: the ones kept,
+    /// and of each one retired when that was and how much it held. Null for a store that keeps none.
+    /// </summary>
+    public IReadOnlyList<ScryDisclosureSegment>? Segments { get; init; }
+
+    /// <summary>When a new segment is started and how many are kept, where the record says so.</summary>
+    public ScryDisclosureRetention? Retention { get; init; }
 }
 
 /// <summary>
