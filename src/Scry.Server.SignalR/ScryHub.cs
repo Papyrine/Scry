@@ -208,11 +208,11 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 services,
                 RequestHeaders,
                 new HeaderDictionary(),
-                Context.UserIdentifier,
-                cancel,
-                // Counted against the connection's user, as it always was, and recorded under whoever
-                // every other answer over this hub is recorded under.
-                recorded: Recorded)
+                // Counted against the caller ScryOptions.Caller names, as a subscription over HTTP is,
+                // so that one caller's subscriptions are one count whichever way they were opened.
+                // Recorded under the same name.
+                Caller,
+                cancel)
             .GetAsyncEnumerator(cancel);
         while (true)
         {
