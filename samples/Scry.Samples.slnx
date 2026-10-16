@@ -5,6 +5,7 @@
   <Project Path="Sample.Model/Sample.Model.csproj" />
   <Project Path="Sample.CommandHandlers/Sample.CommandHandlers.csproj" />
   <Project Path="Sample.WebServer/Sample.WebServer.csproj" />
+  <Project Path="Sample.DisclosureServer/Sample.DisclosureServer.csproj" />
   <Project Path="Sample.WebClient/Sample.WebClient.csproj" />
   <Project Path="Sample.Tests/Sample.Tests.csproj" />
   <Project Path="Sample.QueryModels/Sample.QueryModels.csproj" />

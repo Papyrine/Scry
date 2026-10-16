@@ -184,6 +184,8 @@ An attachment fetch is audited like a query. Its [`ScryAuditEntry`](observabilit
 
 That is the signal worth alerting on: an attachment endpoint is reached by row key, so a client walking keys looks exactly like a run of `404`s.
 
+Where the [disclosure audit](disclosure-audit.md) is on, a fetch that handed a value over is recorded in it: the row, the member, the content type, the length and a digest. The bytes themselves are kept only where the host asks for binary content to be.
+
 
 ## What attachments do not do
 

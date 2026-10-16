@@ -1,0 +1,22 @@
+﻿{
+  Sensitive: false,
+  Fields: [
+    Asset.Name: Returned,
+    Asset.Name: Read,
+    Asset.Wheels: Returned
+  ],
+  Units: [
+    {
+      Content: {"name":"Trailer","wheels":2},
+      Rows: [
+        Asset[4]
+      ]
+    },
+    {
+      Content: {"name":"Van","wheels":4},
+      Rows: [
+        Asset[3]
+      ]
+    }
+  ]
+}

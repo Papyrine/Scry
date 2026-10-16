@@ -1,0 +1,71 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Scry</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
+    <Description>An opt-in browser explorer over the Scry disclosure audit: ask who received a row, what a caller received, and whether a caller ever received a member, with every question recorded.</Description>
+    <DisclosureUiPublishDir>$(MSBuildThisFileDirectory)..\Scry.Disclosure.Ui\bin\$(Configuration)\net10.0\publish\wwwroot</DisclosureUiPublishDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- What the explorer answers is worth asserting without a browser: the questions over a test
+         server, the page and its policy from text of the test's own, the link codec on its own. Named
+         by key for the reason given on Scry.Client's friend. -->
+    <InternalsVisibleTo Include="Scry.Server.Disclosure.Tests" Key="$(ScryPublicKey)" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
+    <!-- What the page and this package say to each other, compiled into both. -->
+    <Compile Include="..\Shared\Disclosure\*.cs" LinkBase="Shared" />
+    <!-- The same serving of an embedded WASM app the query explorer does, over the resources this
+         assembly holds. Linked, not copied: what keeps a stale asset from being served is in it. -->
+    <Compile Include="..\Scry.Server.Explorer\ExplorerAssets.cs" Link="ExplorerAssets.cs" />
+    <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  <!--
+    Publishes the Blazor WASM UI and embeds its published wwwroot as manifest resources, as
+    EmbedExplorerUi does for the query explorer in Scry.Server.Explorer.csproj — which is where the
+    reasons for each step are written down. A copy rather than a shared target, so that changing one
+    explorer's packaging cannot disturb the other's.
+
+    Scry.Disclosure.Ui is in no solution and references no project: this package is its only
+    builder, and its publish shares no obj directory with anything the solution builds.
+  -->
+  <Target Name="EmbedDisclosureUi" BeforeTargets="AssignTargetPaths"
+          Condition="'$(ScryDisclosureUiEmbedded)' != 'true'">
+    <PropertyGroup>
+      <ScryDisclosureUiEmbedded>true</ScryDisclosureUiEmbedded>
+    </PropertyGroup>
+    <MSBuild Projects="..\Scry.Disclosure.Ui\Scry.Disclosure.Ui.csproj"
+             Targets="Restore"
+             Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\Scry.Disclosure.Ui\Scry.Disclosure.Ui.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0" />
+    <ItemGroup>
+      <_ScryDisclosureUiFile Include="$(DisclosureUiPublishDir)\**\*.*"
+                             Exclude="$(DisclosureUiPublishDir)\**\*.br;$(DisclosureUiPublishDir)\**\*.gz" />
+      <EmbeddedResource Include="@(_ScryDisclosureUiFile)"
+                        WithCulture="false"
+                        LogicalName="scryui/%(_ScryDisclosureUiFile.RecursiveDir)%(_ScryDisclosureUiFile.Filename)%(_ScryDisclosureUiFile.Extension)" />
+    </ItemGroup>
+    <GetFileHash Files="@(_ScryDisclosureUiFile)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_ScryDisclosureUiHashed" />
+    </GetFileHash>
+    <ItemGroup>
+      <_ScryDisclosureUiStamped Include="@(_ScryDisclosureUiHashed)">
+        <Served>$([MSBuild]::MakeRelative('$(DisclosureUiPublishDir)', '%(_ScryDisclosureUiHashed.FullPath)'))</Served>
+      </_ScryDisclosureUiStamped>
+    </ItemGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)scryui.stamp"
+                      Lines="@(_ScryDisclosureUiStamped->'%(Served) %(FileHash)')"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(IntermediateOutputPath)scryui.stamp"
+                        WithCulture="false"
+                        LogicalName="scryui.stamp" />
+    </ItemGroup>
+  </Target>
+</Project>

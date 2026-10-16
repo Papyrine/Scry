@@ -115,6 +115,8 @@ Queries never write. Writes are [commands](docs/commands.md): a class in the mod
 | [Scry.Server.MassTransit](https://nuget.org/packages/Scry.Server.MassTransit/) | Opt-in: [commands](docs/commands.md) carried over [MassTransit](https://masstransit.io/). |
 | [Scry.Server.Rebus](https://nuget.org/packages/Scry.Server.Rebus/) | Opt-in: [commands](docs/commands.md) carried over [Rebus](https://github.com/rebus-org/Rebus). |
 | [Scry.Server.Wolverine](https://nuget.org/packages/Scry.Server.Wolverine/) | Opt-in: [commands](docs/commands.md) carried over [Wolverine](https://wolverinefx.net/). |
+| [Scry.Server.Disclosure.SqlServer](https://nuget.org/packages/Scry.Server.Disclosure.SqlServer/) | Opt-in: the [disclosure audit](docs/disclosure-audit.md) kept in SQL Server, a record of everything the server sent to each caller. |
+| [Scry.Server.Disclosure.Explorer](https://nuget.org/packages/Scry.Server.Disclosure.Explorer/) | Opt-in: a browser explorer over that record, for whoever has to answer who saw what. |
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
 
@@ -432,6 +434,22 @@ A Blazor client has a companion: a [debug sidecar](docs/sidecar.md) that opens o
 <img src="samples/Sample.Tests/UiScreenshotTests.SampleSidecar.verified.png" border="1" alt="The sidecar open over the sample app: the captured exchanges, queries and attachment fetches alike, and one query's decoded request, response, and headers">
 
 
+## Disclosure audit
+
+The server can keep a record of everything it sends. The [disclosure audit](docs/disclosure-audit.md) is opt-in, and answers three questions from its store: which callers received a row and which version of it, what a caller received in a range of time, and whether a caller ever received a member.
+
+```csharp
+builder.Services.AddScry<SampleContext>(
+    _ => _.UseSqlServerDisclosureAudit(connectionString));
+```
+
+An answer is recorded before it is sent, and one the store does not accept is not given. Content is stored once however often it is sent, apart from the record of who was sent it, so a row's content can be erased while the record that it was sent is kept. An explorer over the record ships in `Scry.Server.Disclosure.Explorer`, and reading the record through it is itself recorded:
+
+<img src="samples/Sample.Tests/DisclosureScreenshotTests.Row.verified.png" border="1" alt="The disclosure explorer answering who received one employee's row: two callers, the members each answer sent with the sensitive one flagged, the version each was sent, and the reviewer who has since opened one of those answers">
+
+It is off until a server is given somewhere to record, and the record it keeps is the most sensitive data the host holds. See [Disclosure audit](docs/disclosure-audit.md).
+
+
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
@@ -449,6 +467,7 @@ A Blazor client has a companion: a [debug sidecar](docs/sidecar.md) that opens o
 - [Commands](docs/commands.md)
 - [MCP](docs/mcp.md)
 - [Observability](docs/observability.md)
+- [Disclosure audit](docs/disclosure-audit.md)
 - [Caching and 304](docs/caching.md)
 - [Performance](docs/performance.md)
 - [Security model](docs/security.md)

@@ -1,0 +1,297 @@
+﻿{
+  catalog: {
+    sources: [
+      {
+        name: Patient,
+        keyed: true,
+        members: [
+          {
+            name: Diagnosis,
+            sensitive: true
+          },
+          {
+            name: Name,
+            sensitive: false
+          },
+          {
+            name: Ward,
+            sensitive: false
+          }
+        ]
+      },
+      {
+        name: Ward,
+        keyed: true,
+        members: [
+          {
+            name: Name,
+            sensitive: false
+          }
+        ]
+      }
+    ],
+    reviewer: records.officer,
+    export: true,
+    erase: false,
+    verify: false
+  },
+  whoReceivedPatient1: {
+    key: [1],
+    rows: [
+      {
+        event: {
+          id: Guid_1,
+          at: DateTimeOffset_1,
+          caller: dr.osei,
+          kind: Stream,
+          source: Patient,
+          subscribed: false,
+          delivery: Sent,
+          sensitive: false,
+          outcome: Truncated,
+          units: 1,
+          node: ward-1
+        },
+        ordinal: 0,
+        content: p5DkJXuKOpS_I0mOOefHHwdYBUaDWocUSLm7sTR-5Vs,
+        via: ,
+        members: [
+          {
+            source: Patient,
+            member: Name,
+            use: Returned,
+            sensitive: false
+          }
+        ]
+      },
+      {
+        event: {
+          id: Guid_2,
+          at: DateTimeOffset_2,
+          caller: nurse.kim,
+          kind: List,
+          source: Patient,
+          subscribed: false,
+          delivery: Sent,
+          sensitive: true,
+          outcome: Released,
+          units: 1,
+          node: ward-1
+        },
+        ordinal: 0,
+        content: GEE8NIDBBtb6HbAqvbpI5k2nPVdDz4agFBDlmFwjsag,
+        via: ,
+        members: [
+          {
+            source: Patient,
+            member: Name,
+            use: Returned,
+            sensitive: false
+          },
+          {
+            source: Patient,
+            member: Diagnosis,
+            use: Returned,
+            sensitive: true
+          },
+          {
+            source: Ward,
+            member: Name,
+            use: Returned,
+            sensitive: false
+          }
+        ]
+      },
+      {
+        event: {
+          id: Guid_3,
+          at: DateTimeOffset_3,
+          caller: dr.osei,
+          kind: List,
+          source: Patient,
+          subscribed: false,
+          delivery: Sent,
+          sensitive: false,
+          outcome: Released,
+          units: 3,
+          node: ward-1
+        },
+        ordinal: 0,
+        content: p5DkJXuKOpS_I0mOOefHHwdYBUaDWocUSLm7sTR-5Vs,
+        via: ,
+        members: [
+          {
+            source: Patient,
+            member: Name,
+            use: Returned,
+            sensitive: false
+          }
+        ]
+      }
+    ]
+  },
+  whatDrOseiReceived: {
+    events: [
+      {
+        id: Guid_1,
+        at: DateTimeOffset_1,
+        caller: dr.osei,
+        kind: Stream,
+        source: Patient,
+        subscribed: false,
+        delivery: Sent,
+        sensitive: false,
+        outcome: Truncated,
+        units: 1,
+        node: ward-1
+      },
+      {
+        id: Guid_3,
+        at: DateTimeOffset_3,
+        caller: dr.osei,
+        kind: List,
+        source: Patient,
+        subscribed: false,
+        delivery: Sent,
+        sensitive: false,
+        outcome: Released,
+        units: 3,
+        node: ward-1
+      }
+    ]
+  },
+  whetherNurseKimReceivedADiagnosis: {
+    events: [
+      {
+        id: Guid_2,
+        at: DateTimeOffset_2,
+        caller: nurse.kim,
+        kind: List,
+        source: Patient,
+        subscribed: false,
+        delivery: Sent,
+        sensitive: true,
+        outcome: Released,
+        units: 1,
+        node: ward-1
+      }
+    ]
+  },
+  whetherDrOseiDid: {},
+  theChartOpened: {
+    event: {
+      id: Guid_2,
+      at: DateTimeOffset_2,
+      caller: nurse.kim,
+      kind: List,
+      source: Patient,
+      subscribed: false,
+      delivery: Sent,
+      sensitive: true,
+      outcome: Released,
+      units: 1,
+      node: ward-1
+    },
+    request: {"version":1,"root":"Patient","pipeline":[]},
+    fields: [
+      {
+        source: Patient,
+        member: Name,
+        use: Returned,
+        sensitive: false
+      },
+      {
+        source: Patient,
+        member: Diagnosis,
+        use: Returned,
+        sensitive: true
+      },
+      {
+        source: Patient,
+        member: Ward,
+        use: Traversed,
+        sensitive: false
+      },
+      {
+        source: Ward,
+        member: Name,
+        use: Returned,
+        sensitive: false
+      }
+    ],
+    units: [
+      {
+        ordinal: 0,
+        address: GEE8NIDBBtb6HbAqvbpI5k2nPVdDz4agFBDlmFwjsag,
+        kind: Row,
+        length: 52,
+        state: held,
+        released: true,
+        text: {"name":"Ada","diagnosis":"Fracture","ward":"North"},
+        rows: [
+          {
+            source: Patient,
+            key: [1],
+            via: 
+          },
+          {
+            source: Ward,
+            key: [1],
+            via: Ward
+          }
+        ]
+      }
+    ],
+    payload: [{"name":"Ada","diagnosis":"Fracture","ward":"North"}],
+    stamp: stamp-1,
+    closedAt: DateTimeOffset_4
+  },
+  howTheRecordStands: {
+    known: true,
+    pending: 0,
+    pendingBytes: 0,
+    events: 3,
+    reviews: [
+      {
+        id: Guid_4,
+        at: DateTimeOffset_5,
+        reviewer: records.officer,
+        question: Event,
+        results: 1,
+        events: 1
+      },
+      {
+        id: Guid_5,
+        at: DateTimeOffset_6,
+        reviewer: records.officer,
+        question: Member,
+        results: 0,
+        events: 0
+      },
+      {
+        id: Guid_6,
+        at: DateTimeOffset_7,
+        reviewer: records.officer,
+        question: Member,
+        results: 1,
+        events: 0
+      },
+      {
+        id: Guid_7,
+        at: DateTimeOffset_8,
+        reviewer: records.officer,
+        question: Caller,
+        results: 2,
+        events: 0
+      },
+      {
+        id: Guid_8,
+        at: DateTimeOffset_9,
+        reviewer: records.officer,
+        question: Row,
+        results: 3,
+        events: 0
+      }
+    ]
+  }
+}

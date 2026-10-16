@@ -6,7 +6,8 @@
 /// One server and one browser per derived fixture rather than one shared across the assembly: a
 /// server start is seconds against a suite whose cost is dominated by the WASM boot on each page load.
 /// </remarks>
-public abstract class BrowserFixture
+public abstract class BrowserFixture :
+    BrowserTests
 {
     /// <summary>
     /// The server and browser this fixture's tests share, started before its first test and stopped
@@ -14,6 +15,24 @@ public abstract class BrowserFixture
     /// </summary>
     [ClassDataSource<BrowserHost>(Shared = SharedType.PerClass)]
     public required BrowserHost Host { get; init; }
+
+    protected override BrowserHost Server => Host;
+}
+
+/// <summary>
+/// What every fixture that drives a sample server through a browser shares, whichever server it is:
+/// the pages a test opens, what they logged, and the check that the browser refused nothing under the
+/// page's Content-Security-Policy.
+/// </summary>
+/// <remarks>
+/// Apart from <see cref="BrowserFixture"/> because which server a fixture launches is said by the
+/// type of the host it is handed, and that is an attribute's argument: it cannot be left open for a
+/// derived fixture to fill in.
+/// </remarks>
+public abstract class BrowserTests
+{
+    /// <summary>The server and browser the fixture's tests share.</summary>
+    protected abstract BrowserHost Server { get; }
 
     /// <summary>
     /// What one running test opened and what it logged.
@@ -42,7 +61,7 @@ public abstract class BrowserFixture
     RunningTest Current { get; } = new();
 
     /// <summary>The origin the sample server is listening on, with no trailing slash.</summary>
-    protected string BaseUrl => Host.BaseUrl;
+    protected string BaseUrl => Server.BaseUrl;
 
     /// <summary>
     /// Opens a page, recording everything it logs for the duration of the test.
@@ -52,7 +71,7 @@ public abstract class BrowserFixture
     /// that quietly opts out of the recording.
     /// </remarks>
     protected async Task<IPage> NewPageAsync(BrowserNewPageOptions? options = null) =>
-        Track(await Host.Browser.NewPageAsync(options));
+        Track(await Server.Browser.NewPageAsync(options));
 
     /// <summary>
     /// A context for pages that share an origin's storage — what two explorer windows in one browser
@@ -61,7 +80,7 @@ public abstract class BrowserFixture
     /// </summary>
     protected async Task<IBrowserContext> NewContextAsync()
     {
-        var context = await Host.Browser.NewContextAsync();
+        var context = await Server.Browser.NewContextAsync();
         Current.Contexts.Add(context);
         return context;
     }

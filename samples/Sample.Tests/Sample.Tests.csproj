@@ -29,6 +29,10 @@
     <!-- Reference the whole app: builds the server (which the Playwright test launches) and
          exposes the generated ScryQuery + Index page (which the bUnit tests render). -->
     <ProjectReference Include="..\Sample.WebServer\Sample.WebServer.csproj" />
+    <!-- Launched by the disclosure explorer's browser tests, from its own output folder. Built before
+         these tests and referenced by nothing in them: a second web host's Program is not something
+         to have in scope. -->
+    <ProjectReference Include="..\Sample.DisclosureServer\Sample.DisclosureServer.csproj" ReferenceOutputAssembly="false" />
     <!-- The NServiceBus pair is the one backplane sample that needs no infrastructure, so it is the
          one hosted here: server and worker in this process, over a temporary transport folder. -->
     <ProjectReference Include="..\Sample.NServiceBusServer\Sample.NServiceBusServer.csproj" />

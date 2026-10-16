@@ -114,5 +114,12 @@ public sealed record ScryAuditEntry(
     /// has this to redact or drop on.
     /// </summary>
     public bool Sensitive { get; init; }
+
+    /// <summary>
+    /// The disclosure audit's event for this answer: what the record of everything sent is kept
+    /// under. Null where the disclosure audit is off, and where nothing was sent — a query that was
+    /// refused or failed, or one run of a live query whose answer had not changed.
+    /// </summary>
+    public Guid? Disclosure { get; init; }
 }
 // end-snippet

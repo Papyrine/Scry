@@ -1,0 +1,54 @@
+@namespace Scry
+
+@*
+    The whole page: a rail to pick a question, a bar that says which one is being asked and who is
+    asking it, and the one view that question has. Which view is the fragment of the page's address,
+    so every question the page can ask is one that can be linked to.
+*@
+<div class="shell" data-testid="shell">
+    <Rail View="@View" Theme="@theme" OnThemeToggle="ToggleTheme" />
+    <div class="main">
+        <header class="top">
+            <h1 data-testid="title">@Title</h1>
+            <span class="@ReadingClass" data-testid="reviewer">@Reading</span>
+        </header>
+        @if (failure is not null)
+        {
+            <div class="view">
+                <p class="error" data-testid="boot-error">@failure</p>
+            </div>
+        }
+        else if (Booting)
+        {
+            <div class="view">
+                <p class="muted loading-hint">Reading what the record holds…</p>
+            </div>
+        }
+        else if (ShowingRow)
+        {
+            <RowView Address="@address" />
+        }
+        else if (ShowingCaller)
+        {
+            <div class="view" data-testid="caller-view">
+                <CallerForm Address="@address" />
+                <EventList Address="@address" />
+            </div>
+        }
+        else if (ShowingMember)
+        {
+            <div class="view" data-testid="member-view">
+                <MemberForm Address="@address" />
+                <EventList Address="@address" />
+            </div>
+        }
+        else if (ShowingEvent)
+        {
+            <EventView Address="@address" />
+        }
+        else
+        {
+            <StatusView Address="@address" />
+        }
+    </div>
+</div>

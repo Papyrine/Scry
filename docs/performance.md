@@ -15,7 +15,7 @@ dotnet run -c Release --project Benchmarks -- --filter '*'
 
 Release is mandatory — BenchmarkDotNet refuses a Debug build. The project is deliberately in no solution; see the note in `CLAUDE.md` for why.
 
-The sources are [`Benchmarks/ResponseBenchmarks.cs`](../Benchmarks/ResponseBenchmarks.cs), [`Benchmarks/PageBenchmarks.cs`](../Benchmarks/PageBenchmarks.cs), [`Benchmarks/BatchBenchmarks.cs`](../Benchmarks/BatchBenchmarks.cs) and [`Benchmarks/TerminalBenchmarks.cs`](../Benchmarks/TerminalBenchmarks.cs) and [`Benchmarks/PreparationBenchmarks.cs`](../Benchmarks/PreparationBenchmarks.cs) for the server, and [`Benchmarks/ClientReadBenchmarks.cs`](../Benchmarks/ClientReadBenchmarks.cs) for the client. Rows come from an in-memory `[QueryablePoco]` source, so the measurement is shaping and serialization with no database and no I/O in it.
+The sources are [`Benchmarks/ResponseBenchmarks.cs`](../Benchmarks/ResponseBenchmarks.cs), [`Benchmarks/PageBenchmarks.cs`](../Benchmarks/PageBenchmarks.cs), [`Benchmarks/BatchBenchmarks.cs`](../Benchmarks/BatchBenchmarks.cs), [`Benchmarks/TerminalBenchmarks.cs`](../Benchmarks/TerminalBenchmarks.cs), [`Benchmarks/PreparationBenchmarks.cs`](../Benchmarks/PreparationBenchmarks.cs) and [`Benchmarks/DisclosureBenchmarks.cs`](../Benchmarks/DisclosureBenchmarks.cs) for the server, and [`Benchmarks/ClientReadBenchmarks.cs`](../Benchmarks/ClientReadBenchmarks.cs) for the client. Rows come from an in-memory `[QueryablePoco]` source, so the measurement is shaping and serialization with no database and no I/O in it. The exceptions are the journaled arm of the disclosure benchmark, which is there to price a flush to disk, and [`Benchmarks/DisclosureReadBenchmarks.cs`](../Benchmarks/DisclosureReadBenchmarks.cs), which asks its questions of a database.
 
 
 ## Writing a response
@@ -99,6 +99,93 @@ What the server spends on a request before the database is asked: validating it,
 The whole of a preparation is a few microseconds and a few kilobytes, which is what a source generator on the server side could not improve on: nothing here is compiled per request, and the projection is the client's, so there is no shape to generate ahead of time. Nor is anything reflected per request. Resolving a source's set, composing an operator, reading a temporal part or an optional's `Value`, applying a policy and keying the row writer are each a delegate or a lookup made once.
 
 The last row is the same request carried on into EF's pre-execution work — funcletizing, hashing, the compiled-query lookup, the command text — so the server's share can be read against the provider's. The table gives allocations only; the timings of these arms move by a third between runs, as the note below says, and the difference between two arms of two microseconds is inside that.
+
+
+## The disclosure audit
+
+What the [disclosure audit](disclosure-audit.md) adds to an answer. All three arms of `DisclosureBenchmarks` are the HTTP endpoint answering the same wide list, so they carry the same transport constant and can be read against each other as they stand, which the pairs above cannot.
+
+| Rows | Audit off | Recorded, the sink discarding it | Recorded through a journal |
+| --- | --- | --- | --- |
+| 1 | 57 KB / 815 µs | 64 KB / 898 µs | 71 KB / 1221 µs |
+| 100 | 139 KB / 825 µs | 210 KB / 1021 µs | 272 KB / 1583 µs |
+| 1000 | 902 KB / 1451 µs | 1373 KB / 1823 µs | 1960 KB / 4318 µs |
+
+**Off costs nothing that can be measured.** A host that never turned the audit on takes a null check where a capture would be made, and nothing else: no key is added to its projections and nothing is hashed. The endpoint arm of `ResponseBenchmarks`, run on the commit before the audit existed and again with the audit compiled in and off, allocated 124.92 KB against 124.58 KB at one row, 207.12 KB against 206.99 KB at a hundred, and 969.29 KB against 969.08 KB at a thousand, and the timings of the two runs differed by less than either run's own error. Both sides of that comparison were taken before the endpoint stopped initializing a context it did not use, which is why they read some 64 KB above every table here. The first column of this one reads a few kilobytes under the first table on the page because the hosts of this benchmark write no logs, where that one leaves the console logger on.
+
+**Recording is paid per row.** The middle arm has the audit on over a sink that discards what it is handed, so it is the capture alone: each row's bytes hashed and copied into the batch, its key read from a slot the answer does not carry and written into the record, the batch built. Taken as the growth from 1 row to 1000:
+
+| Per row | Audit off | Recorded | Through a journal |
+| --- | --- | --- | --- |
+| Allocated | 0.85 KB | 1.31 KB | 1.89 KB |
+| Time | 0.64 µs | 0.93 µs | 3.10 µs |
+
+So the capture adds about half a kilobyte and three tenths of a microsecond to a row a little over 200 bytes long, and about 7 KB to an answer whatever it holds. This row has no binary member, so it is serialized once either way: the bytes that are hashed are the bytes that are sent. A row with one is written a second time for the record, with the value named by its digest. So is a row with a value the host [left out of the record](disclosure-audit.md#leaving-a-member-out), with a marker in the value's place. Neither is measured here.
+
+**A durable accept is the disk's to price.** The journal adds a write and a flush before the answer is sent, and the flush is most of the third column at a small answer: a third of a millisecond on this machine in this run and two thirds in the one before it, with the rest in proportion to what is written. It is the one figure on this page that says more about the machine than about the code, and the least steady. The SQL outbox pays a committed insert in the same place, which nothing here measures: it is a round trip to a database, and the benchmark has none.
+
+Nor does the table show the database's share of recording. A key slot is a column added to the query, and a navigation a policy guards adds one correlated subquery for its key. The benchmark reads an in-memory source, where a key is a property read.
+
+### Asking the record
+
+What the questions the record exists for cost to ask of the SQL Server store, from `DisclosureReadBenchmarks`. This is the one benchmark with a database in it: LocalDB on the machine the rest ran on, over three records made by hand. `Repeated` is one answer of a thousand rows given five hundred times. `Drifting` is five hundred answers of a thousand rows, each one row different from the one before, which is what a live query leaves behind. `Small` is ten thousand answers of one row each. A question that is answered a page at a time is asked for its first page, two hundred lines.
+
+Each cell is the store as it kept a list whole, then the store as it keeps a list as [runs other lists share](disclosure-audit.md#sql-server):
+
+| Question | Repeated | Drifting | Small |
+| --- | --- | --- | --- |
+| Who received a row | 9.7 ms / 7.1 ms | 18.1 ms / 8.1 ms | 2.3 ms / 1.4 ms |
+| What a caller received | 0.6 ms / 0.5 ms | 0.8 ms / 0.5 ms | 15.4 ms / 13.2 ms |
+| Whether a caller was sent a member | 1.2 ms / 1.1 ms | 1.2 ms / 1.3 ms | 18.1 ms / 18.9 ms |
+| An answer put back together | 8.4 ms / 5.8 ms | 8.7 ms / 8.2 ms | 0.27 ms / 0.16 ms |
+
+**Reading through runs costs nothing that shows here.** A unit's place in an answer is added up from where its batch, its list and its run start, which is two more joins than a list kept whole needed, and no question is slower for it by more than the runs differ between themselves. These are timings of a database on a developer's machine and they move: the same build measured twice, a few minutes apart, gave figures a third apart and in one case two thirds apart. So the table says the two are alike, and does not say which is quicker. The one gain that is the code's is the first row of it. Asking who received a row has to count a row once where a unit was read from it twice, and that check now looks within the run the unit is in, where it used to search every answer the row was in.
+
+**Every segment kept is another place to look, unless the question says when.** The record is since kept in [segments](disclosure-audit.md#sql-server), and every question is asked of a view over all of them. The same three records, with their answers shared out evenly between one segment, six and twenty-four, in the order they were given:
+
+| Question | Record | 1 segment | 6 | 24 |
+| --- | --- | --- | --- | --- |
+| Who received a row | Repeated | 7.7 ms | 13.5 ms | 37.6 ms |
+| | Drifting | 10.0 ms | 15.1 ms | 36.7 ms |
+| | Small | 1.6 ms | 3.2 ms | 14.6 ms |
+| What a caller received | Repeated | 0.46 ms | 0.52 ms | 0.73 ms |
+| | Drifting | 0.46 ms | 0.53 ms | 0.73 ms |
+| | Small | 12.3 ms | 18.5 ms | 21.2 ms |
+| Whether a caller was sent a member | Repeated | 1.9 ms | 2.9 ms | 12.7 ms |
+| | Drifting | 1.8 ms | 4.3 ms | 22.8 ms |
+| | Small | 21.9 ms | 37.2 ms | 93.0 ms |
+| An answer put back together | Repeated | 5.4 ms | 5.5 ms | 5.5 ms |
+| | Drifting | 7.6 ms | 6.8 ms | 5.8 ms |
+| | Small | 0.17 ms | 0.17 ms | 0.22 ms |
+
+Putting an answer back together costs the same however many segments there are: which segment holds it is asked first, of all of them, and everything after is asked of that one. The other three are asked of every segment and grow with their number, though by less than it: who received a row is some four times dearer over twenty-four segments than over one, and what a caller received hardly dearer at all, being one seek of an index in each. Whether a caller was sent a member grows most, since each of the caller's answers is then looked into, and the database looks in every segment for it though told it is in the answer's own.
+
+That last is how the database reads a view over the segments. A segment is left out only where its number is written into the statement. Told that a row's segment is the segment of some other row, or handed the number as a parameter, it looks in all of them and finds nothing in most. So an answer is put back together by a statement written for its one segment, and a question that covers them all pays for them all. Writing that question as one statement per segment, joined into one, so that what is asked of each row is asked of its own segment, was tried: it was no quicker, and over twenty-four segments of the repeated record took some three times as long, against the same run's one segment, as the view did.
+
+**A question about a span of time is asked only of the segments that cover any of it.** A segment's span is written down when it is rolled away from, and a question with a span names the segments it can reach. Asked for the last twentieth of the time the record covers:
+
+| Question | Record | 1 segment | 6 | 24 |
+| --- | --- | --- | --- | --- |
+| Who received a row, lately | Repeated | 1.4 ms | 0.52 ms | 0.95 ms |
+| | Drifting | 2.0 ms | 0.71 ms | 1.0 ms |
+| | Small | 1.2 ms | 0.41 ms | 6.3 ms |
+| What a caller received, lately | Repeated | 0.25 ms | 0.09 ms | 0.14 ms |
+| | Drifting | 0.43 ms | 0.10 ms | 0.13 ms |
+| | Small | 1.2 ms | 0.92 ms | 0.93 ms |
+
+So over twenty-four segments, who received a row in that span is a millisecond where over all time it is thirty-seven. With segments it is quicker than without, since the one or two segments reached are a fraction of the record. A listing read a page at a time gains the same way from its second page on: a page begins where the last one ended, which is a span of time.
+
+A segment also keeps its own copy of what it shares. The repeated record is 2.6 MB in one segment, 13 MB in six and 52 MB in twenty-four, since each segment holds the thousand rows once and their content once; the drifting one is 20 MB, 24 MB and 58 MB, and the small one 15 MB, 20 MB and 36 MB. So segments are for retiring what is old, and are not free: a few long ones cost less to read and to keep than many short ones.
+
+**What runs save is space, and only where answers are alike without being the same.**
+
+| Record | Kept as whole lists | Kept as runs | Moved on in |
+| --- | --- | --- | --- |
+| Repeated | 2.3 MB | 2.5 MB | 2.8 s / 1.5 s |
+| Drifting | 179 MB | 22 MB | 10.0 s / 2.8 s |
+| Small | 14 MB | 11 MB | 3.7 s / 3.7 s |
+
+The drifting record is five hundred thousand unit rows kept whole and thirty-two thousand kept as runs: the first answer's thousand, and for each answer after it the run or two its changed row disturbs, some sixty units, with a line for each of the twenty-five runs the list is made of. A repeated answer was already one list either way and gains nothing, and an answer of one row is a run of one unit. The last column is what the mover took to bring the whole record from the outbox into the tables, once each, and is as unsteady as the timings above.
 
 
 ## Reading a response

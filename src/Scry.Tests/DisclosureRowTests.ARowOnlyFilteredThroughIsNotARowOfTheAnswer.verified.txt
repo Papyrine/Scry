@@ -1,0 +1,24 @@
+﻿{
+  Sensitive: false,
+  Fields: [
+    Department.Name: Read,
+    Employee.Department: Traversed,
+    Employee.Manager: Traversed,
+    Employee.Name: Returned,
+    Employee.Name: Read
+  ],
+  Units: [
+    {
+      Content: {"name":"Carol"},
+      Rows: [
+        Employee[2]
+      ]
+    },
+    {
+      Content: {"name":"Bob"},
+      Rows: [
+        Employee[4]
+      ]
+    }
+  ]
+}

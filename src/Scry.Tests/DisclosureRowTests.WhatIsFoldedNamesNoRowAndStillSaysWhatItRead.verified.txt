@@ -1,0 +1,84 @@
+﻿{
+  Grouped: {
+    Sensitive: false,
+    Fields: [
+      Order.Amount: Aggregated,
+      Order.Amount: Read,
+      Order.Quantity: Aggregated,
+      Order.Region: Returned,
+      Order.Region: Read
+    ],
+    Units: [
+      {
+        Content: {"region":"North","total":350.00,"largest":7},
+        Rows: []
+      },
+      {
+        Content: {"region":"South","total":75.00,"largest":1},
+        Rows: []
+      }
+    ]
+  },
+  Folded: {
+    Sensitive: false,
+    Fields: [
+      Order.Lines: Aggregated,
+      Order.Region: Returned,
+      Order.Region: Read,
+      OrderLine.Quantity: Read,
+      OrderLine.Units: Aggregated
+    ],
+    Units: [
+      {
+        Content: {"region":"North","lines":2,"units":42,"heavy":false},
+        Rows: [
+          Order[1]
+        ]
+      },
+      {
+        Content: {"region":"North","lines":1,"units":7,"heavy":true},
+        Rows: [
+          Order[2]
+        ]
+      },
+      {
+        Content: {"region":"South","lines":0,"units":0,"heavy":false},
+        Rows: [
+          Order[3]
+        ]
+      }
+    ]
+  },
+  Counted: {
+    Sensitive: false,
+    Fields: [
+      Employee.Active: Read
+    ],
+    Units: [
+      {
+        Content: 3,
+        Rows: []
+      }
+    ]
+  },
+  Distinct: {
+    Sensitive: false,
+    Fields: [
+      Employee.Status: Returned
+    ],
+    Units: [
+      {
+        Content: {"status":"FullTime"},
+        Rows: []
+      },
+      {
+        Content: {"status":"PartTime"},
+        Rows: []
+      },
+      {
+        Content: {"status":"Contractor"},
+        Rows: []
+      }
+    ]
+  }
+}
