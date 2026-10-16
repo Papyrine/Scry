@@ -736,7 +736,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // provider compare them — and, for every kind but Concat, deduplicate across them.
         if (set is not null)
         {
-            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (leftSelector, shape, binarySlots))
+            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (leftSelector, shape, binarySlots, leftOut))
             {
                 throw new ScryValidationException(
                     $"A set operation is limited to {DistinctRow.ByArity.Length} projected members.");
@@ -762,7 +762,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 otherSource = Apply(otherSource, "Where", builder.BuildPredicate(otherPredicate, otherType));
             }
 
-            if (builder.BuildDistinctRow(set.Projection, otherType) is not var (rightSelector, _, _) ||
+            if (builder.BuildDistinctRow(set.Projection, otherType) is not var (rightSelector, _, _, rightLeftOut) ||
                 rightSelector.ReturnType != leftSelector.ReturnType)
             {
                 throw new ScryValidationException(
@@ -789,7 +789,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     return Folds(probes, combined, "Any");
             }
 
-            return Lists(probes, new(combined, new(leftSelector, shape, binarySlots), Deduplicated: true, scope.Binary));
+            // A row of a set operation is from either side, so a slot is left out where either side's is.
+            return Lists(probes, new(combined, new(leftSelector, shape, binarySlots, builtLeftOut: ProjectionPlan.Either(leftOut, rightLeftOut)), Deduplicated: true, scope.Binary));
         }
 
         // Ordering, paging and folding all need the deduplicated rows to have equality and ordering of
@@ -798,7 +799,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         if (distinct &&
             (terminal is CountOp or LongCountOp or AnyOp || afterDistinct.Count > 0))
         {
-            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (selector, shape, binarySlots))
+            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (selector, shape, binarySlots, leftOut))
             {
                 throw new ScryValidationException(
                     $"A Distinct query of more than {DistinctRow.ByArity.Length} projected members can only be enumerated.");
@@ -835,7 +836,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     return Folds(probes, deduped, "Any");
             }
 
-            return Lists(probes, new(deduped, new(selector, shape, binarySlots), Deduplicated: true, scope.Binary));
+            return Lists(probes, new(deduped, new(selector, shape, binarySlots, builtLeftOut: leftOut), Deduplicated: true, scope.Binary));
         }
 
         // Every other folding terminal reads the rows themselves and projects nothing. None of them can
@@ -914,7 +915,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var (outerKey, innerKey) = builder.BuildJoinKeys(join.OuterKey, outerType, join.InnerKey, innerType);
-        var (selector, shape, binarySlots, entities) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
+        var (selector, shape, binarySlots, entities, leftOut) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
 
         var joined = (IQueryable<object[]>)QueryComposition.Compose(
             outer,
@@ -927,7 +928,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 Expression.Quote(innerKey),
                 Expression.Quote(selector)));
 
-        return (joined, new(selector, shape, binarySlots, entities));
+        return (joined, new(selector, shape, binarySlots, entities, leftOut));
     }
 
     /// <summary>
@@ -1658,9 +1659,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var effectiveKeys = seekSafe ? keys : Array.Empty<(Node Key, bool Descending)>();
-        var (selector, shape, binarySlots, keyCount, entities) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
+        var (selector, shape, binarySlots, keyCount, entities, leftOut) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
         var projected = ApplySelect(query, selector);
-        var plan = new ProjectionPlan(selector, shape, binarySlots, entities);
+        var plan = new ProjectionPlan(selector, shape, binarySlots, entities, leftOut);
 
         // Fetch one extra row to detect a further page without issuing a second COUNT query. Composed
         // through ApplyPaging rather than Queryable.Take so the count is bound, not inlined.

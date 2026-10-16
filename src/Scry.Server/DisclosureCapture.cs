@@ -205,15 +205,16 @@ sealed class DisclosureCapture(
     {
         var writer = plan.Writer;
 
-        // Whether the plan has a slot that could hold a byte[], which is the one thing that makes a
-        // row's record differ from what is sent.
-        var bytes = plan.HasBytes;
+        // Whether the plan has a slot that could hold a byte[], or one read from a member left out of
+        // the record: the two things that make a row's record differ from what is sent.
+        var bytes = Apart(plan);
         Identify(plan, row);
-        var canonical = Canonical(writer, row, bytes);
+        var canonical = Canonical(writer, row, bytes, plan.LeftOut(runtime.Settings));
         Unit(ScryDisclosureContentKind.Row, canonical);
 
-        // The canonical row names a binary value by its digest, where the wire carries the value or a
-        // part's index. So the wire's form is written apart, and is the only one to touch the collector.
+        // The canonical row names a binary value by its digest, and marks a member left out of the
+        // record, where the wire carries the value or a part's index. So the wire's form is written
+        // apart, and is the only one to touch the collector.
         if (bytes)
         {
             writer.WriteRow(json, row, binary);
@@ -230,10 +231,32 @@ sealed class DisclosureCapture(
     public int AddRow(ProjectionPlan plan, object[] row)
     {
         Identify(plan, row);
-        var canonical = Canonical(plan.Writer, row, plan.HasBytes);
+        var canonical = Canonical(plan.Writer, row, Apart(plan), plan.LeftOut(runtime.Settings));
         Unit(ScryDisclosureContentKind.Row, canonical);
         return canonical.Length - 1;
     }
+
+    /// <summary>
+    /// Whether a row of this plan is recorded as something other than the bytes it is sent as: it may
+    /// hold a binary value, which is recorded by its digest, or a value read from a member left out
+    /// of the record, which is recorded by a marker. Such a row is written twice.
+    /// </summary>
+    public bool Apart(ProjectionPlan plan) =>
+        plan.HasBytes ||
+        plan.LeftOut(runtime.Settings) is not null;
+
+    /// <summary>
+    /// What the record holds in the place of a value read from a member left out of it: that the
+    /// member was there, and nothing of what it held.
+    /// </summary>
+    public static void WriteLeftOut(Utf8JsonWriter json)
+    {
+        json.WriteStartObject();
+        json.WriteBoolean(excludedProperty, true);
+        json.WriteEndObject();
+    }
+
+    static JsonEncodedText excludedProperty = JsonEncodedText.Encode("$excluded");
 
     /// <summary>
     /// Records one row from the bytes it was already written as: a row with no binary value, whose
@@ -318,8 +341,15 @@ sealed class DisclosureCapture(
     /// Takes what the query was found to read while it was rebound: the members, each with what was
     /// done with it, as the shape every answer of this query has.
     /// </summary>
-    public void Describe(DisclosurePlanner planner) =>
+    public void Describe(DisclosurePlanner planner)
+    {
+        scalarLeftOut = planner.ReturnsLeftOut;
         Describe(planner.Fields(), planner.Sensitive);
+    }
+
+    // Whether a scalar answer of this query was folded from a member left out of the record, so is
+    // recorded by a marker in place of its value.
+    bool scalarLeftOut;
 
     /// <summary>The same, for an answer whose members are known without a query to rebind.</summary>
     public void Describe(IReadOnlyList<ScryDisclosureField> read, bool marked)
@@ -354,7 +384,8 @@ sealed class DisclosureCapture(
     {
         var canonical = Canonical(value);
         Unit(ScryDisclosureContentKind.Scalar, canonical);
-        if (value is byte[])
+        if (value is byte[] ||
+            scalarLeftOut)
         {
             PlanShapeWriter.WriteValue(json, value);
             return;
@@ -421,12 +452,12 @@ sealed class DisclosureCapture(
         return address;
     }
 
-    ReadOnlySpan<byte> Canonical(PlanShapeWriter writer, object[] row, bool bytes)
+    ReadOnlySpan<byte> Canonical(PlanShapeWriter writer, object[] row, bool bytes, IReadOnlyList<bool>? leftOut)
     {
         var json = Scratch(ScryDisclosureContentKind.Row);
         if (bytes)
         {
-            writer.WriteCanonicalRow(json, row, this);
+            writer.WriteCanonicalRow(json, row, this, leftOut);
         }
         else
         {
@@ -440,7 +471,11 @@ sealed class DisclosureCapture(
     ReadOnlySpan<byte> Canonical(object? value)
     {
         var json = Scratch(ScryDisclosureContentKind.Scalar);
-        if (value is byte[] bytes)
+        if (scalarLeftOut)
+        {
+            WriteLeftOut(json);
+        }
+        else if (value is byte[] bytes)
         {
             WriteDigest(json, bytes);
         }

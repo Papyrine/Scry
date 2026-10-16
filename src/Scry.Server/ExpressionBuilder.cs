@@ -161,7 +161,7 @@ sealed class ExpressionBuilder(
         var parameter = Expression.Parameter(type, "e");
         var outer = Enter(ScryDisclosureFieldUse.Read);
         var values = new List<Expression>(keys.Count);
-        var read = new List<IReadOnlyList<ScryDisclosureField>>(keys.Count);
+        var read = new List<DisclosurePlanner.KeyRead>(keys.Count);
         foreach (var key in keys)
         {
             // What each key read is remembered apart, so that a grouped projection returning one of
@@ -200,15 +200,28 @@ sealed class ExpressionBuilder(
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
+        var leftOut = new List<bool>();
         if (identified)
         {
             disclosure?.Begin(parameter);
         }
 
-        Flatten(projection, parameter, [], leaves, shape, binary);
+        Flatten(projection, parameter, [], leaves, shape, binary, leftOut: leftOut);
         var entities = Reached(leaves, identified);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return new(selector, shape, Normalize(binary), entities);
+        return new(selector, shape, Normalize(binary), entities, Normalize(leftOut));
+    }
+
+    // How many reads of what the disclosure audit leaves out the planner has seen: a leaf whose
+    // building moved it holds what was left out.
+    int LeftOutSeen => disclosure?.LeftOutSeen ?? 0;
+
+    // A leaf of the default projection, noted as left out where reading it was.
+    void AddLeaf(ParameterExpression parameter, TypeMeta meta, Member member, List<Expression> leaves, List<bool> leftOut)
+    {
+        var before = LeftOutSeen;
+        leaves.Add(Leaf(parameter, meta, member));
+        leftOut.Add(LeftOutSeen > before);
     }
 
     // The keys of the rows a projection reached, appended after every leaf that is written.
@@ -228,7 +241,7 @@ sealed class ExpressionBuilder(
     /// One materialization then yields both the shaped rows and the last row's key values (for the next
     /// cursor). <c>Shape</c> describes only the leading projection slots.
     /// </summary>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, int KeyCount, IReadOnlyList<DisclosureSlot>? Entities) BuildPageProjection(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, int KeyCount, IReadOnlyList<DisclosureSlot>? Entities, IReadOnlyList<bool>? LeftOut) BuildPageProjection(
         Projection? projection,
         IReadOnlyList<(Node Key, bool Descending)> keys,
         Type type)
@@ -237,6 +250,7 @@ sealed class ExpressionBuilder(
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
+        var leftOut = new List<bool>();
         disclosure?.Begin(parameter);
 
         if (projection is null)
@@ -248,14 +262,14 @@ sealed class ExpressionBuilder(
 
             foreach (var member in meta.Members.Values.Where(_ => _.Kind is MemberKind.Scalar or MemberKind.Capability))
             {
-                leaves.Add(Leaf(parameter, meta, member));
+                AddLeaf(parameter, meta, member, leaves, leftOut);
                 shape.Add([member.Name]);
                 binary.Add(member.BinaryTransfer);
             }
         }
         else
         {
-            Flatten(projection, parameter, [], leaves, shape, binary);
+            Flatten(projection, parameter, [], leaves, shape, binary, leftOut: leftOut);
         }
 
         // Trailing slots: the ordering-key values, used only to build the next page's cursor. Read
@@ -272,7 +286,7 @@ sealed class ExpressionBuilder(
         // After the cursor's slots, which are found by counting on from the shape's.
         var entities = Reached(leaves);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return (selector, shape, Normalize(binary), keys.Count, entities);
+        return (selector, shape, Normalize(binary), keys.Count, entities, Normalize(leftOut));
     }
 
     /// <summary>
@@ -464,16 +478,17 @@ sealed class ExpressionBuilder(
             disclosure?.Begin(parameter);
         }
 
+        var leftOut = new List<bool>();
         foreach (var member in meta.Members.Values.Where(_ => _.Kind is MemberKind.Scalar or MemberKind.Capability))
         {
-            leaves.Add(Leaf(parameter, meta, member));
+            AddLeaf(parameter, meta, member, leaves, leftOut);
             shape.Add([member.Name]);
             binary.Add(member.BinaryTransfer);
         }
 
         var entities = Reached(leaves, identified);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return new(selector, shape, Normalize(binary), entities);
+        return new(selector, shape, Normalize(binary), entities, Normalize(leftOut));
     }
 
     // A scalar of the row read off it, or a capability decided for it.
@@ -509,7 +524,7 @@ sealed class ExpressionBuilder(
     /// Under a left join the inner row can be absent, so a non-nullable value read from that side is
     /// widened to its nullable form; without that the shaper would fault materializing a SQL NULL.
     /// </remarks>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, IReadOnlyList<DisclosureSlot>? Entities) BuildJoinProjection(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, IReadOnlyList<DisclosureSlot>? Entities, IReadOnlyList<bool>? LeftOut) BuildJoinProjection(
         IReadOnlyList<JoinMember> members,
         Type outerType,
         Type innerType,
@@ -526,6 +541,7 @@ sealed class ExpressionBuilder(
         var leaves = new List<Expression>(members.Count);
         var shape = new List<IReadOnlyList<string>>(members.Count);
         var binary = new List<bool>(members.Count);
+        var leftOut = new List<bool>(members.Count);
 
         // A joined row is read from a row of each side, and is recorded as both. The side an outer
         // join can leave unmatched is a row that may not be there; a group's rows are folded away.
@@ -538,16 +554,19 @@ sealed class ExpressionBuilder(
         var reading = Enter(ScryDisclosureFieldUse.Returned);
         foreach (var member in members)
         {
+            var before = LeftOutSeen;
             if (member.Aggregate is { } aggregate)
             {
                 leaves.Add(BuildAggregate(aggregate, inner, innerType));
                 shape.Add([member.Name]);
                 binary.Add(false);
+                leftOut.Add(LeftOutSeen > before);
                 continue;
             }
 
             Expression root = member.Side == JoinSide.Outer ? outer : inner;
             var leaf = BuildMemberAccess(root, member.Path);
+            leftOut.Add(LeftOutSeen > before);
             binary.Add(IsBinaryPath(member.Path, member.Side == JoinSide.Outer ? outerType : innerType));
 
             // A side the join can leave unmatched yields SQL NULL, so a non-nullable value read from
@@ -569,7 +588,7 @@ sealed class ExpressionBuilder(
 
         Leave(reading);
         var entities = Reached(leaves);
-        return (Expression.Lambda(ToObjectArray(leaves), outer, inner), shape, Normalize(binary), entities);
+        return (Expression.Lambda(ToObjectArray(leaves), outer, inner), shape, Normalize(binary), entities, Normalize(leftOut));
     }
 
     /// <summary>
@@ -657,7 +676,7 @@ sealed class ExpressionBuilder(
     /// it nor order by one of its members — which is exactly how a plain record behaves, and why one
     /// is not enough on its own.
     /// </remarks>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots)? BuildDistinctRow(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, IReadOnlyList<bool>? LeftOut)? BuildDistinctRow(
         Projection projection,
         Type type)
     {
@@ -665,7 +684,8 @@ sealed class ExpressionBuilder(
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
-        Flatten(projection, parameter, [], leaves, shape, binary);
+        var leftOut = new List<bool>();
+        Flatten(projection, parameter, [], leaves, shape, binary, leftOut: leftOut);
 
         if (leaves.Count == 0 ||
             leaves.Count > DistinctRow.ByArity.Length)
@@ -676,7 +696,7 @@ sealed class ExpressionBuilder(
         var row = DistinctRow.ByArity[leaves.Count - 1].MakeGenericType([..leaves.Select(_ => _.Type)]);
         var (constructor, members) = DistinctRow.Describe(row);
 
-        return (Expression.Lambda(Expression.New(constructor, leaves, members), parameter), shape, Normalize(binary));
+        return (Expression.Lambda(Expression.New(constructor, leaves, members), parameter), shape, Normalize(binary), Normalize(leftOut));
     }
 
     /// <summary>
@@ -737,6 +757,7 @@ sealed class ExpressionBuilder(
         var parameter = Expression.Parameter(groupingType, "g");
         var leaves = new List<Expression>(projection.Members.Count);
         var shape = new List<IReadOnlyList<string>>(projection.Members.Count);
+        var leftOut = new List<bool>(projection.Members.Count);
 
         foreach (var member in projection.Members)
         {
@@ -746,14 +767,16 @@ sealed class ExpressionBuilder(
             }
 
             // Reading the group is what Build already does when the row is a grouping.
+            var before = LeftOutSeen;
             var outer = Enter(ScryDisclosureFieldUse.Returned);
             leaves.Add(Box(Build(value.Node, parameter, null)));
             Leave(outer);
+            leftOut.Add(LeftOutSeen > before);
             shape.Add([member.Name]);
         }
 
         var selector = Expression.Lambda(Expression.NewArrayInit(typeof(object), leaves), parameter);
-        return new(selector, shape);
+        return new(selector, shape, builtLeftOut: Normalize(leftOut));
     }
 
     void Flatten(
@@ -763,7 +786,8 @@ sealed class ExpressionBuilder(
         List<Expression> leaves,
         List<IReadOnlyList<string>> shape,
         List<bool>? binary = null,
-        bool policied = false)
+        bool policied = false,
+        List<bool>? leftOut = null)
     {
         foreach (var member in projection.Members)
         {
@@ -776,9 +800,11 @@ sealed class ExpressionBuilder(
                 // describes may be absent, so a value-typed leaf is widened to carry that null,
                 // exactly as a flat path through the same navigation is.
                 case NodeValue value:
+                    var before = LeftOutSeen;
                     var returning = Enter(ScryDisclosureFieldUse.Returned);
                     var leaf = Build(value.Node, root, null);
                     Leave(returning);
+                    leftOut?.Add(LeftOutSeen > before);
                     leaves.Add(policied ? Widened(leaf) : leaf);
                     shape.Add(jsonPath);
                     binary?.Add(value.Node is MemberNode memberNode && IsBinaryPath(memberNode.Path, root.Type));
@@ -788,7 +814,7 @@ sealed class ExpressionBuilder(
                     var stepping = Enter(ScryDisclosureFieldUse.Traversed);
                     var navTarget = BuildMemberAccess(root, nested.Path, out var throughPolicy);
                     Leave(stepping);
-                    Flatten(nested.Projection, navTarget, jsonPath, leaves, shape, binary, policied || throughPolicy);
+                    Flatten(nested.Projection, navTarget, jsonPath, leaves, shape, binary, policied || throughPolicy, leftOut);
                     break;
 
                 default:
@@ -1179,7 +1205,7 @@ sealed class ExpressionBuilder(
         Type element,
         Type? expected,
         ScryDisclosureFieldUse use,
-        (string Source, string Prefix) of = default)
+        DisclosurePlanner.Origin of = default)
     {
         var parameter = Expression.Parameter(element, "x");
         if (of.Source is not null)

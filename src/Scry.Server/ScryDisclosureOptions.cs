@@ -166,14 +166,16 @@ public sealed class ScryDisclosureOptions
     /// <para>
     /// The rule is about the answer, and errs towards recording. An answer that reads an excluded
     /// source and one that is not — through a navigation, a join, a subquery, a set operation, in a
-    /// filter as much as in a projection — is recorded whole, the excluded source's part included:
-    /// leaving that part out would leave a record that could not be put back together into what was
-    /// sent. So excluding a source never hides what was sent of another.
+    /// filter as much as in a projection — is recorded, without what it read of the excluded source:
+    /// the record holds a marker in the place of each of its values, and of each value computed or
+    /// folded from one, as it does for an excluded member. Its rows are still named by their keys,
+    /// and its members among what was returned. So excluding a source never hides what was sent of
+    /// another. What is sent is unchanged.
     /// </para>
     /// <para>
     /// Said of a type, it holds for the types derived from it. An excluded source needs neither a
     /// key nor <see cref="Unkeyed{TSource}"/> for the server to start; where an answer that is
-    /// recorded reads one with no key, its rows are recorded as content with no row to hang them on.
+    /// recorded reads one with no key, its rows are marked with no row to name them by.
     /// </para>
     /// </remarks>
     public void Exclude<TSource>() =>
@@ -193,9 +195,14 @@ public sealed class ScryDisclosureOptions
     /// <para>
     /// A read is a read wherever it is: in a projection, a filter, an ordering, a grouping, an
     /// aggregate. An answer that reads an excluded member and anything that is not — another member
-    /// of the row, a member of another source — is recorded whole, the excluded member's values
-    /// included. So this decides which answers are recorded, and is no way to keep a value out of an
-    /// answer that is: a recorded answer is recorded as it was sent.
+    /// of the row, a member of another source — is recorded, without the excluded member's values:
+    /// the record holds a marker in the place of each, and of each value computed or folded from
+    /// one, and still names the member among what was returned. What is sent is unchanged.
+    /// </para>
+    /// <para>
+    /// A member of a row's key, and the member named as a row's version with
+    /// <see cref="Version{TSource}"/>, cannot be left out: the record keeps both beside every row it
+    /// names, and a server told to leave either out refuses to start.
     /// </para>
     /// <para>
     /// An answer that reads a source and no member of it — a count of its rows — is recorded: it
@@ -204,7 +211,7 @@ public sealed class ScryDisclosureOptions
     /// </para>
     /// <para>
     /// Said of a type, it holds for the types derived from it. A member that holds a value of
-    /// several parts is left out with everything in it.
+    /// several parts is left out with everything in it, and so is a collection with its elements.
     /// </para>
     /// </remarks>
     public void Exclude<TSource>(params Expression<Func<TSource, object?>>[] members)

@@ -35,6 +35,14 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         /// everything read beneath it is read of that member.
         /// </summary>
         public bool Left { get; init; }
+
+        /// <summary>
+        /// Set on a row of a source the host left out of the record, and everything read beneath one:
+        /// what is read of it is left out of what an answer is recorded as holding. Apart from
+        /// <see cref="Left"/>, since whether the answer is recorded at all is said of an excluded
+        /// source by the types read.
+        /// </summary>
+        public bool SourceLeft { get; init; }
     }
 
     HashSet<ScryDisclosureField> fields = [];
@@ -47,10 +55,21 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     HashSet<string> kept = new(StringComparer.Ordinal);
     HashSet<string> left = new(StringComparer.Ordinal);
     Dictionary<Expression, Origin> origins = [];
-    Dictionary<Type, (string Source, string Prefix)> elements = [];
+    Dictionary<Type, Origin> elements = [];
     Dictionary<Type, IReadOnlyList<PropertyInfo>?> keys = [];
     List<ScryDisclosureField>? capturing;
-    IReadOnlyList<IReadOnlyList<ScryDisclosureField>> groupKeys = [];
+    int capturedFrom;
+    IReadOnlyList<KeyRead> groupKeys = [];
+
+    /// <summary>What a group key read, and whether any of it is left out of the record.</summary>
+    public readonly record struct KeyRead(IReadOnlyList<ScryDisclosureField> Fields, bool Left);
+
+    /// <summary>
+    /// How many reads of a member or a source left out of the record have been seen so far: a leaf
+    /// whose building moved it holds what was left out, however it came by it — a group key, the
+    /// elements of an excluded collection, the other side of a set operation.
+    /// </summary>
+    public int LeftOutSeen { get; private set; }
 
     // The rows the projection now being built reaches, in the order they were first reached.
     List<(string Source, string Via, IReadOnlyList<Expression> Key, Expression? Version)> reached = [];
@@ -116,14 +135,19 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         };
 
     /// <summary>Marks a lambda parameter as an element of the collection last read.</summary>
-    public void Element(ParameterExpression element, (string Source, string Prefix) of) =>
-        origins[element] = new(of.Source, of.Prefix, Via: "", Rooted: false, element);
+    public void Element(ParameterExpression element, Origin of) =>
+        origins[element] = of with
+        {
+            Via = "",
+            Rooted = false,
+            Row = element
+        };
 
     /// <summary>
     /// Says rows of a type are from here on the elements of a flattened collection, so a member read
     /// off one is named against the row that held the collection.
     /// </summary>
-    public void Flattened(Type element, (string Source, string Prefix) of)
+    public void Flattened(Type element, Origin of)
     {
         if (!schema.TryGetSourceForType(element, out _))
         {
@@ -142,7 +166,12 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         var type = Nullable.GetUnderlyingType(root.Type) ?? root.Type;
         if (elements.TryGetValue(type, out var element))
         {
-            return new(element.Source, element.Prefix, Via: "", Rooted: false, root);
+            return element with
+            {
+                Via = "",
+                Rooted = false,
+                Row = root
+            };
         }
 
         return new(SourceName(type), Prefix: "", Via: "", Rooted: false, root);
@@ -166,7 +195,8 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         {
             origin = origin with
             {
-                Source = SourceName(owner)
+                Source = SourceName(owner),
+                SourceLeft = settings.Excludes(owner)
             };
         }
 
@@ -211,7 +241,10 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
                 Record(origin, name, ScryDisclosureFieldUse.Traversed, sensitive);
                 return Remember(
                     value,
-                    new(SourceName(member.Target), Prefix: "", Via(origin.Via, member.Name), origin.Rooted, value));
+                    new(SourceName(member.Target), Prefix: "", Via(origin.Via, member.Name), origin.Rooted, value)
+                    {
+                        SourceLeft = settings.Excludes(member.Target)
+                    });
             }
 
             // Still inside the member where it is one left out: what follows is read of it.
@@ -265,17 +298,25 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
 
     /// <summary>
     /// Where the elements of the collection last stepped onto stand: what a lambda over them is told.
+    /// Elements that are no source of their own are part of the row that held them, and are left out
+    /// where it, or the collection, is.
     /// </summary>
-    public (string Source, string Prefix) LastElement { get; private set; }
+    public Origin LastElement { get; private set; }
 
-    (string Source, string Prefix) Elements(Origin origin, string name, Type element)
+    Origin Elements(Origin origin, string name, Type element)
     {
         if (schema.TryGetSourceForType(element, out _))
         {
-            return (SourceName(element), "");
+            return new(SourceName(element), Prefix: "", Via: "", Rooted: false, origin.Row)
+            {
+                SourceLeft = settings.Excludes(element)
+            };
         }
 
-        return (origin.Source, name + ".");
+        return origin with
+        {
+            Prefix = name + "."
+        };
     }
 
     // Registered against the expression itself, so a caller that goes on reading members off what a
@@ -306,6 +347,13 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         return $"{via}.{member}";
     }
 
+    /// <summary>
+    /// Whether anything the query returns or folds was read from a member or a source left out of
+    /// the record: what tells a scalar answer — a sum, a largest value, a string joined from the rows
+    /// — to be recorded by a marker in place of its value.
+    /// </summary>
+    public bool ReturnsLeftOut { get; private set; }
+
     void Record(Origin origin, string member, ScryDisclosureFieldUse use, bool sensitive)
     {
         if (Suspended)
@@ -315,6 +363,15 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
 
         var field = new ScryDisclosureField(origin.Source, member, use, sensitive);
         fields.Add(field);
+        if (origin.Left || origin.SourceLeft)
+        {
+            LeftOutSeen++;
+            if (use is ScryDisclosureFieldUse.Returned or ScryDisclosureFieldUse.Aggregated)
+            {
+                ReturnsLeftOut = true;
+            }
+        }
+
         capturing?.Add(field);
         if (origin.Left)
         {
@@ -340,12 +397,12 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     public void Leaf(ParameterExpression row, TypeMeta meta, Member member)
     {
         var origin = Start(row);
-        if (origin.Prefix.Length == 0 &&
-            settings.Excludes(row.Type, member.Name))
+        if (origin.Prefix.Length == 0)
         {
             origin = origin with
             {
-                Left = true
+                Left = origin.Left || settings.Excludes(row.Type, member.Name),
+                SourceLeft = origin.SourceLeft || settings.Excludes(row.Type)
             };
         }
 
@@ -359,19 +416,22 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     }
 
     /// <summary>Begins noting the members read from here on, for the group key they make up.</summary>
-    public void BeginKey() =>
+    public void BeginKey()
+    {
         capturing = [];
+        capturedFrom = LeftOutSeen;
+    }
 
     /// <summary>The members read since <see cref="BeginKey"/>.</summary>
-    public IReadOnlyList<ScryDisclosureField> EndKey()
+    public KeyRead EndKey()
     {
         var captured = capturing ?? [];
         capturing = null;
-        return captured;
+        return new(captured, LeftOutSeen > capturedFrom);
     }
 
     /// <summary>Remembers what each of the query's group keys read, in the order they were grouped by.</summary>
-    public void Grouped(IReadOnlyList<IReadOnlyList<ScryDisclosureField>> read) =>
+    public void Grouped(IReadOnlyList<KeyRead> read) =>
         groupKeys = read;
 
     /// <summary>
@@ -381,13 +441,24 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     public void GroupKey(int index)
     {
         if (Suspended ||
-            Use != ScryDisclosureFieldUse.Returned ||
             index >= groupKeys.Count)
         {
             return;
         }
 
-        foreach (var field in groupKeys[index])
+        // A key made of what was left out holds what was left out, wherever it is read again.
+        var key = groupKeys[index];
+        if (key.Left)
+        {
+            LeftOutSeen++;
+        }
+
+        if (Use != ScryDisclosureFieldUse.Returned)
+        {
+            return;
+        }
+
+        foreach (var field in key.Fields)
         {
             if (field.Use == ScryDisclosureFieldUse.Read)
             {

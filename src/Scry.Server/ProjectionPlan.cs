@@ -3,7 +3,8 @@ sealed class ProjectionPlan(
     LambdaExpression selector,
     IReadOnlyList<IReadOnlyList<string>> shape,
     IReadOnlyList<bool>? binarySlots = null,
-    IReadOnlyList<DisclosureSlot>? entities = null)
+    IReadOnlyList<DisclosureSlot>? entities = null,
+    IReadOnlyList<bool>? builtLeftOut = null)
 {
     public LambdaExpression Selector { get; } = selector;
 
@@ -51,6 +52,108 @@ sealed class ProjectionPlan(
         hasBytes ??= ReadsBytes(Selector.Body, Shape.Count);
 
     bool? hasBytes;
+
+    /// <summary>
+    /// Per written slot: whether its value is read from a member the disclosure audit leaves out, or
+    /// from a row of a source it leaves out, so that the record holds a marker in its place. Null
+    /// where no slot is, which is every plan of a host that leaves nothing out. Read only where the
+    /// audit is on.
+    /// </summary>
+    /// <remarks>
+    /// Decided from what each leaf's expression reads, so a value computed from an excluded member —
+    /// its length, a string it was joined into — is left out as the member is. A leaf that reads one
+    /// alongside other members is left out whole: what it holds cannot be told apart from the part
+    /// that came from the excluded member. And from what building each leaf was found to read, for
+    /// what its expression does not say: a group key made from an excluded member, a row that is an
+    /// element of one, the other side of a set operation.
+    /// </remarks>
+    public IReadOnlyList<bool>? LeftOut(ScryDisclosureOptions settings)
+    {
+        if (settings is {ExcludedMembers.Count: 0, Excluded.Count: 0})
+        {
+            return null;
+        }
+
+        if (leftOutKnown)
+        {
+            return leftOut;
+        }
+
+        leftOut = Reads(settings);
+        leftOutKnown = true;
+        return leftOut;
+    }
+
+    bool leftOutKnown;
+    IReadOnlyList<bool>? leftOut;
+    IReadOnlyList<bool>? built = builtLeftOut;
+
+    /// <summary>A slot is left out where either list says so.</summary>
+    public static IReadOnlyList<bool>? Either(IReadOnlyList<bool>? left, IReadOnlyList<bool>? right)
+    {
+        if (left is null)
+        {
+            return right;
+        }
+
+        if (right is null)
+        {
+            return left;
+        }
+
+        return [.. left.Select((_, slot) => _ || (slot < right.Count && right[slot]))];
+    }
+
+    IReadOnlyList<bool>? Reads(ScryDisclosureOptions settings)
+    {
+        var written = Shape.Count;
+        var slots = new bool[written];
+        var any = false;
+        for (var slot = 0; slot < written && built is not null && slot < built.Count; slot++)
+        {
+            any |= slots[slot] = built[slot];
+        }
+
+        var body = Selector.Body;
+        if (body is NewArrayExpression array)
+        {
+            for (var slot = 0; slot < written && slot < array.Expressions.Count; slot++)
+            {
+                if (!slots[slot] &&
+                    LeftOutReads.Find(array.Expressions[slot], settings))
+                {
+                    slots[slot] = any = true;
+                }
+            }
+        }
+        else if (body is NewExpression row)
+        {
+            for (var slot = 0; slot < written && slot < row.Arguments.Count; slot++)
+            {
+                if (!slots[slot] &&
+                    LeftOutReads.Find(row.Arguments[slot], settings))
+                {
+                    slots[slot] = any = true;
+                }
+            }
+        }
+
+        // A selector of a shape this does not know is left out whole where it reads one at all,
+        // which keeps out more than it need and never less.
+        else if (any ||
+                 LeftOutReads.Find(body, settings))
+        {
+            Array.Fill(slots, true);
+            any = true;
+        }
+
+        if (any)
+        {
+            return slots;
+        }
+
+        return null;
+    }
 
     static bool ReadsBytes(Expression body, int written)
     {

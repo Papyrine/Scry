@@ -67,7 +67,49 @@ public sealed partial class ScryProcessor
     public void ValidateAgainstModel(DbContext data)
     {
         schema.ValidateAgainstModel(data.Model, options.ContextType);
+        EnsureLeftOutMembersAreNotKept(data.Model);
         EnsureRowsCanBeNamed(data.Model);
+    }
+
+    /// <summary>
+    /// Confirms that no member left out of the record is one the record has to keep: a member of a
+    /// row's key, which is what the record names the row by, or the member named as a row's version.
+    /// </summary>
+    /// <remarks>
+    /// Either would be recorded beside every row it was read from whatever the exclusion said, so a
+    /// host asking for both is told at startup rather than left to find its member in the record.
+    /// </remarks>
+    void EnsureLeftOutMembersAreNotKept(IModel model)
+    {
+        if (options.Disclosure is not {ExcludedMembers.Count: > 0} audit)
+        {
+            return;
+        }
+
+        foreach (var source in schema.Sources.OrderBy(_ => _.Name, StringComparer.Ordinal))
+        {
+            var type = source.ClrType;
+            if (source.Kind != SourceKind.Poco &&
+                model.FindEntityType(type) is null)
+            {
+                continue;
+            }
+
+            if (DisclosurePlanner.Key(model, audit, type) is { } key &&
+                key.FirstOrDefault(_ => audit.Excludes(type, _.Name)) is { } keyed)
+            {
+                throw new($"The disclosure audit leaves '{source.Name}.{keyed.Name}' out of the record, and it is part of the key a row of '{source.Name}' is recorded by, which the record keeps beside every row it names. Leave out a member that is not part of the key, or name another key with _.Key<{type.Name}>(...).");
+            }
+
+            for (var declared = type; declared is not null; declared = declared.BaseType)
+            {
+                if (audit.Versions.TryGetValue(declared, out var version) &&
+                    audit.Excludes(type, version.Name))
+                {
+                    throw new($"The disclosure audit leaves '{source.Name}.{version.Name}' out of the record, and it is the member named as a row's version, which the record keeps beside every row it names. Leave it out or name it as the version, not both.");
+                }
+            }
+        }
     }
 
     /// <summary>

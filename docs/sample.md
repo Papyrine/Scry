@@ -870,7 +870,7 @@ services
                 // Left out of the record: a calendar is nobody's to ask after, and neither is
                 // the logo or the handbook a department publishes. An answer of nothing but
                 // these is sent as it would be with the audit off. One that reads anything
-                // else is recorded whole, these included.
+                // else is recorded, with a marker where a holiday, a logo or a handbook was.
                 audit.Exclude<Holiday>();
                 audit.Exclude<Department>(_ => _.Logo, _ => _.Handbook);
             });

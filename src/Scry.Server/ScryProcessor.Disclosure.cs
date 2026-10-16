@@ -376,8 +376,9 @@ public sealed partial class ScryProcessor
         IAsyncEnumerator<object> source = QueryExecutor.Enumerate(rows, cancel).GetAsyncEnumerator(cancel);
         ProjectionPlan plan = rows.Plan;
 
-        // Whether a row's line is its record: a stream of lines whose rows hold no binary value.
-        bool written = lines && !rows.Plan.HasBytes;
+        // Whether a row's line is its record: a stream of lines whose rows hold no binary value and
+        // nothing read from a member left out of the record.
+        bool written = lines && !capture.Apart(rows.Plan);
         PooledBufferWriter line = new();
         PooledBufferWriter chunk = new();
         Utf8JsonWriter? json;

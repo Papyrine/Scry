@@ -543,10 +543,14 @@ sealed class PlanShapeWriter
     /// with the audit off is the code it always was. Takes no collector: a row is written this way
     /// beside its wire form, never instead of it, and only the wire form may claim a part's index.
     /// </remarks>
-    public void WriteCanonicalRow(Utf8JsonWriter json, object[] row, DisclosureCapture capture) =>
-        WriteCanonical(json, root, row, capture);
+    /// <param name="json">Where the row is written.</param>
+    /// <param name="row">The projected row.</param>
+    /// <param name="capture">What records a binary value's digest.</param>
+    /// <param name="leftOut">Per slot, whether the slot is left out of the record and marked in its place.</param>
+    public void WriteCanonicalRow(Utf8JsonWriter json, object[] row, DisclosureCapture capture, IReadOnlyList<bool>? leftOut = null) =>
+        WriteCanonical(json, root, row, capture, leftOut);
 
-    static void WriteCanonical(Utf8JsonWriter json, Node node, object[] row, DisclosureCapture capture)
+    static void WriteCanonical(Utf8JsonWriter json, Node node, object[] row, DisclosureCapture capture, IReadOnlyList<bool>? leftOut)
     {
         json.WriteStartObject();
         foreach (var child in node.Children!)
@@ -554,7 +558,13 @@ sealed class PlanShapeWriter
             json.WritePropertyName(child.Encoded);
             if (child.Children is not null)
             {
-                WriteCanonical(json, child, row, capture);
+                WriteCanonical(json, child, row, capture, leftOut);
+                continue;
+            }
+
+            if (leftOut?[child.Slot] == true)
+            {
+                DisclosureCapture.WriteLeftOut(json);
                 continue;
             }
 

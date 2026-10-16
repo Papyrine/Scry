@@ -71,7 +71,7 @@ services
                 // Left out of the record: a calendar is nobody's to ask after, and neither is
                 // the logo or the handbook a department publishes. An answer of nothing but
                 // these is sent as it would be with the audit off. One that reads anything
-                // else is recorded whole, these included.
+                // else is recorded, with a marker where a holiday, a logo or a handbook was.
                 audit.Exclude<Holiday>();
                 audit.Exclude<Department>(_ => _.Logo, _ => _.Handbook);
             });
@@ -798,18 +798,20 @@ audit.Exclude<Country>();
 
 This is for a source whose rows are nobody's to ask after: a calendar, a list of countries. An answer that reads nothing but excluded sources is not recorded. It is sent as it would be with the audit off: the response is not marked `no-store` for the audit's sake, nobody has to be named, a stream is not held back, and an attachment or a command receipt of such a row leaves nothing.
 
-The rule is about the answer and errs towards the record. An answer that reads an excluded source and one that is not is recorded whole, the excluded source's part included:
+The rule is about the answer and errs towards the record. An answer that reads an excluded source and one that is not is recorded, without what it read of the excluded source:
 
 | The answer reads | Recorded |
 | --- | --- |
 | Excluded sources only | No |
-| An excluded root, and a recorded source through a navigation, a join, a subquery or a set operation | Yes, whole |
-| A recorded root, and an excluded source reached from it | Yes, whole |
-| An excluded source, filtered or ordered by a member of a recorded one | Yes, whole |
+| An excluded root, and a recorded source through a navigation, a join, a subquery or a set operation | Yes, without the excluded source's values |
+| A recorded root, and an excluded source reached from it | Yes, without the excluded source's values |
+| An excluded source, filtered or ordered by a member of a recorded one | Yes, without the excluded source's values |
 
-Whole, because a record with part of an answer left out could not be put back together into what was sent, and because a filter is a read: an excluded source narrowed by what a recorded one holds says something about the recorded one. So leaving a source out never hides what was sent of another. A query rooted at an excluded source is refused for want of a caller only once it is found to read something recorded.
+Recorded, because a filter is a read: an excluded source narrowed by what a recorded one holds says something about the recorded one. So leaving a source out never hides what was sent of another. A query rooted at an excluded source is refused for want of a caller only once it is found to read something recorded.
 
-Said of a type, it holds for the types derived from it. An excluded source needs neither `Key<T>` nor `Unkeyed<T>` for the server to start; where a recorded answer reads one with no key, its rows are recorded as content with no row to hang them on.
+What it read of the excluded source is left out as an [excluded member](#leaving-a-member-out) is: a marker, `{"$excluded":true}`, where a row returned a value of it or of anything computed from one, and in place of a value folded from its rows. The excluded source's rows are still named by their keys, as every row the record names is, and its members among what the answer returned: that the answer reached those rows can be asked, and what they held cannot. A row of a set operation may be from either side, so a value is marked where either side read it from what was left out. A count of rows filtered by what an excluded source holds is no value of it, and is recorded as it was sent.
+
+Said of a type, it holds for the types derived from it. An excluded source needs neither `Key<T>` nor `Unkeyed<T>` for the server to start; where a recorded answer reads one with no key, its rows are marked with no row to name them by.
 
 ### Leaving a member out
 
@@ -824,13 +826,15 @@ This is for a member whose values are nobody's to ask after while the rest of th
 | The answer reads | Recorded |
 | --- | --- |
 | Excluded members only, in a projection, a filter, an ordering or an aggregate | No |
-| An excluded member and another member of the same row, even to filter by | Yes, whole |
-| An excluded member reached through a navigation from another row | Yes, whole: the navigation is a member of the row it was reached from |
+| An excluded member and another member of the same row, even to filter by | Yes, without the excluded member's values |
+| An excluded member reached through a navigation from another row | Yes, without the excluded member's values: the navigation is a member of the row it was reached from |
 | The rows and no member of them, as a count of them is | Yes |
 
-It decides which answers are recorded, and is no way to keep a value out of an answer that is: a recorded answer is recorded as it was sent, the excluded member's values included, and the member is named among what it returned. What goes unrecorded is what the excluded members held, and how many rows there were of them.
+An answer that is recorded is recorded without the excluded members' values. Where a row returned one, the record holds `{"$excluded":true}` in its place, and the member is still named among what the answer returned: who was sent the member can still be asked, and what it held cannot. A value computed from an excluded member is left out with it, since it holds what the member held: its length, a string it was joined into, a key rows were grouped by. A value folded from one, as a largest or a sum of it is, is left out too. A count is not, since it reads the rows and no member's value. What is sent is untouched: a row that returned an excluded member is written twice, once as it is sent and once as it is recorded, as a row with a binary value is.
 
-Said of a type, it holds for the types derived from it. A member that holds a value of several parts is left out with everything in it. A member is named as a property read straight off the row.
+A member of a row's key cannot be left out, since the record names the row by it, and nor can the member named as a row's version: a server told to leave either out refuses to start.
+
+Said of a type, it holds for the types derived from it. A member that holds a value of several parts is left out with everything in it, and so is a collection with its elements. A member is named as a property read straight off the row.
 
 
 ## Erasure
