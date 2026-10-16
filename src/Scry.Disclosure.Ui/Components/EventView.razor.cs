@@ -106,6 +106,12 @@ public partial class EventView
 
     bool HasUnits => answer!.Units.Count > 0;
 
+    // What the record holds in the place of a value the server left out of it. Inside a JSON string
+    // its quotes would be escaped, so where it appears unescaped it is the marker and nothing else.
+    const string Marker = """{"$excluded":true}""";
+
+    bool HasLeftOut => answer!.Units.Any(_ => LeftOut(_) is not null);
+
     string Reader => Session.Catalog?.Reviewer ?? "Whoever is reading";
 
     string Caller => Show.Caller(answer!.Event.Caller);
@@ -222,12 +228,34 @@ public partial class EventView
     static string Carried(UnitLine unit)
     {
         var carried = unit.Text ?? Gone(unit);
+        if (LeftOut(unit) is { } left)
+        {
+            carried = $"({left}) {carried}";
+        }
+
         if (!unit.Released)
         {
             return $"(accepted, never sent) {carried}";
         }
 
         return carried;
+    }
+
+    // Whether the record holds markers where the unit's values were: all of them, which is content of
+    // its own kind, or some.
+    static string? LeftOut(UnitLine unit)
+    {
+        if (unit.Kind == "LeftOut")
+        {
+            return "every value left out of the record";
+        }
+
+        if (unit.Text?.Contains(Marker, StringComparison.Ordinal) == true)
+        {
+            return "some values left out of the record";
+        }
+
+        return null;
     }
 
     static string Gone(UnitLine unit) =>

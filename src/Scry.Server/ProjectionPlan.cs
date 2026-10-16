@@ -86,6 +86,16 @@ sealed class ProjectionPlan(
 
     bool leftOutKnown;
     IReadOnlyList<bool>? leftOut;
+
+    /// <summary>
+    /// Whether every written slot is left out of the record, so that a row of this plan is recorded
+    /// as markers alone and holds nothing of the row it was read from.
+    /// </summary>
+    public bool HoldsNothing(ScryDisclosureOptions settings) =>
+        holdsNothing ??= LeftOut(settings) is { } slots &&
+                         slots.All(_ => _);
+
+    bool? holdsNothing;
     IReadOnlyList<bool>? built = builtLeftOut;
 
     /// <summary>A slot is left out where either list says so.</summary>

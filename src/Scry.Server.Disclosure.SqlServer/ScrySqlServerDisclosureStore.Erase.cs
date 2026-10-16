@@ -38,7 +38,8 @@ public sealed partial class ScrySqlServerDisclosureStore
         }
 
         // Every piece of content a unit read from this row carried, in whichever segment. Erasure wins
-        // over reconstruction: a piece another row happened to be sent as goes too.
+        // over reconstruction: a piece another row happened to be sent as goes too. All but markers
+        // alone, which hold nothing of the row and are what every other row of its answer was too.
         // Made by a statement with no parameters, which is what leaves a temporary table behind it
         // for the statements after: one made by a statement that has them goes when it ends.
         await using (var make = Command(connection, "CREATE TABLE #erase ([Address] binary(32) NOT NULL PRIMARY KEY);", transaction))
@@ -48,7 +49,7 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         await using (var find = Command(
                          connection,
-                         $"INSERT INTO #erase ([Address]) SELECT DISTINCT n.[Content] FROM {sql.Entities} n WHERE n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key;",
+                         $"INSERT INTO #erase ([Address]) SELECT DISTINCT n.[Content] FROM {sql.Entities} n WHERE n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key AND NOT EXISTS (SELECT 1 FROM {sql.Content} k WHERE k.[Address] = n.[Content] AND k.[Kind] = {(byte) ScryDisclosureContentKind.LeftOut});",
                          transaction))
         {
             Row(find, row, source, text);

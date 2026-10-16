@@ -542,6 +542,52 @@ public class SqlStoreTests
         }
     }
 
+    // Markers alone hold nothing of the row they were read from, and are what every other row of
+    // their answer was recorded as. Erasing one row leaves them be, where taking them would take them
+    // from every row and every answer that held them. A row recorded with a value of its own still
+    // loses it.
+    [Test]
+    public async Task ErasingARowLeavesWhatHoldsNothingOfIt()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var processor = Processor(new Both(memory, kept), new(), _ => _.Exclude<Patient>(_ => _.Name));
+
+        // Ordered by the ward, which is kept, so the answer is recorded, and returns nothing that is.
+        var markers = QueryRequest.Create(
+            "Patient",
+            [
+                new OrderByOp(new MemberNode(["WardId"]), Descending: false),
+                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))
+            ]);
+        processor.Execute(markers, database.Context);
+        processor.Execute(WithDiagnosis(), database.Context);
+        await kept.DrainAsync();
+
+        var erasure = await kept.EraseAsync("Patient", [1], by: "records.officer");
+        var told = await memory.EraseAsync("Patient", [1], by: "records.officer");
+
+        var answers = new List<ScryDisclosedResponse>();
+        foreach (var id in (await kept.ReceiversOf("Patient", [1]).ToListAsync()).Select(_ => _.Event.Id).Distinct())
+        {
+            answers.Add((await kept.Reconstruct(id))!);
+        }
+
+        var left = answers.Single(_ => _.Units.All(_ => _.Content.Kind == ScryDisclosureContentKind.LeftOut));
+        var valued = answers.Single(_ => _.Units.All(_ => _.Content.Kind == ScryDisclosureContentKind.Row));
+        using (Assert.Multiple())
+        {
+            await Assert.That(erasure.Units).IsEqualTo(1);
+            await Assert.That(told.Units).IsEqualTo(1);
+            await Assert.That(left.Units.Count).IsGreaterThan(1);
+            await Assert.That(left.Units.Any(_ => _.Erased)).IsFalse();
+            await Assert.That(left.Units.Select(_ => Encoding.UTF8.GetString(_.Content.Bytes.Span)).Distinct()).IsEquivalentTo(["{\"name\":{\"$excluded\":true}}"]);
+            await Assert.That(valued.Units.Single(_ => _.Entities.Any(_ => _ is {Source: "Patient", Key: "[1]"})).Erased).IsTrue();
+            await Assert.That(await Told(kept)).IsEqualTo(await Told(memory));
+        }
+    }
+
     // Erasing a row removes what was sent of it and keeps that it was sent. An answer accepted a moment
     // ago, still in the outbox, is erased with the rest.
     [Test]

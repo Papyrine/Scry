@@ -190,6 +190,7 @@ public class DisclosureScopeTests
             await Assert.That(sent.AsSpan().SequenceEqual(unaudited)).IsTrue();
             await Assert.That(events[0].Event.Kind).IsEqualTo(ScryDisclosureKind.Scalar);
             await Assert.That(Encoding.UTF8.GetString(answer.Units[0].Content.Bytes.Span)).IsEqualTo("{\"$excluded\":true}");
+            await Assert.That(answer.Units[0].Content.Kind).IsEqualTo(ScryDisclosureContentKind.LeftOut);
         }
     }
 
@@ -316,6 +317,7 @@ public class DisclosureScopeTests
             await Assert.That(answer.Shape!.Fields.Any(_ => _ is {Source: "Employee", Member: "Name", Use: ScryDisclosureFieldUse.Returned})).IsTrue();
             await Assert.That(answer.Shape.Fields.Any(_ => _ is {Source: "Employee", Member: "Active", Use: ScryDisclosureFieldUse.Read})).IsTrue();
             await Assert.That(answer.Units.Select(_ => Encoding.UTF8.GetString(_.Content.Bytes.Span)).Distinct()).IsEquivalentTo(["{\"name\":{\"$excluded\":true}}"]);
+            await Assert.That(answer.Units.All(_ => _.Content.Kind == ScryDisclosureContentKind.LeftOut)).IsTrue();
             await Assert.That(sent.AsSpan().SequenceEqual(unaudited)).IsTrue();
         }
     }
@@ -349,6 +351,7 @@ public class DisclosureScopeTests
         {
             await Assert.That(sent.AsSpan().SequenceEqual(unaudited)).IsTrue();
             await Assert.That(first).StartsWith("{\"id\":");
+            await Assert.That(answer.Units.All(_ => _.Content.Kind == ScryDisclosureContentKind.Row)).IsTrue();
             await Assert.That(first).Contains("\"name\":{\"$excluded\":true},\"shouted\":{\"$excluded\":true},\"status\":\"");
             await Assert.That(answer.Units.All(_ => !Encoding.UTF8.GetString(_.Content.Bytes.Span).Contains("\"name\":\""))).IsTrue();
         }
@@ -379,6 +382,7 @@ public class DisclosureScopeTests
             await Assert.That(sent.AsSpan().SequenceEqual(unaudited)).IsTrue();
             await Assert.That(events[0].Event.Kind).IsEqualTo(ScryDisclosureKind.Scalar);
             await Assert.That(Encoding.UTF8.GetString(answer.Units[0].Content.Bytes.Span)).IsEqualTo("{\"$excluded\":true}");
+            await Assert.That(answer.Units[0].Content.Kind).IsEqualTo(ScryDisclosureContentKind.LeftOut);
         }
     }
 
@@ -592,6 +596,45 @@ public class DisclosureScopeTests
         {
             await Assert.That(events).Count().IsEqualTo(1);
             await Assert.That(events[0].Event.Source).IsEqualTo("Employee");
+        }
+    }
+
+    // A navigation left out takes what is read through it, as a member that holds a value of several
+    // parts does: an answer of nothing else is not recorded, and one that reads anything else is
+    // recorded with a marker where each value read through it was. The row it reached is still named
+    // by its key.
+    [Test]
+    public async Task AnExcludedNavigationTakesWhatIsReadThroughIt()
+    {
+        var (processor, store) = Disclosures.Audited(configure: _ => _.Exclude<Employee>(_ => _.Department));
+        var through = Employees
+            .OrderBy(_ => _.Department!.Name)
+            .Select(_ => new
+            {
+                Department = _.Department!.Name
+            })
+            .ToScryRequest();
+        var beside = Employees
+            .OrderBy(_ => _.Id)
+            .Select(_ => new
+            {
+                _.Id,
+                Department = _.Department!.Name
+            })
+            .ToScryRequest();
+
+        await Disclosures.Buffered(processor, through);
+        var sent = await Disclosures.Buffered(processor, beside);
+        var unaudited = await Disclosures.Buffered(SharedProcessor.Instance, beside);
+
+        var events = await Disclosures.Events(store);
+        await Assert.That(events).Count().IsEqualTo(1);
+        var answer = (await store.Reconstruct(events[0].Event.Id))!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(sent.AsSpan().SequenceEqual(unaudited)).IsTrue();
+            await Assert.That(answer.Units.All(_ => Encoding.UTF8.GetString(_.Content.Bytes.Span).EndsWith(",\"department\":{\"$excluded\":true}}"))).IsTrue();
+            await Assert.That(answer.Units.All(_ => _.Entities.Any(_ => _ is {Source: "Department", Via: "Department"}))).IsTrue();
         }
     }
 

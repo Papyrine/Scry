@@ -234,7 +234,9 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         if (member.Kind == MemberKind.Navigation)
         {
             // A step to another row is recorded as a step, and what follows is that row's. A step
-            // into a value the row holds is no step at all: what follows is still this row's.
+            // into a value the row holds is no step at all: what follows is still this row's. A step
+            // through a navigation the host left out takes the exclusion with it, as a member that
+            // holds a value of several parts does: what is read beyond it was read through it.
             if (KeyOf(member.Target) is not null ||
                 schema.TryGetSourceForType(member.Target, out _))
             {
@@ -243,6 +245,7 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
                     value,
                     new(SourceName(member.Target), Prefix: "", Via(origin.Via, member.Name), origin.Rooted, value)
                     {
+                        Left = origin.Left,
                         SourceLeft = settings.Excludes(member.Target)
                     });
             }

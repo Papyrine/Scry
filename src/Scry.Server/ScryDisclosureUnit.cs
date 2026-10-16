@@ -112,7 +112,15 @@ public enum ScryDisclosureContentKind : byte
     Bytes = 9,
 
     /// <summary>What a reviewer asked of the store.</summary>
-    Parameters = 10
+    Parameters = 10,
+
+    /// <summary>
+    /// A row or a scalar answer of which every value was left out of the record by
+    /// <see cref="ScryDisclosureOptions.Exclude{TSource}()"/>: a marker where each value was, and
+    /// nothing of any. It holds nothing of the row it was read from, so erasing that row leaves it
+    /// where it is, though every other row of the answer was recorded as the same bytes.
+    /// </summary>
+    LeftOut = 11
 }
 
 /// <summary>

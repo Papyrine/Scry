@@ -51,6 +51,13 @@
         {
             <p class="note" data-testid="event-note">@note</p>
         }
+        @if (HasLeftOut)
+        {
+            <p class="note" data-testid="event-left-out">
+                Values the server leaves out of the record are shown as @Marker: that each was sent is
+                recorded, and what it held is not.
+            </p>
+        }
         <pre data-testid="event-payload">@Payload</pre>
 
         @if (HasUnits)

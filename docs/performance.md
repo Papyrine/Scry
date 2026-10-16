@@ -120,7 +120,7 @@ What the [disclosure audit](disclosure-audit.md) adds to an answer. All three ar
 | Allocated | 0.85 KB | 1.31 KB | 1.89 KB |
 | Time | 0.64 µs | 0.93 µs | 3.10 µs |
 
-So the capture adds about half a kilobyte and three tenths of a microsecond to a row a little over 200 bytes long, and about 7 KB to an answer whatever it holds. This row has no binary member, so it is serialized once either way: the bytes that are hashed are the bytes that are sent. A row with one is written a second time for the record, with the value named by its digest.
+So the capture adds about half a kilobyte and three tenths of a microsecond to a row a little over 200 bytes long, and about 7 KB to an answer whatever it holds. This row has no binary member, so it is serialized once either way: the bytes that are hashed are the bytes that are sent. A row with one is written a second time for the record, with the value named by its digest. So is a row with a value the host [left out of the record](disclosure-audit.md#leaving-a-member-out), with a marker in the value's place. Neither is measured here.
 
 **A durable accept is the disk's to price.** The journal adds a write and a flush before the answer is sent, and the flush is most of the third column at a small answer: a third of a millisecond on this machine in this run and two thirds in the one before it, with the rest in proportion to what is written. It is the one figure on this page that says more about the machine than about the code, and the least steady. The SQL outbox pays a committed insert in the same place, which nothing here measures: it is a round trip to a database, and the benchmark has none.
 

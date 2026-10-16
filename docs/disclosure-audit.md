@@ -364,7 +364,7 @@ Two smaller seams sit beside the reader, each optional for a store to implement:
 
 ## Canonicalisation
 
-1. **A row** is the UTF-8 JSON object the response writer produces for it: members in projection order, camel-cased names, enums by name, numbers and strings as `ScryJson.Options` writes them, no insignificant whitespace. It is the object the wire carries, so a row of a plan with no `byte[]` leaf is written once: into a scratch buffer, hashed, and copied into the response. Rows of a plan that has one are written twice: in a canonical form that writes each binary value's digest, then as the wire wants them.
+1. **A row** is the UTF-8 JSON object the response writer produces for it: members in projection order, camel-cased names, enums by name, numbers and strings as `ScryJson.Options` writes them, no insignificant whitespace. It is the object the wire carries, so a row of a plan with no `byte[]` leaf is written once: into a scratch buffer, hashed, and copied into the response. Rows of a plan that has one are written twice: in a canonical form that writes each binary value's digest, then as the wire wants them. So are rows of a plan with a value [left out of the record](#leaving-a-member-out), whose canonical form holds a marker in its place.
 2. **A `byte[]` value**, inline base64 or `[BinaryTransfer]`, is replaced in the canonical row by `{"$bytes":"<address>","length":n}`, so the row is independent of the transfer encoding and large values do not enter the store. The bytes become content of their own only where `StoreBinaryContent` is set.
 3. **A scalar** is its JSON value. **A request** is its wire JSON. **A receipt, capabilities and a schema** are their wire JSON. **SQL** is its UTF-8 text.
 4. **An address** is `SHA-256(kind ‖ bytes)`, or `HMAC-SHA-256(AddressKey, kind ‖ bytes)` where a key is set. The kind byte separates the domains. It is 32 bytes, stored raw, and written as 43 characters of base64url.
@@ -834,7 +834,9 @@ An answer that is recorded is recorded without the excluded members' values. Whe
 
 A member of a row's key cannot be left out, since the record names the row by it, and nor can the member named as a row's version: a server told to leave either out refuses to start.
 
-Said of a type, it holds for the types derived from it. A member that holds a value of several parts is left out with everything in it, and so is a collection with its elements. A member is named as a property read straight off the row.
+Said of a type, it holds for the types derived from it. A member that holds a value of several parts is left out with everything in it, and so is a collection with its elements. So is a navigation: what is read through it is left out with it, both in deciding whether an answer is recorded and in what a recorded one holds, and the row it reaches is still named by its key. A member is named as a property read straight off the row.
+
+A row of which every value was left out is markers alone, and is the same bytes for every row of its answer. It is kept as content of its own kind, `ScryDisclosureContentKind.LeftOut`, as is a scalar answer folded from what was left out, so that [erasing](#erasure) one of the rows does not take it from the others.
 
 
 ## Erasure
@@ -842,7 +844,7 @@ Said of a type, it holds for the types derived from it. A member that holds a va
 A record that is only added to and an erasure request pull in opposite directions.
 
 - **The tables that are only added to hold no content**: addresses, row keys, field names, callers, times.
-- **Content lives in a table of its own.** `IScryDisclosureEraser.EraseAsync` removes every piece of content in which a row appears and appends an `Erasure` record naming who asked. An event rebuilt afterwards reports the unit as erased. Erasure wins over reconstruction: content another row was also sent as goes too. A row sent again after it was erased is a new disclosure and is kept as one; content is kept by address, so the earlier events that sent the same bytes read whole again from then on.
+- **Content lives in a table of its own.** `IScryDisclosureEraser.EraseAsync` removes every piece of content in which a row appears and appends an `Erasure` record naming who asked. An event rebuilt afterwards reports the unit as erased. Erasure wins over reconstruction: content another row was also sent as goes too. Content that is markers alone (`LeftOut`) is the exception, since it holds nothing of the row and every other row of its answer was recorded as the same bytes: it stays, and is not counted among what was erased. A row sent again after it was erased is a new disclosure and is kept as one; content is kept by address, so the earlier events that sent the same bytes read whole again from then on.
 - **`AddressKey`** makes addresses HMACs, so an address left in the record for a value with few possibilities cannot be confirmed by guessing without the key.
 
 Deferred, and why: per-entity crypto-shredding, where each unit is encrypted under keys derived from the rows it mentions and erasing deletes the key, which also covers backups. It needs key creation in the mover, key storage with a backup lifetime of its own, rotation, and a rule for units naming several rows. That is a feature of its own, and nothing here blocks it: content is already separate and addresses are already opaque. Left as they are, deliberately: row keys and caller names in the record, until the segment they are in is retired. In the SQL Server store a piece of content is kept in each segment it was sent in, and an erasure removes it from every one. A natural key such as an email address is the host's to avoid or to pseudonymise.
@@ -877,7 +879,7 @@ It needs a host with the audit on and something registered as `IScryDisclosureRe
 | Row | A source, a key, an optional range of time | Who received that row and when, the members each answer sent, the version (a content address), and the reviewers who have opened one of those answers since |
 | Caller | A caller, a range of time | Every answer sent to that caller, newest first: its kind, its source, how many units left, whether it returned a sensitive member, how it ended |
 | Member | A caller, a source, a member | A yes or a no, and the answers that make it a yes |
-| Answer | One event, from any list | The payload rebuilt from the store, each unit with the rows it was read from, the members the answer read with their use, and the request |
+| Answer | One event, from any list | The payload rebuilt from the store, each unit with the rows it was read from, the members the answer read with their use, and the request. Where the server left values out of the record, a note says what the marker in their place is, and each unit holding one says whether it holds some values or none |
 | Record | | What is waiting to be moved on, the chain head with a way to check the chain, the segments the record is kept in and when it starts and retires them, what has been erased, and who has been reading |
 
 Opening an answer is the one view that shows content:
@@ -1023,7 +1025,7 @@ A host that only reads does not move the record on. What a reviewer asks there i
 
 ## What it costs
 
-Off: a null check where a capture would be made. On, per row: one SHA-256 over the row's bytes and a copy of them into the batch, with no second serialisation unless the plan has a `byte[]` leaf. Per response: one sink accept. The extra key columns cost what selecting a primary key costs, and a policied navigation adds one correlated subquery for its key. The numbers are in [Performance](performance.md#the-disclosure-audit).
+Off: a null check where a capture would be made. On, per row: one SHA-256 over the row's bytes and a copy of them into the batch, with no second serialisation unless the plan has a `byte[]` leaf or a value left out of the record. Per response: one sink accept. The extra key columns cost what selecting a primary key costs, and a policied navigation adds one correlated subquery for its key. The numbers are in [Performance](performance.md#the-disclosure-audit).
 
 
 ## Open questions

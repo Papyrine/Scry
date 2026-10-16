@@ -209,8 +209,9 @@ sealed class DisclosureCapture(
         // the record: the two things that make a row's record differ from what is sent.
         var bytes = Apart(plan);
         Identify(plan, row);
-        var canonical = Canonical(writer, row, bytes, plan.LeftOut(runtime.Settings));
-        Unit(ScryDisclosureContentKind.Row, canonical);
+        var kind = RowKind(plan);
+        var canonical = Canonical(writer, row, bytes, plan.LeftOut(runtime.Settings), kind);
+        Unit(kind, canonical);
 
         // The canonical row names a binary value by its digest, and marks a member left out of the
         // record, where the wire carries the value or a part's index. So the wire's form is written
@@ -231,9 +232,37 @@ sealed class DisclosureCapture(
     public int AddRow(ProjectionPlan plan, object[] row)
     {
         Identify(plan, row);
-        var canonical = Canonical(plan.Writer, row, Apart(plan), plan.LeftOut(runtime.Settings));
-        Unit(ScryDisclosureContentKind.Row, canonical);
+        var kind = RowKind(plan);
+        var canonical = Canonical(plan.Writer, row, Apart(plan), plan.LeftOut(runtime.Settings), kind);
+        Unit(kind, canonical);
         return canonical.Length - 1;
+    }
+
+    // A row of which every written value was left out is markers alone, the same bytes for every
+    // row of the answer, and is kept as content of its own kind: an erasure of one of those rows has
+    // nothing of it to take, and would otherwise take it from all of them.
+    ScryDisclosureContentKind RowKind(ProjectionPlan plan)
+    {
+        if (plan.HoldsNothing(runtime.Settings))
+        {
+            return ScryDisclosureContentKind.LeftOut;
+        }
+
+        return ScryDisclosureContentKind.Row;
+    }
+
+    // A scalar folded from what was left out is a marker alone, kept as a row of nothing but markers is.
+    ScryDisclosureContentKind ScalarKind
+    {
+        get
+        {
+            if (scalarLeftOut)
+            {
+                return ScryDisclosureContentKind.LeftOut;
+            }
+
+            return ScryDisclosureContentKind.Scalar;
+        }
     }
 
     /// <summary>
@@ -383,7 +412,7 @@ sealed class DisclosureCapture(
     public void WriteScalar(Utf8JsonWriter json, object? value)
     {
         var canonical = Canonical(value);
-        Unit(ScryDisclosureContentKind.Scalar, canonical);
+        Unit(ScalarKind, canonical);
         if (value is byte[] ||
             scalarLeftOut)
         {
@@ -396,7 +425,7 @@ sealed class DisclosureCapture(
 
     /// <summary>Records a scalar answer that something else is writing.</summary>
     public void AddScalar(object? value) =>
-        Unit(ScryDisclosureContentKind.Scalar, Canonical(value));
+        Unit(ScalarKind, Canonical(value));
 
     /// <summary>
     /// Records a unit whose content is already bytes of its own: a receipt, a schema, SQL text. Kept
@@ -452,9 +481,9 @@ sealed class DisclosureCapture(
         return address;
     }
 
-    ReadOnlySpan<byte> Canonical(PlanShapeWriter writer, object[] row, bool bytes, IReadOnlyList<bool>? leftOut)
+    ReadOnlySpan<byte> Canonical(PlanShapeWriter writer, object[] row, bool bytes, IReadOnlyList<bool>? leftOut, ScryDisclosureContentKind kind)
     {
-        var json = Scratch(ScryDisclosureContentKind.Row);
+        var json = Scratch(kind);
         if (bytes)
         {
             writer.WriteCanonicalRow(json, row, this, leftOut);
@@ -470,7 +499,7 @@ sealed class DisclosureCapture(
 
     ReadOnlySpan<byte> Canonical(object? value)
     {
-        var json = Scratch(ScryDisclosureContentKind.Scalar);
+        var json = Scratch(ScalarKind);
         if (scalarLeftOut)
         {
             WriteLeftOut(json);

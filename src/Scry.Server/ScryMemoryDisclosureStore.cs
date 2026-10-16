@@ -463,8 +463,11 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
                 foreach (var (id, entity) in disclosures)
                 {
                     var unit = events[id].Units.First(_ => _.Ordinal == entity.Ordinal);
+                    // Markers alone hold nothing of the row, and are what every other row of the
+                    // answer was recorded as too: there is nothing here to erase.
                     if (!contents.TryGetValue(unit.Content, out var held) ||
-                        held.Erased)
+                        held.Erased ||
+                        held.Kind == ScryDisclosureContentKind.LeftOut)
                     {
                         continue;
                     }

@@ -369,6 +369,29 @@ public class DisclosureUiTests :
         await Assertions.Expect(page.Locator("[data-testid='event-request']")).ToContainTextAsync("\"root\": \"Order\"");
     }
 
+    // The sample leaves a department's logo out of the record. Asked for beside its name, the answer
+    // is recorded with a marker in the logo's place, and the answer's page says what the marker is.
+    // The first department only: the second is the one the erasure test needs nobody else to be sent.
+    [Test]
+    public async Task AValueLeftOutIsShownAsLeftOut()
+    {
+        const string logos =
+            """{"version":1,"root":"Department","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":"Name"},"right":{"$type":"const","value":"Engineering","tag":"String"}}},{"$type":"select","projection":{"members":["Name","Logo"]}}]}""";
+        var page = await SignedIn("max.logos");
+        await Assert.That(await Ask(page, logos)).IsEqualTo(200);
+
+        await Become(page, Reviewer);
+        await Explore(page, "caller?caller=max.logos");
+        await Answered(page, "events");
+        await page.Locator("[data-testid='events-table'] tbody tr [data-testid='open-event']").ClickAsync();
+        await Answered(page, "event-view");
+
+        await Assertions.Expect(page.Locator("[data-testid='event-left-out']")).ToContainTextAsync("{\"$excluded\":true}: that each was sent is recorded");
+        await Assertions.Expect(page.Locator("[data-testid='event-payload']")).ToContainTextAsync("\"logo\": {");
+        var units = page.Locator("[data-testid='event-units'] tbody tr");
+        await Assertions.Expect(units.First).ToContainTextAsync("(some values left out of the record) {\"name\":");
+    }
+
     // The sample leaves the calendar out of the record. Asking for it is answered, by somebody with
     // a name and by nobody at all, and leaves nothing to be read back.
     [Test]
