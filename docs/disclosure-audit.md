@@ -595,6 +595,14 @@ public sealed class ScrySqlServerDisclosureOptions
     public TimeSpan AcceptTimeout { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>
+    /// How long any other statement may run: a question asked of the record, the store's status, a
+    /// round of moving batches on. Default a minute. Apart from <see cref="AcceptTimeout"/>, which is
+    /// what an answer waits on and is kept short for that reason; a read of a large record on a busy
+    /// server is not something to fail for taking longer.
+    /// </summary>
+    public TimeSpan CommandTimeout { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// Whether the chain is kept in append-only ledger tables, which the database itself then refuses
     /// to update or delete from. Null, the default, makes them so where the server has ledger tables
     /// — SQL Server 2022 and Azure SQL — and plain where it does not. True refuses to create them
@@ -729,7 +737,7 @@ public sealed class ScrySqlServerDisclosureOptions
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 }
 ```
-<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureOptions.cs#L4-L164' title='Snippet source file'>snippet source</a> | <a href='#snippet-sqlServerDisclosureOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureOptions.cs#L4-L172' title='Snippet source file'>snippet source</a> | <a href='#snippet-sqlServerDisclosureOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The store creates its schema and tables the first time it is used. A deployment that creates its own objects turns `CreateTables` off and runs `ScrySqlServerDisclosureStore.Script`, which can be run any number of times.
@@ -844,7 +852,7 @@ A row of which every value was left out is markers alone, and is the same bytes 
 A record that is only added to and an erasure request pull in opposite directions.
 
 - **The tables that are only added to hold no content**: addresses, row keys, field names, callers, times.
-- **Content lives in a table of its own.** `IScryDisclosureEraser.EraseAsync` removes every piece of content in which a row appears and appends an `Erasure` record naming who asked. An event rebuilt afterwards reports the unit as erased. Erasure wins over reconstruction: content another row was also sent as goes too. Content that is markers alone (`LeftOut`) is the exception, since it holds nothing of the row and every other row of its answer was recorded as the same bytes: it stays, and is not counted among what was erased. A row sent again after it was erased is a new disclosure and is kept as one; content is kept by address, so the earlier events that sent the same bytes read whole again from then on.
+- **Content lives in a table of its own.** `IScryDisclosureEraser.EraseAsync` removes every piece of content in which a row appears and appends an `Erasure` record naming who asked. An event rebuilt afterwards reports the unit as erased. Erasure wins over reconstruction: content another row was also sent as goes too. Content that is markers alone (`LeftOut`) is the exception, since it holds nothing of the row and every other row of its answer was recorded as the same bytes: it stays, and is not counted among what was erased. Leaving members out makes rows alike more often: rows that differ only in what was left out, such as every active employee once names are excluded, are recorded as the same bytes, and erasing one of them takes that content from every answer and every row that held it. That is the rule applied, and it is kept: the content holds a value of the erased row, and content is kept once by address so that what is alike costs nothing to keep again. A row sent again after it was erased is a new disclosure and is kept as one; content is kept by address, so the earlier events that sent the same bytes read whole again from then on.
 - **`AddressKey`** makes addresses HMACs, so an address left in the record for a value with few possibilities cannot be confirmed by guessing without the key.
 
 Deferred, and why: per-entity crypto-shredding, where each unit is encrypted under keys derived from the rows it mentions and erasing deletes the key, which also covers backups. It needs key creation in the mover, key storage with a backup lifetime of its own, rotation, and a rule for units naming several rows. That is a feature of its own, and nothing here blocks it: content is already separate and addresses are already opaque. Left as they are, deliberately: row keys and caller names in the record, until the segment they are in is retired. In the SQL Server store a piece of content is kept in each segment it was sent in, and an erasure removes it from every one. A natural key such as an email address is the host's to avoid or to pseudonymise.

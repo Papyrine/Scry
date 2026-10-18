@@ -9,6 +9,50 @@
 /// </remarks>
 public class SqlOutboxTests
 {
+    // How long an answer waits to be accepted bounds the accept and nothing else: a question of the
+    // store held up for longer than that, here by a transaction holding the outbox, is answered once
+    // it is let go, where it used to fail at the accept's limit.
+    [Test]
+    public async Task AQuestionOfTheStoreIsNotBoundByHowLongAnAcceptWaits()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var store = Store(database, _ => _.AcceptTimeout = TimeSpan.FromSeconds(1));
+        await store.AppendAsync(Clinic.Batch(1), Cancel.None);
+
+        await using var holding = new SqlConnection(database.ConnectionString);
+        await holding.OpenAsync();
+        var transaction = holding.BeginTransaction();
+        // A change to the table's definition, never committed: it holds off every reader, however
+        // the database isolates them.
+        await using (var hold = new SqlCommand("ALTER TABLE [scry].[DisclosureOutbox] ADD [Held] int NULL;", holding, transaction))
+        {
+            await hold.ExecuteNonQueryAsync();
+        }
+
+        var asked = store.Status().AsTask();
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        var waited = !asked.IsCompleted;
+        await transaction.RollbackAsync();
+        var status = await asked;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(waited).IsTrue();
+            await Assert.That(status.Pending).IsEqualTo(1);
+        }
+    }
+
+    // A store told no statement may run at all is refused when it is made.
+    [Test]
+    public async Task ACommandTimeoutOfNothingIsRefused()
+    {
+        await using var database = await Clinic.Instance.Build();
+
+        var refused = Assert.Throws<ArgumentException>(() => Store(database, _ => _.CommandTimeout = TimeSpan.Zero));
+
+        await Assert.That(refused!.Message).Contains("CommandTimeout must be greater than zero");
+    }
+
     [Test]
     public async Task AnAcceptedBatchIsARowInTheOutbox()
     {

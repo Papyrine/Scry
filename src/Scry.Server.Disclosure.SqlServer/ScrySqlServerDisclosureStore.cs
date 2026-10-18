@@ -45,6 +45,11 @@ public sealed partial class ScrySqlServerDisclosureStore :
             throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.AcceptTimeout)} must be greater than zero. It is how long an answer waits for its record to be accepted.");
         }
 
+        if (options.CommandTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.CommandTimeout)} must be greater than zero. It is how long a statement other than an accept may run.");
+        }
+
         if (options.DrainBatches < 1)
         {
             throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.DrainBatches)} must be greater than zero. It is how many batches are moved out of the outbox in one transaction.");
@@ -159,7 +164,9 @@ public sealed partial class ScrySqlServerDisclosureStore :
         batch.Serialize(bytes);
         MemoryMarshal.TryGetArray(bytes.WrittenMemory, out var written);
 
+        // The one statement an answer waits on, bounded by how long it is willing to.
         var command = Command(connection, sql.Accept);
+        command.CommandTimeout = Seconds(options.AcceptTimeout);
         command.Parameters.Add(new("@event", SqlDbType.UniqueIdentifier) {Value = batch.EventId});
         command.Parameters.Add(new("@sequence", SqlDbType.Int) {Value = batch.Sequence});
         command.Parameters.Add(new("@batch", SqlDbType.VarBinary, written.Count) {Value = written.Array});
@@ -184,8 +191,11 @@ public sealed partial class ScrySqlServerDisclosureStore :
     SqlCommand Command(SqlConnection connection, string text, SqlTransaction? transaction = null) =>
         new(text, connection, transaction)
         {
-            CommandTimeout = Math.Max(1, (int) Math.Ceiling(options.AcceptTimeout.TotalSeconds))
+            CommandTimeout = Seconds(options.CommandTimeout)
         };
+
+    static int Seconds(TimeSpan timeout) =>
+        Math.Max(1, (int) Math.Ceiling(timeout.TotalSeconds));
 
     async ValueTask EnsureAsync(Cancel cancel)
     {

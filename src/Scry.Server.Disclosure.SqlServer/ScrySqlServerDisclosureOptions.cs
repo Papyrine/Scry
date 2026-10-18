@@ -28,6 +28,14 @@ public sealed class ScrySqlServerDisclosureOptions
     public TimeSpan AcceptTimeout { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>
+    /// How long any other statement may run: a question asked of the record, the store's status, a
+    /// round of moving batches on. Default a minute. Apart from <see cref="AcceptTimeout"/>, which is
+    /// what an answer waits on and is kept short for that reason; a read of a large record on a busy
+    /// server is not something to fail for taking longer.
+    /// </summary>
+    public TimeSpan CommandTimeout { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// Whether the chain is kept in append-only ledger tables, which the database itself then refuses
     /// to update or delete from. Null, the default, makes them so where the server has ledger tables
     /// — SQL Server 2022 and Azure SQL — and plain where it does not. True refuses to create them
