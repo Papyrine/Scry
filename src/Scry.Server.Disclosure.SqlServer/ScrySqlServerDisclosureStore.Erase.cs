@@ -298,7 +298,46 @@ public sealed partial class ScrySqlServerDisclosureStore
         }
 
         var recorded = await Recorded(connection, segment, batch.EventId, batch.Sequence, cancel);
-        return DisclosureChain.Digest(recorded).AsSpan().SequenceEqual(digest);
+        return DisclosureChain.Digest(recorded).AsSpan().SequenceEqual(digest) &&
+               await Receipted(connection, segment, recorded, cancel);
+    }
+
+    // Whether every row the batch's units were read from is filed among the row's receipts, under
+    // when its answer was given. The receipts are not in the digest, being made from what is, but a
+    // row's receipts are how who received it is found, so one taken away would hide that it was sent.
+    // Each is looked up by the whole of its key.
+    async Task<bool> Receipted(SqlConnection connection, int segment, ScryDisclosureBatch batch, Cancel cancel)
+    {
+        var expected = batch.Entities
+            .Select(_ => (Row: Convert.ToHexString(DisclosureSql.RowHash(_.Source, _.Key)), _.Ordinal))
+            .ToHashSet();
+        if (expected.Count == 0)
+        {
+            return true;
+        }
+
+        var tables = sql.Segment(segment);
+        var rows = string.Join(", ", expected.Select(_ => _.Row).Distinct().Select(_ => $"0x{_}"));
+        var ordinals = string.Join(", ", expected.Select(_ => _.Ordinal).Distinct().Select(_ => _.ToString(CultureInfo.InvariantCulture)));
+        await using var command = Command(
+            connection,
+            $"""
+             SELECT t.[RowHash], t.[Ordinal] FROM {tables.Receipt} t JOIN {tables.Event} e ON e.[EventId] = @event
+             WHERE t.[RowHash] IN ({rows}) AND t.[At] = e.[At] AND t.[EventId] = @event AND t.[Ordinal] IN ({ordinals});
+             """);
+        command.Parameters.AddWithValue("@event", batch.EventId);
+        var found = new HashSet<(string Row, int Ordinal)>();
+        await using var reader = await command.ExecuteReaderAsync(cancel);
+        while (await reader.ReadAsync(cancel))
+        {
+            var row = (Convert.ToHexString((byte[]) reader[0]), reader.GetInt32(1));
+            if (expected.Contains(row))
+            {
+                found.Add(row);
+            }
+        }
+
+        return found.Count == expected.Count;
     }
 
     /// <summary>

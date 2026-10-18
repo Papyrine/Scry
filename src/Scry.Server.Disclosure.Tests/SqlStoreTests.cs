@@ -282,7 +282,7 @@ public class SqlStoreTests
             await Assert.That((await kept.VerifyChainAsync()).Intact).IsTrue();
 
             // Everything else is plain: the outbox, and every table of a segment.
-            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 0")).IsEqualTo(19);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 0")).IsEqualTo(20);
         }
     }
 
@@ -350,7 +350,7 @@ public class SqlStoreTests
         using (Assert.Multiple())
         {
             // Every table of the segment the record only adds to, the chain, and the segment log.
-            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(18);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(19);
 
             // The outbox, the content an erasure removes, and the summary of sources named by key.
             await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 0")).IsEqualTo(3);
@@ -540,6 +540,82 @@ public class SqlStoreTests
             await Assert.That(await kept.FindLinkAsync(head)).IsNull();
             await Assert.That(await kept.FindLinkAsync((await kept.Status()).ChainHead!.Value)).IsEqualTo(3);
         }
+    }
+
+    // A row many answers carried is read a page at a time from its receipts, newest first, each page
+    // starting where the last one ended: every receipt once and in order, three answers to a moment
+    // so that pages end inside one, and a span of time cutting them where the in-memory store does.
+    [Test]
+    public async Task ARowsReceiptsArePagedInTheOrderTheyWereGiven()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var sink = new Both(memory, kept);
+        var start = new DateTimeOffset(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
+        for (var index = 0; index < 450; index++)
+        {
+            await sink.AppendAsync(Sent(start.AddSeconds(index / 3), index), Cancel.None);
+        }
+
+        await kept.DrainAsync();
+
+        var all = await kept.ReceiversOf("Patient", [1]).ToListAsync();
+        var since = await kept.ReceiversOf("Patient", [1], start.AddSeconds(100)).ToListAsync();
+        var remembered = await memory.ReceiversOf("Patient", [1]).ToListAsync();
+        using (Assert.Multiple())
+        {
+            await Assert.That(all).Count().IsEqualTo(450);
+            await Assert.That(all.Select(_ => _.Event.Id).Distinct()).Count().IsEqualTo(450);
+            await Assert.That(all.Select(_ => _.Event.At)).IsOrderedByDescending(_ => _);
+            await Assert.That(all.Select(_ => _.Event.Id).Order()).IsEquivalentTo(remembered.Select(_ => _.Event.Id).Order(), CollectionOrdering.Matching);
+            await Assert.That(since).Count().IsEqualTo(150);
+            await Assert.That(since.All(_ => _.Event.At >= start.AddSeconds(100))).IsTrue();
+        }
+    }
+
+    // A receipt is how who received a row is found, so one taken away is a change the chain check
+    // sees, as one taken from the rows a unit was read from is.
+    [Test]
+    public async Task AReceiptTakenAwayBreaksTheChain()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var kept = Store(database);
+        var start = new DateTimeOffset(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
+        for (var index = 0; index < 3; index++)
+        {
+            await kept.AppendAsync(Sent(start.AddSeconds(index), index), Cancel.None);
+        }
+
+        await kept.DrainAsync();
+        var before = await kept.VerifyChainAsync();
+        await Execute(database, "DELETE TOP (1) FROM [scry_000001].[DisclosureReceipt]");
+        var after = await kept.VerifyChainAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(before.Intact).IsTrue();
+            await Assert.That(after.Intact).IsFalse();
+            await Assert.That(await kept.ReceiversOf("Patient", [1]).ToListAsync()).Count().IsEqualTo(2);
+        }
+    }
+
+    // One answer of patient 1, given at a moment of the test's choosing.
+    static ScryDisclosureBatch Sent(DateTimeOffset at, int index)
+    {
+        var batch = Clinic.Batch(index);
+        return new()
+        {
+            EventId = batch.EventId,
+            Begin = batch.Begin! with
+            {
+                At = at
+            },
+            Units = batch.Units,
+            Entities = [new(0, 0, "Patient", "[1]", "")],
+            Contents = batch.Contents,
+            Close = batch.Close
+        };
     }
 
     // Markers alone hold nothing of the row they were read from, and are what every other row of

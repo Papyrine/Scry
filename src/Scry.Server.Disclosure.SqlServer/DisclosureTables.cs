@@ -21,6 +21,7 @@ sealed class DisclosureTables
         ("DisclosureManifest", ["Manifest", "Units"]),
         ("DisclosureManifestRun", ["Manifest", "Start", "Run"]),
         ("DisclosureAnswer", ["EventId", "Sequence", "Start", "Manifest"]),
+        ("DisclosureReceipt", ["RowHash", "At", "EventId", "Ordinal"]),
         ("DisclosureUnits", ["EventId", "Ordinal", "Sequence", "Content"]),
         ("DisclosureEntities", ["EventId", "Ordinal", "Slot", "Sequence", "RowHash", "Source", "RowKey", "Via", "Content", "Leading", "Version"]),
         ("DisclosureShape", ["Address"]),
@@ -47,6 +48,7 @@ sealed class DisclosureTables
         Manifest = $"{s}.[DisclosureManifest]";
         ManifestRun = $"{s}.[DisclosureManifestRun]";
         Answer = $"{s}.[DisclosureAnswer]";
+        Receipt = $"{s}.[DisclosureReceipt]";
         Units = $"{s}.[DisclosureUnits]";
         Entities = $"{s}.[DisclosureEntities]";
         Shape = $"{s}.[DisclosureShape]";
@@ -86,6 +88,12 @@ sealed class DisclosureTables
 
     /// <summary>Which list each batch of an answer carried, and where in the answer the list starts.</summary>
     public string Answer { get; }
+
+    /// <summary>
+    /// Each row a unit was read from, once a unit, by when its answer was given: what a row's
+    /// receipts are read through, newest first, so a page of them starts where the last one ended.
+    /// </summary>
+    public string Receipt { get; }
 
     /// <summary>
     /// Every unit of every event, whichever way it is kept: its own rows, or the rows of the runs of
@@ -270,6 +278,19 @@ sealed class DisclosureTables
             CONSTRAINT [PK_DisclosureAnswer] PRIMARY KEY CLUSTERED ([EventId], [Sequence])
             """);
         Index(script, s, "DisclosureAnswer", "IX_DisclosureAnswer_Manifest", "([Manifest]) INCLUDE ([Start])");
+
+        // A row's receipts in the order they are asked for. Runs keep a row once however many
+        // answers carried it, which is what keeps the record small and what leaves a question about
+        // the row having to find every one of those answers before it can say which is newest. This
+        // says it ahead of time, a row a unit, narrow: the hash of the row and where it went.
+        Table(script, s, "DisclosureReceipt",
+            """
+            [RowHash] binary(32) NOT NULL,
+            [At] datetimeoffset(7) NOT NULL,
+            [EventId] uniqueidentifier NOT NULL,
+            [Ordinal] int NOT NULL,
+            CONSTRAINT [PK_DisclosureReceipt] PRIMARY KEY CLUSTERED ([RowHash], [At] DESC, [EventId] DESC, [Ordinal])
+            """);
         View(script, s, "DisclosureUnits",
             $"""
              SELECT u.[EventId], u.[Ordinal], u.[Sequence], u.[Content] FROM {s}.[DisclosureUnit] u

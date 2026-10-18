@@ -20,14 +20,45 @@ public sealed partial class ScrySqlServerDisclosureStore
         await Caught(cancel);
         var text = ScryDisclosureEntity.KeyOf(key);
 
-        // Found by the hash and then held to the text it is a hash of. And once for each unit, however
-        // many of the unit's rows this one was: a row joined to itself is still sent once.
-        var released =
+        // Found by the hash, in the order receipts are filed in, and then held to the text it is a hash
+        // of: the unit's first slot that is this row, which a row joined to itself is in twice and was
+        // sent in once. And only where the unit was handed on.
+        var unit =
             $"""
-             n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key
-             AND (c.[Units] IS NULL OR n.[Ordinal] < c.[Units])
-             AND n.[Leading] = 1
+             CROSS APPLY (SELECT TOP (1) m.[Ordinal], m.[Content], m.[Via], m.[Version] FROM {sql.Entities} m
+                          WHERE m.[EventId] = t.[EventId] AND m.[Segment] = t.[Segment] AND m.[Ordinal] = t.[Ordinal]
+                            AND m.[RowHash] = t.[RowHash] AND m.[Source] = @source AND m.[RowKey] = @key
+                          ORDER BY m.[Slot]) n
              """;
+
+        // Where the question names a span or a page goes on from the last, said as conditions on the
+        // order the rows are listed in, and only then: a condition that may say nothing is one the
+        // database checks of every row rather than a range it seeks to.
+        string Span(string alias)
+        {
+            var span = "";
+            if (from is not null)
+            {
+                span += $" AND {alias}.[At] >= @from";
+            }
+
+            if (to is not null)
+            {
+                span += $" AND {alias}.[At] <= @to";
+            }
+
+            return span;
+        }
+
+        string Seek(string at, string id, string ordinal)
+        {
+            if (after is null)
+            {
+                return "";
+            }
+
+            return $" AND {at} <= @afterAt AND ({at} < @afterAt OR ({at} = @afterAt AND ({id} < @afterId OR ({id} = @afterId AND {ordinal} > @afterOrdinal))))";
+        }
 
         while (true)
         {
@@ -35,37 +66,46 @@ public sealed partial class ScrySqlServerDisclosureStore
             // the showing. Both cut at how far the event really got: a unit accepted and never handed
             // on is not a disclosure, to its caller or to anybody shown the event afterwards.
             //
-            // Each looked for only in the segments its time can be in: a release by when the answer
-            // was given, a showing by when the reviewer was shown it. The answer a reviewer was shown
-            // may be in any segment, so that half reads the row from all of them.
+            // Each is read in the order it is listed in and stops at a page: a release from the row's
+            // receipts, newest first, and a showing from the reviews, newest first, each kept only
+            // where it showed an answer the row is a receipt of. Each looked for only in the segments
+            // its time can be in.
             var until = Earlier(to, after?.At);
-            var releases = await Within("e", from, until, cancel);
+            var releases = await Within("t", from, until, cancel);
             var showings = await Within("r", from, until, cancel);
             var query =
                 $"""
                  SELECT TOP (@page) q.* FROM
                  (
-                     SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
-                            CAST(NULL AS uniqueidentifier) AS [ReviewId], CAST(NULL AS datetimeoffset(7)) AS [ReviewedAt], CAST(NULL AS nvarchar(max)) AS [Reviewer],
-                            CAST(NULL AS tinyint) AS [Question], CAST(NULL AS binary(32)) AS [Parameters], CAST(NULL AS int) AS [Results], CAST(NULL AS nvarchar(max)) AS [ReviewNode],
-                            e.[At] AS [When], e.[EventId] AS [Mark], n.[Version]
-                     FROM {sql.Entities} n
-                     JOIN {sql.Event} e ON e.[EventId] = n.[EventId] AND e.[Segment] = n.[Segment]
-                     {sql.Ended}
-                     WHERE {released}{releases}
+                     SELECT * FROM
+                     (
+                         SELECT TOP (@page) {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
+                                CAST(NULL AS uniqueidentifier) AS [ReviewId], CAST(NULL AS datetimeoffset(7)) AS [ReviewedAt], CAST(NULL AS nvarchar(max)) AS [Reviewer],
+                                CAST(NULL AS tinyint) AS [Question], CAST(NULL AS binary(32)) AS [Parameters], CAST(NULL AS int) AS [Results], CAST(NULL AS nvarchar(max)) AS [ReviewNode],
+                                t.[At] AS [When], t.[EventId] AS [Mark], n.[Version]
+                         FROM {sql.Receipt} t
+                         JOIN {sql.Event} e ON e.[EventId] = t.[EventId] AND e.[Segment] = t.[Segment]
+                         {sql.Ended}
+                         {unit}
+                         WHERE t.[RowHash] = @row AND (c.[Units] IS NULL OR t.[Ordinal] < c.[Units]){releases}{Span("t")}{Seek("t.[At]", "t.[EventId]", "t.[Ordinal]")}
+                         ORDER BY t.[At] DESC, t.[EventId] DESC, t.[Ordinal]
+                     ) a
                      UNION ALL
-                     SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
-                            r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node],
-                            r.[At], r.[ReviewId], n.[Version]
-                     FROM {sql.Entities} n
-                     JOIN {sql.Event} e ON e.[EventId] = n.[EventId] AND e.[Segment] = n.[Segment]
-                     {sql.Ended}
-                     JOIN {sql.ReviewEvent} v ON v.[EventId] = e.[EventId]
-                     JOIN {sql.Review} r ON r.[ReviewId] = v.[ReviewId] AND r.[Segment] = v.[Segment]
-                     WHERE {released}{showings}
+                     SELECT * FROM
+                     (
+                         SELECT TOP (@page) {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
+                                r.[ReviewId], r.[At] AS [ReviewedAt], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node] AS [ReviewNode],
+                                r.[At] AS [When], r.[ReviewId] AS [Mark], n.[Version]
+                         FROM {sql.Review} r
+                         JOIN {sql.ReviewEvent} v ON v.[ReviewId] = r.[ReviewId] AND v.[Segment] = r.[Segment]
+                         JOIN {sql.Event} e ON e.[EventId] = v.[EventId]
+                         {sql.Ended}
+                         JOIN {sql.Receipt} t ON t.[RowHash] = @row AND t.[At] = e.[At] AND t.[EventId] = e.[EventId] AND t.[Segment] = e.[Segment]
+                         {unit}
+                         WHERE (c.[Units] IS NULL OR t.[Ordinal] < c.[Units]){showings}{Span("r")}{Seek("r.[At]", "r.[ReviewId]", "t.[Ordinal]")}
+                         ORDER BY r.[At] DESC, r.[ReviewId] DESC, t.[Ordinal]
+                     ) b
                  ) q
-                 WHERE (@from IS NULL OR q.[When] >= @from) AND (@to IS NULL OR q.[When] <= @to)
-                   AND (@afterAt IS NULL OR q.[When] < @afterAt OR (q.[When] = @afterAt AND (q.[Mark] < @afterId OR (q.[Mark] = @afterId AND q.[Ordinal] > @afterOrdinal))))
                  ORDER BY q.[When] DESC, q.[Mark] DESC, q.[Ordinal];
                  """;
             var read = new List<ScryRowDisclosure>(page);

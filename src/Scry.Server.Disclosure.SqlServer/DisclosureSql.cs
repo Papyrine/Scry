@@ -85,6 +85,8 @@ sealed class DisclosureSql
 
     public string Entities => read.Entities;
 
+    public string Receipt => read.Receipt;
+
     public string Shape => read.Shape;
 
     public string Field => read.Field;

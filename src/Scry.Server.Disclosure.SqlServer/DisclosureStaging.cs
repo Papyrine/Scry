@@ -42,6 +42,8 @@ sealed class DisclosureStaging(DisclosureTables sql)
         ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)), ("Version", typeof(string)));
     DataTable answers = Table(
         ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Start", typeof(int)), ("Manifest", typeof(byte[])));
+    DataTable receipts = Table(
+        ("RowHash", typeof(byte[])), ("EventId", typeof(Guid)), ("Ordinal", typeof(int)));
 
     // The lists and the runs this round has already staged, so that one named by several of its
     // batches is staged once.
@@ -137,9 +139,16 @@ sealed class DisclosureStaging(DisclosureTables sql)
             }
         }
 
+        // A row once a unit, however many of the unit's slots it fills: a row joined to itself was
+        // sent once.
+        HashSet<(int, string, string)> receipted = [];
         foreach (var entity in batch.Entities)
         {
             seen[entity.Source] = true;
+            if (receipted.Add((entity.Ordinal, entity.Source, entity.Key)))
+            {
+                receipts.Rows.Add(DisclosureSql.RowHash(entity.Source, entity.Key), batch.EventId, entity.Ordinal);
+            }
         }
 
         // The units a batch carries are kept as a list, which is kept once however many batches
@@ -329,6 +338,21 @@ sealed class DisclosureStaging(DisclosureTables sql)
             cancel);
 
         await Listed(connection, transaction, cancel);
+
+        // After the events, since a receipt is filed under when its answer was given, which a later
+        // part of a stream does not carry and its first part does.
+        await Apply(
+            connection,
+            transaction,
+            receipts,
+            "#receipt",
+            "[RowHash] binary(32) NOT NULL, [EventId] uniqueidentifier NOT NULL, [Ordinal] int NOT NULL",
+            $"""
+             INSERT INTO {sql.Receipt} ([RowHash], [At], [EventId], [Ordinal])
+             SELECT s.[RowHash], e.[At], s.[EventId], s.[Ordinal] FROM #receipt s JOIN {e} e ON e.[EventId] = s.[EventId]
+             WHERE NOT EXISTS (SELECT 1 FROM {sql.Receipt} x WHERE x.[RowHash] = s.[RowHash] AND x.[At] = e.[At] AND x.[EventId] = s.[EventId] AND x.[Ordinal] = s.[Ordinal]);
+             """,
+            cancel);
 
         // The fields before the shape they belong to, since it is the shape's being absent that
         // says its fields are.
