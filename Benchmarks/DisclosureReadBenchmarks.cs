@@ -99,7 +99,7 @@ public class DisclosureReadBenchmarks
     public async Task Cleanup() =>
         await store.DisposeAsync();
 
-    /// <summary>Who received one row: the first page of it, two hundred receipts.</summary>
+    /// <summary>Who received one row: every receipt, read a page of two hundred at a time.</summary>
     [Benchmark]
     public async Task<int> WhoReceivedARow()
     {
@@ -112,7 +112,7 @@ public class DisclosureReadBenchmarks
         return count;
     }
 
-    /// <summary>What one caller received: the first page of its events.</summary>
+    /// <summary>What one caller received: every event, a page at a time.</summary>
     [Benchmark]
     public async Task<int> WhatACallerReceived()
     {
@@ -154,7 +154,7 @@ public class DisclosureReadBenchmarks
         return count;
     }
 
-    /// <summary>Whether a caller was sent a member: the first page of the events that sent it.</summary>
+    /// <summary>Whether a caller was sent a member: every event that sent it, a page at a time.</summary>
     [Benchmark]
     public async Task<int> WasACallerSentAMember()
     {

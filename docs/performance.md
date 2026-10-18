@@ -128,7 +128,7 @@ Nor does the table show the database's share of recording. A key slot is a colum
 
 ### Asking the record
 
-What the questions the record exists for cost to ask of the SQL Server store, from `DisclosureReadBenchmarks`. This is the one benchmark with a database in it: LocalDB on the machine the rest ran on, over three records made by hand. `Repeated` is one answer of a thousand rows given five hundred times. `Drifting` is five hundred answers of a thousand rows, each one row different from the one before, which is what a live query leaves behind. `Small` is ten thousand answers of one row each. A question that is answered a page at a time is asked for its first page, two hundred lines.
+What the questions the record exists for cost to ask of the SQL Server store, from `DisclosureReadBenchmarks`. This is the one benchmark with a database in it: LocalDB on the machine the rest ran on, over three records made by hand. `Repeated` is one answer of a thousand rows given five hundred times. `Drifting` is five hundred answers of a thousand rows, each one row different from the one before, which is what a live query leaves behind. `Small` is ten thousand answers of one row each. A question that is answered a page at a time is read to its end, two hundred lines a page: who received a row of the two large records is five hundred lines, three pages, and what a caller of the small record received is a thousand, five, which is most of why the small record is the slow one for the caller's questions.
 
 Each cell is the store as it kept a list whole, then the store as it keeps a list as [runs other lists share](disclosure-audit.md#sql-server):
 
@@ -186,6 +186,32 @@ A segment also keeps its own copy of what it shares. The repeated record is 2.6 
 | Small | 14 MB | 11 MB | 3.7 s / 3.7 s |
 
 The drifting record is five hundred thousand unit rows kept whole and thirty-two thousand kept as runs: the first answer's thousand, and for each answer after it the run or two its changed row disturbs, some sixty units, with a line for each of the twenty-five runs the list is made of. A repeated answer was already one list either way and gains nothing, and an answer of one row is a run of one unit. The last column is what the mover took to bring the whole record from the outbox into the tables, once each, and is as unsteady as the timings above.
+
+### At a million answers
+
+The same questions, from `DisclosureScaleBenchmarks`, of a record the size a busy host makes: a million answers from a thousand callers, of one to ten rows each out of a hundred thousand, a second apart, so some eleven and a half days of them. Every row is in some fifty answers, and the row asked about is in ten thousand. Each caller has a thousand. A listing is asked for its first page, two hundred lines, as a screen asks it, and the row's receipts are also read to the end, as an export reads them. Each is asked with the database doing nothing else, and then while a second record in the same database takes answers from four writers and is moved on as it goes: a few thousand answers in the time each case ran.
+
+Each cell is idle / writing:
+
+| Question | 1 segment | 6 | 24 |
+| --- | --- | --- | --- |
+| Who received a row | 63 ms / 69 ms | 107 ms / 116 ms | 111 ms / 122 ms |
+| Every receipt of that row | 2.1 s / 2.4 s | 3.4 s / 3.9 s | 3.2 s / 3.4 s |
+| What a caller received | 1.2 ms / 1.7 ms | 2.0 ms / 2.6 ms | 2.0 ms / 2.3 ms |
+| Who received a row, lately | 21 ms / 25 ms | 6.0 ms / 8.0 ms | 19 ms / 20 ms |
+| What a caller received, lately | 0.40 ms / 0.62 ms | 0.44 ms / 0.66 ms | 0.58 ms / 0.85 ms |
+| Whether a caller was sent a member | 3.0 ms / 3.5 ms | 5.7 ms / 6.5 ms | 13 ms / 16 ms |
+| An answer put back together | 0.23 ms / 0.43 ms | 0.26 ms / 0.52 ms | 0.26 ms / 0.45 ms |
+
+**A record a hundred times the size asks no more of the questions about a caller or an answer.** What a caller received, whether it was sent a member and an answer put back together cost here what they cost of the records a hundredth the size above, segments and all: each is a seek of an index to what the caller or the answer holds, and the rest of the record is never read.
+
+**What a row costs is what the row has.** Who received a row has to find every answer it is in before it can say which are the newest two hundred: ten thousand here, against five hundred above. So its first page is a twentieth of a second, and each later page finds them all again, which is why reading all fifty pages takes two seconds and more, some forty times one page. That is the question to watch: a row that very many answers carried, read to its end. Asked for a span of time, only the receipts in it are found.
+
+**Segments cost a row's question half as much again, and then little more.** Six segments and twenty-four cost the row's question alike, about seventy per cent more than one, and the member question grows with them most, as it does at the smaller size. A span is asked of the segments that cover it. In twenty-four, the last twentieth is the last segment and the one before it, where in six it is the last alone, which is the difference between those two columns of the lately row.
+
+**Another record being written costs a tenth to a fifth.** The database had four writers and a mover to serve besides, and every question took a little longer for it, the questions that take a millisecond most in proportion. None changed in kind.
+
+Filled, the record is 1.2 GB in one segment, 2.8 GB in six and 4.1 GB in twenty-four, and took ten to thirteen minutes to accept and move on. Its answers repeat every hundred thousand, so in one segment each list is kept once for ten answers. In more segments it is kept once per segment, since segments share nothing, and that is most of the growth. LocalDB's limit is ten gigabytes a database, so the next size up is a server's.
 
 
 ## Reading a response

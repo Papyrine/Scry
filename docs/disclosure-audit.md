@@ -1038,7 +1038,7 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 
 ## Open questions
 
-1. **What reading costs across many segments.** An answer is put back together from its one segment, and a question about a span of time is asked only of the segments that cover any of it. A question over all time is asked of every segment kept and [grows with their number](performance.md#asking-the-record): who received a row is some four times dearer over twenty-four segments than over one, and whether a caller was sent a member some six times. Writing such a question as one statement per segment, so that what is asked of each row is asked of its own segment, was tried and was no quicker. Nothing has been measured on a record of millions of answers, or on a server with other work to do.
+1. **A row that very many answers carried.** [Measured at a million answers](performance.md#at-a-million-answers), with another record being written beside it, the questions about a caller and an answer cost what they cost of a record a hundredth the size, and segments add some seventy per cent to a row's question and little more after six. What grows is a row's own receipts: who received a row finds every answer it is in before it can say which are newest, so a row in ten thousand answers is a twentieth of a second a page, and reading all of them takes seconds, since each page finds them all again. A question with a span of time finds only the receipts in it. Whether a host's rows are ever that widely sent, and whether a row's receipts should be kept in an order that lets a page start where the last ended, is open.
 
 
 ## Later

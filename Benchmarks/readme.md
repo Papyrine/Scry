@@ -49,6 +49,8 @@ These arms carry no transport and no execution, so their absolute figures are th
 
 `DisclosureReadBenchmarks` asks the SQL Server store the questions the record exists for, over three records it fills first. It is the one benchmark here that needs a database: LocalDB's default instance, in databases named `ScryDisclosureBench_*` that it makes once and finds again. What each record weighs, table by table, is written to `scry_bench_disclosure_*.txt` in the temporary directory.
 
+`DisclosureScaleBenchmarks` asks the same questions of a million answers, in one segment, six and twenty-four, idle and with another record being written in the same database. Filling the three takes some forty minutes and 8 GB, once, in databases named `ScryDisclosureScale_*`; `SCRY_BENCH_ANSWERS` fills a smaller record to try it with. What each weighs is written to `scry_bench_scale_*.txt`.
+
 `Off` is a host that never turned the audit on, and the baseline. `Recorded` has it on over a sink that discards what it is handed, so the arm is the capture alone: each row hashed and copied into the batch, its key read and written, the batch built. `Journaled` puts the journal in front of that sink, which adds a write and a flush to disk before the answer is sent.
 
 The setup refuses to run unless all three answered with the same bytes. The hosts write no logs. A host's console lines for a request come to a few kilobytes, where recording adds under 8 KB to a one-row answer, so left on they would be a good part of the smallest difference here.
