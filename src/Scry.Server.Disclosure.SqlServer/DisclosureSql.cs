@@ -87,6 +87,21 @@ sealed class DisclosureSql
 
     public string Receipt => read.Receipt;
 
+    // The tables a unit kept in a run is gone to through, one seek after another, by what reads a
+    // single unit's rows and cannot afford the views that put every unit back at its place.
+
+    public string Entity => read.Entity;
+
+    public string Unit => read.Unit;
+
+    public string Answer => read.Answer;
+
+    public string ManifestRun => read.ManifestRun;
+
+    public string RunEntity => read.RunEntity;
+
+    public string RunUnit => read.RunUnit;
+
     public string Shape => read.Shape;
 
     public string Field => read.Field;

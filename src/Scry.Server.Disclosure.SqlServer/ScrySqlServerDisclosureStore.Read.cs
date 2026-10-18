@@ -22,13 +22,30 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         // Found by the hash, in the order receipts are filed in, and then held to the text it is a hash
         // of: the unit's first slot that is this row, which a row joined to itself is in twice and was
-        // sent in once. And only where the unit was handed on.
+        // sent in once. Gone to by seeks alone. A unit kept as its batch's own is found by its place.
+        // One kept in a run is found by going to the part of the answer it is in, the run of that
+        // part's list it is in, and its offset there, each the last that starts at or before it,
+        // since a unit's place in an answer is the three starts added up and no index can seek that.
         var unit =
             $"""
-             CROSS APPLY (SELECT TOP (1) m.[Ordinal], m.[Content], m.[Via], m.[Version] FROM {sql.Entities} m
-                          WHERE m.[EventId] = t.[EventId] AND m.[Segment] = t.[Segment] AND m.[Ordinal] = t.[Ordinal]
-                            AND m.[RowHash] = t.[RowHash] AND m.[Source] = @source AND m.[RowKey] = @key
-                          ORDER BY m.[Slot]) n
+             CROSS APPLY (SELECT TOP (1) m.[Content], m.[Via], m.[Version] FROM
+             (
+                 SELECT k.[Slot], u.[Content], k.[Via], k.[Version] FROM {sql.Entity} k
+                 JOIN {sql.Unit} u ON u.[EventId] = k.[EventId] AND u.[Ordinal] = k.[Ordinal] AND u.[Segment] = k.[Segment]
+                 WHERE k.[EventId] = t.[EventId] AND k.[Segment] = t.[Segment] AND k.[Ordinal] = t.[Ordinal]
+                   AND k.[RowHash] = t.[RowHash] AND k.[Source] = @source AND k.[RowKey] = @key
+                 UNION ALL
+                 SELECT r.[Slot], u.[Content], r.[Via], r.[Version]
+                 FROM (SELECT TOP (1) a.[Manifest], a.[Start] FROM {sql.Answer} a
+                       WHERE a.[EventId] = t.[EventId] AND a.[Segment] = t.[Segment] AND a.[Start] <= t.[Ordinal]
+                       ORDER BY a.[Start] DESC) a
+                 CROSS APPLY (SELECT TOP (1) l.[Run], l.[Start] FROM {sql.ManifestRun} l
+                              WHERE l.[Manifest] = a.[Manifest] AND l.[Segment] = t.[Segment] AND l.[Start] <= t.[Ordinal] - a.[Start]
+                              ORDER BY l.[Start] DESC) l
+                 JOIN {sql.RunEntity} r ON r.[Run] = l.[Run] AND r.[Segment] = t.[Segment] AND r.[Offset] = t.[Ordinal] - a.[Start] - l.[Start]
+                 JOIN {sql.RunUnit} u ON u.[Run] = r.[Run] AND u.[Offset] = r.[Offset] AND u.[Segment] = t.[Segment]
+                 WHERE r.[RowHash] = t.[RowHash] AND r.[Source] = @source AND r.[RowKey] = @key
+             ) m ORDER BY m.[Slot]) n
              """;
 
         // Where the question names a span or a page goes on from the last, said as conditions on the
@@ -79,7 +96,7 @@ public sealed partial class ScrySqlServerDisclosureStore
                  (
                      SELECT * FROM
                      (
-                         SELECT TOP (@page) {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
+                         SELECT TOP (@page) {sql.Columns}, t.[Ordinal], n.[Content], n.[Via],
                                 CAST(NULL AS uniqueidentifier) AS [ReviewId], CAST(NULL AS datetimeoffset(7)) AS [ReviewedAt], CAST(NULL AS nvarchar(max)) AS [Reviewer],
                                 CAST(NULL AS tinyint) AS [Question], CAST(NULL AS binary(32)) AS [Parameters], CAST(NULL AS int) AS [Results], CAST(NULL AS nvarchar(max)) AS [ReviewNode],
                                 t.[At] AS [When], t.[EventId] AS [Mark], n.[Version]
@@ -93,7 +110,7 @@ public sealed partial class ScrySqlServerDisclosureStore
                      UNION ALL
                      SELECT * FROM
                      (
-                         SELECT TOP (@page) {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
+                         SELECT TOP (@page) {sql.Columns}, t.[Ordinal], n.[Content], n.[Via],
                                 r.[ReviewId], r.[At] AS [ReviewedAt], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node] AS [ReviewNode],
                                 r.[At] AS [When], r.[ReviewId] AS [Mark], n.[Version]
                          FROM {sql.Review} r
