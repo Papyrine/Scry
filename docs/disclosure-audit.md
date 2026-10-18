@@ -1039,4 +1039,8 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 ## Open questions
 
 1. **What reading costs across many segments.** An answer is put back together from its one segment, and a question about a span of time is asked only of the segments that cover any of it. A question over all time is asked of every segment kept and [grows with their number](performance.md#asking-the-record): who received a row is some four times dearer over twenty-four segments than over one, and whether a caller was sent a member some six times. Writing such a question as one statement per segment, so that what is asked of each row is asked of its own segment, was tried and was no quicker. Nothing has been measured on a record of millions of answers, or on a server with other work to do.
-2. **Retention by source.** A segment is retired whole, by count or by age, so every source's rows are kept as long as each other's. A source whose rows may be kept for less time than the rest has no setting of its own. The in-memory store keeps everything, and shares nothing between answers.
+
+
+## Later
+
+- **Retention by source.** A segment is retired whole, by count or by age, so every source's rows are kept as long as each other's, and a source whose rows may be kept for less time than the rest has no setting of its own. Not built, deliberately for now. Until then, a host whose sources need different periods sets `Keep` or `KeepFor` to the shortest of them, which retires every source's rows that soon, or erases a source's rows as their period ends. Nothing here is in its way: every unit names the source of each row it was read from, so a later version can retire a source's rows within a segment, or keep a source's answers in segments of their own. The in-memory store keeps everything, and shares nothing between answers.
