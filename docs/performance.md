@@ -141,7 +141,7 @@ Each cell is the store as it kept a list whole, then the store as it keeps a lis
 
 **Reading through runs costs nothing that shows here.** A unit's place in an answer is added up from where its batch, its list and its run start, which is two more joins than a list kept whole needed, and no question is slower for it by more than the runs differ between themselves. These are timings of a database on a developer's machine and they move: the same build measured twice, a few minutes apart, gave figures a third apart and in one case two thirds apart. So the table says the two are alike, and does not say which is quicker. The one gain that is the code's is the first row of it. Asking who received a row has to count a row once where a unit was read from it twice, and that check now looks within the run the unit is in, where it used to search every answer the row was in.
 
-**Every segment kept is another place to look, unless the question says when.** The record is since kept in [segments](disclosure-audit.md#sql-server), and every question is asked of a view over all of them. The same three records, with their answers shared out evenly between one segment, six and twenty-four, in the order they were given:
+**Every segment kept is another place to look, unless the question says when.** The record is since kept in [segments](disclosure-audit.md#sql-server), and every question is asked of a view over all of them. The figures for who received a row, here and in the two tables after, are from before [a row's receipts were filed in time order](#a-rows-receipts-in-time-order), which changed that question and no other. The same three records, with their answers shared out evenly between one segment, six and twenty-four, in the order they were given:
 
 | Question | Record | 1 segment | 6 | 24 |
 | --- | --- | --- | --- | --- |
@@ -205,13 +205,51 @@ Each cell is idle / writing:
 
 **A record a hundred times the size asks no more of the questions about a caller or an answer.** What a caller received, whether it was sent a member and an answer put back together cost here what they cost of the records a hundredth the size above, segments and all: each is a seek of an index to what the caller or the answer holds, and the rest of the record is never read.
 
-**What a row costs is what the row has.** Who received a row has to find every answer it is in before it can say which are the newest two hundred: ten thousand here, against five hundred above. So its first page is a twentieth of a second, and each later page finds them all again, which is why reading all fifty pages takes two seconds and more, some forty times one page. That is the question to watch: a row that very many answers carried, read to its end. Asked for a span of time, only the receipts in it are found.
+**What a row costs was what the row has.** Measured here, who received a row had to find every answer it is in before it could say which are the newest two hundred: ten thousand here, against five hundred above. So its first page was a twentieth of a second, and each later page found them all again, which is why reading all fifty pages took two seconds and more, some forty times one page. That is what [filing a row's receipts in time order](#a-rows-receipts-in-time-order) is for.
 
 **Segments cost a row's question half as much again, and then little more.** Six segments and twenty-four cost the row's question alike, about seventy per cent more than one, and the member question grows with them most, as it does at the smaller size. A span is asked of the segments that cover it. In twenty-four, the last twentieth is the last segment and the one before it, where in six it is the last alone, which is the difference between those two columns of the lately row.
 
 **Another record being written costs a tenth to a fifth.** The database had four writers and a mover to serve besides, and every question took a little longer for it, the questions that take a millisecond most in proportion. None changed in kind.
 
 Filled, the record is 1.2 GB in one segment, 2.8 GB in six and 4.1 GB in twenty-four, and took ten to thirteen minutes to accept and move on. Its answers repeat every hundred thousand, so in one segment each list is kept once for ten answers. In more segments it is kept once per segment, since segments share nothing, and that is most of the growth. LocalDB's limit is ten gigabytes a database, so the next size up is a server's.
+
+
+### A row's receipts in time order
+
+Who received a row is since read from `DisclosureReceipt`, which files each row a unit was read from by when its answer was given, newest first, and a page is read in two steps: the page of receipts from that table alone, then what was sent in them from each segment the page reaches, named in the statement. Measured in one session on one machine, the commit before receipts against the commit after, the database idle.
+
+At a million answers:
+
+| Question | 1 segment | 6 | 24 |
+| --- | --- | --- | --- |
+| Who received a row | 63 ms → 4.5 ms | 107 ms → 5.5 ms | 111 ms → 13 ms |
+| Every receipt of that row | 2.1 s → 0.26 s | 3.4 s → 0.29 s | 3.2 s → 0.64 s |
+| Who received a row, lately | 21 ms → 4.9 ms | 6.0 ms → 5.2 ms | 19 ms → 7.8 ms |
+
+And of the three smaller records, a row in five hundred answers in the first two and in a hundred in the third, read to its end:
+
+| Question | Record | 1 segment | 6 | 24 |
+| --- | --- | --- | --- | --- |
+| Who received a row | Repeated | 11 ms → 11 ms | 18 ms → 17 ms | 49 ms → 34 ms |
+| | Drifting | 13 ms → 9.9 ms | 18 ms → 13 ms | 44 ms → 32 ms |
+| | Small | 2.3 ms → 2.9 ms | 4.3 ms → 5.6 ms | 17 ms → 13 ms |
+| Who received a row, lately | Repeated | 1.7 ms → 1.4 ms | 1.0 ms → 1.4 ms | 1.3 ms → 6.3 ms |
+| | Drifting | 2.6 ms → 0.85 ms | 1.1 ms → 0.89 ms | 1.3 ms → 7.0 ms |
+| | Small | 1.4 ms → 0.68 ms | 0.59 ms → 3.5 ms | 7.3 ms → 6.9 ms |
+
+**A page is now a page's worth of work.** A row in ten thousand answers is a page in a few milliseconds and all of it in a quarter of a second, against a twentieth of a second and seconds. Twenty-four segments still cost more than one, since a page of receipts is read from a view over all of them, but the receipts are the only thing read of every segment: what was sent in them is read of the segments the page reaches, which is one or two. The smaller records, whose rows have a page or three of receipts, are as quick as before or quicker. The one question slower for it is a span of time over many segments, a few milliseconds where it was one, since a page of receipts in a span is read through the view as every page is.
+
+**Receipts are the one part of the record that grows with every row sent.** A receipt is some 105 to 112 bytes. Runs keep a row once however many answers carried it; receipts keep it once an answer, which is the price of being able to say in order who received it. Where answers repeat a few large lists it is most of the record:
+
+| Record | Before | With receipts | Of which receipts |
+| --- | --- | --- | --- |
+| Repeated, 1 segment | 2.6 MB | 54 MB | 52 MB |
+| Drifting, 1 segment | 20 MB | 72 MB | 52 MB |
+| Small, 1 segment | 15 MB | 12 MB | 1.1 MB |
+| A million answers, 1 segment | 1.2 GB | 1.8 GB | 0.6 GB |
+| A million answers, 24 segments | 4.1 GB | 4.7 GB | 0.6 GB |
+
+The small record reads smaller than before because it was filled again; its receipts are a tenth of it. Filling the million answers took 13 to 19 minutes, where it took 10 to 13.
 
 
 ## Reading a response
