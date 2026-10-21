@@ -65,8 +65,13 @@ public class DisclosureScaleBenchmarks
     public int Segments { get; set; } = 1;
 
     /// <summary>Whether the database has nothing else to do, or is taking another record as well.</summary>
-    [Params("Idle", "Writing")]
+    [ParamsSource(nameof(Loads))]
     public string Load { get; set; } = "Idle";
+
+    // Both, unless SCRY_BENCH_LOADS names fewer: a comparison of one change against the last needs
+    // only the idle database.
+    public static IEnumerable<string> Loads =>
+        Environment.GetEnvironmentVariable("SCRY_BENCH_LOADS")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? ["Idle", "Writing"];
 
     [GlobalSetup]
     public async Task Setup()

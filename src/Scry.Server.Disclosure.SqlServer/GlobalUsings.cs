@@ -1,6 +1,7 @@
 global using System.Buffers;
 global using System.Buffers.Binary;
 global using System.Data;
+global using System.Data.SqlTypes;
 global using System.Diagnostics;
 global using System.Globalization;
 global using System.Runtime.InteropServices;

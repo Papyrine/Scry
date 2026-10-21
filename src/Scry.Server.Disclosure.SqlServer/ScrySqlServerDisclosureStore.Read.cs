@@ -19,34 +19,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         await EnsureAsync(cancel);
         await Caught(cancel);
         var text = ScryDisclosureEntity.KeyOf(key);
-
-        // Found by the hash, in the order receipts are filed in, and then held to the text it is a hash
-        // of: the unit's first slot that is this row, which a row joined to itself is in twice and was
-        // sent in once. Gone to by seeks alone. A unit kept as its batch's own is found by its place.
-        // One kept in a run is found by going to the part of the answer it is in, the run of that
-        // part's list it is in, and its offset there, each the last that starts at or before it,
-        // since a unit's place in an answer is the three starts added up and no index can seek that.
-        var unit =
-            $"""
-             CROSS APPLY (SELECT TOP (1) m.[Content], m.[Via], m.[Version] FROM
-             (
-                 SELECT k.[Slot], u.[Content], k.[Via], k.[Version] FROM {sql.Entity} k
-                 JOIN {sql.Unit} u ON u.[EventId] = k.[EventId] AND u.[Ordinal] = k.[Ordinal] AND u.[Segment] = k.[Segment]
-                 WHERE k.[EventId] = t.[EventId] AND k.[Segment] = t.[Segment] AND k.[Ordinal] = t.[Ordinal]
-                   AND k.[RowHash] = t.[RowHash] AND k.[Source] = @source AND k.[RowKey] = @key
-                 UNION ALL
-                 SELECT r.[Slot], u.[Content], r.[Via], r.[Version]
-                 FROM (SELECT TOP (1) a.[Manifest], a.[Start] FROM {sql.Answer} a
-                       WHERE a.[EventId] = t.[EventId] AND a.[Segment] = t.[Segment] AND a.[Start] <= t.[Ordinal]
-                       ORDER BY a.[Start] DESC) a
-                 CROSS APPLY (SELECT TOP (1) l.[Run], l.[Start] FROM {sql.ManifestRun} l
-                              WHERE l.[Manifest] = a.[Manifest] AND l.[Segment] = t.[Segment] AND l.[Start] <= t.[Ordinal] - a.[Start]
-                              ORDER BY l.[Start] DESC) l
-                 JOIN {sql.RunEntity} r ON r.[Run] = l.[Run] AND r.[Segment] = t.[Segment] AND r.[Offset] = t.[Ordinal] - a.[Start] - l.[Start]
-                 JOIN {sql.RunUnit} u ON u.[Run] = r.[Run] AND u.[Offset] = r.[Offset] AND u.[Segment] = t.[Segment]
-                 WHERE r.[RowHash] = t.[RowHash] AND r.[Source] = @source AND r.[RowKey] = @key
-             ) m ORDER BY m.[Slot]) n
-             """;
+        var row = DisclosureSql.RowHash(source, text);
 
         // Where the question names a span or a page goes on from the last, said as conditions on the
         // order the rows are listed in, and only then: a condition that may say nothing is one the
@@ -77,105 +50,228 @@ public sealed partial class ScrySqlServerDisclosureStore
             return $" AND {at} <= @afterAt AND ({at} < @afterAt OR ({at} = @afterAt AND ({id} < @afterId OR ({id} = @afterId AND {ordinal} > @afterOrdinal))))";
         }
 
+        void Parameters(SqlCommand command)
+        {
+            command.Parameters.AddWithValue("@page", page);
+            command.Parameters.Add(new("@row", SqlDbType.Binary, 32) {Value = row});
+            command.Parameters.Add(new("@source", SqlDbType.NVarChar, -1) {Value = source});
+            command.Parameters.Add(new("@key", SqlDbType.NVarChar, -1) {Value = text});
+            command.Parameters.Add(new("@from", SqlDbType.DateTimeOffset) {Value = Value(from)});
+            command.Parameters.Add(new("@to", SqlDbType.DateTimeOffset) {Value = Value(to)});
+            After(command, after);
+        }
+
         while (true)
         {
             // A release of the row, and — for every reviewer since shown an event that released it —
             // the showing. Both cut at how far the event really got: a unit accepted and never handed
             // on is not a disclosure, to its caller or to anybody shown the event afterwards.
             //
-            // Each is read in the order it is listed in and stops at a page: a release from the row's
-            // receipts, newest first, and a showing from the reviews, newest first, each kept only
-            // where it showed an answer the row is a receipt of. Each looked for only in the segments
-            // its time can be in.
+            // Releases in two steps. First the page of the row's receipts, newest first, from the
+            // receipts alone: a seek that stops at a page, whatever the number of segments. Then,
+            // for each segment the page reaches, what was sent in those receipts, from that
+            // segment's own tables named in the statement: asked of the views, every receipt's
+            // event, close and unit would be looked for in every segment there is.
             var until = Earlier(to, after?.At);
             var releases = await Within("t", from, until, cancel);
             var showings = await Within("r", from, until, cancel);
-            var query =
-                $"""
-                 SELECT TOP (@page) q.* FROM
-                 (
-                     SELECT * FROM
-                     (
-                         SELECT TOP (@page) {sql.Columns}, t.[Ordinal], n.[Content], n.[Via],
-                                CAST(NULL AS uniqueidentifier) AS [ReviewId], CAST(NULL AS datetimeoffset(7)) AS [ReviewedAt], CAST(NULL AS nvarchar(max)) AS [Reviewer],
-                                CAST(NULL AS tinyint) AS [Question], CAST(NULL AS binary(32)) AS [Parameters], CAST(NULL AS int) AS [Results], CAST(NULL AS nvarchar(max)) AS [ReviewNode],
-                                t.[At] AS [When], t.[EventId] AS [Mark], n.[Version]
-                         FROM {sql.Receipt} t
-                         JOIN {sql.Event} e ON e.[EventId] = t.[EventId] AND e.[Segment] = t.[Segment]
-                         {sql.Ended}
-                         {unit}
-                         WHERE t.[RowHash] = @row AND (c.[Units] IS NULL OR t.[Ordinal] < c.[Units]){releases}{Span("t")}{Seek("t.[At]", "t.[EventId]", "t.[Ordinal]")}
-                         ORDER BY t.[At] DESC, t.[EventId] DESC, t.[Ordinal]
-                     ) a
-                     UNION ALL
-                     SELECT * FROM
-                     (
-                         SELECT TOP (@page) {sql.Columns}, t.[Ordinal], n.[Content], n.[Via],
-                                r.[ReviewId], r.[At] AS [ReviewedAt], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node] AS [ReviewNode],
-                                r.[At] AS [When], r.[ReviewId] AS [Mark], n.[Version]
-                         FROM {sql.Review} r
-                         JOIN {sql.ReviewEvent} v ON v.[ReviewId] = r.[ReviewId] AND v.[Segment] = r.[Segment]
-                         JOIN {sql.Event} e ON e.[EventId] = v.[EventId]
-                         {sql.Ended}
-                         JOIN {sql.Receipt} t ON t.[RowHash] = @row AND t.[At] = e.[At] AND t.[EventId] = e.[EventId] AND t.[Segment] = e.[Segment]
-                         {unit}
-                         WHERE (c.[Units] IS NULL OR t.[Ordinal] < c.[Units]){showings}{Span("r")}{Seek("r.[At]", "r.[ReviewId]", "t.[Ordinal]")}
-                         ORDER BY r.[At] DESC, r.[ReviewId] DESC, t.[Ordinal]
-                     ) b
-                 ) q
-                 ORDER BY q.[When] DESC, q.[Mark] DESC, q.[Ordinal];
-                 """;
-            var read = new List<ScryRowDisclosure>(page);
+            var receipts = new List<(int Segment, DateTimeOffset At, Guid EventId, int Ordinal)>(page);
+            var shown = new List<ScryRowDisclosure>();
             await using (var connection = await OpenAsync(cancel))
-            await using (var command = Command(connection, query))
             {
-                command.Parameters.AddWithValue("@page", page);
-                command.Parameters.Add(new("@row", SqlDbType.Binary, 32) {Value = DisclosureSql.RowHash(source, text)});
-                command.Parameters.Add(new("@source", SqlDbType.NVarChar, -1) {Value = source});
-                command.Parameters.Add(new("@key", SqlDbType.NVarChar, -1) {Value = text});
-                command.Parameters.Add(new("@from", SqlDbType.DateTimeOffset) {Value = Value(from)});
-                command.Parameters.Add(new("@to", SqlDbType.DateTimeOffset) {Value = Value(to)});
-                After(command, after);
-                await using var reader = await command.ExecuteReaderAsync(cancel);
-                while (await reader.ReadAsync(cancel))
+                await using (var command = Command(
+                                 connection,
+                                 $"""
+                                  SELECT TOP (@page) t.[Segment], t.[At], t.[EventId], t.[Ordinal] FROM {sql.Receipt} t
+                                  WHERE t.[RowHash] = @row{releases}{Span("t")}{Seek("t.[At]", "t.[EventId]", "t.[Ordinal]")}
+                                  ORDER BY t.[At] DESC, t.[EventId] DESC, t.[Ordinal];
+                                  """))
                 {
-                    var disclosed = Event(reader);
-                    var row = new ScryRowDisclosure(disclosed, reader.GetInt32(19), ScryDisclosureAddress.From((byte[]) reader[20]), reader.GetString(21))
+                    Parameters(command);
+                    await using var reader = await command.ExecuteReaderAsync(cancel);
+                    while (await reader.ReadAsync(cancel))
                     {
-                        Close = Closed(reader),
-                        Version = Text(reader, 31)
-                    };
-                    if (!reader.IsDBNull(22))
-                    {
-                        row = row with
-                        {
-                            Review = new(reader.GetGuid(22), reader.GetDateTimeOffset(23), (ScryDisclosureQuestion) reader.GetByte(25))
-                            {
-                                Reviewer = Text(reader, 24),
-                                Parameters = Address(reader, 26),
-                                Results = reader.GetInt32(27),
-                                Events = [disclosed.Id],
-                                Node = Text(reader, 28)
-                            }
-                        };
+                        receipts.Add((reader.GetInt32(0), reader.GetDateTimeOffset(1), reader.GetGuid(2), reader.GetInt32(3)));
                     }
+                }
 
-                    read.Add(row);
+                // A showing from the reviews, newest first, kept where it showed an answer the row is
+                // a receipt of. Reviews are few beside answers, so this is asked of the views whole.
+                await using (var command = Command(
+                                 connection,
+                                 $"""
+                                  SELECT TOP (@page) {sql.Columns}, t.[Ordinal], n.[Content], n.[Via], n.[Version],
+                                         r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node]
+                                  FROM {sql.Review} r
+                                  JOIN {sql.ReviewEvent} v ON v.[ReviewId] = r.[ReviewId] AND v.[Segment] = r.[Segment]
+                                  JOIN {sql.Event} e ON e.[EventId] = v.[EventId]
+                                  {sql.Ended}
+                                  JOIN {sql.Receipt} t ON t.[RowHash] = @row AND t.[At] = e.[At] AND t.[EventId] = e.[EventId] AND t.[Segment] = e.[Segment]
+                                  {Unit("t.[EventId]", "t.[Ordinal]", "t.[RowHash]", sql.Entity, sql.Unit, sql.Answer, sql.ManifestRun, sql.RunEntity, sql.RunUnit, "t.[Segment]")}
+                                  WHERE (c.[Units] IS NULL OR t.[Ordinal] < c.[Units]){showings}{Span("r")}{Seek("r.[At]", "r.[ReviewId]", "t.[Ordinal]")}
+                                  ORDER BY r.[At] DESC, r.[ReviewId] DESC, t.[Ordinal];
+                                  """))
+                {
+                    Parameters(command);
+                    await using var reader = await command.ExecuteReaderAsync(cancel);
+                    while (await reader.ReadAsync(cancel))
+                    {
+                        var disclosed = Event(reader);
+                        shown.Add(
+                            new(disclosed, reader.GetInt32(19), ScryDisclosureAddress.From((byte[]) reader[20]), reader.GetString(21))
+                            {
+                                Close = Closed(reader),
+                                Version = Text(reader, 22),
+                                Review = new(reader.GetGuid(23), reader.GetDateTimeOffset(24), (ScryDisclosureQuestion) reader.GetByte(26))
+                                {
+                                    Reviewer = Text(reader, 25),
+                                    Parameters = Address(reader, 27),
+                                    Results = reader.GetInt32(28),
+                                    Events = [disclosed.Id],
+                                    Node = Text(reader, 29)
+                                }
+                            });
+                    }
                 }
             }
 
-            foreach (var row in read)
+            var released = await Released(receipts, row, source, text, cancel);
+
+            // The two merged in the order the record lists them, which is SQL Server's: a
+            // uniqueidentifier sorts by its last bytes first.
+            var merged = released
+                .Concat(shown)
+                .OrderByDescending(Listed)
+                .ThenByDescending(_ => new SqlGuid(_.Review?.Id ?? _.Event.Id))
+                .ThenBy(_ => _.Ordinal)
+                .ToList();
+            var read = merged.Take(page).ToList();
+            foreach (var each in read)
             {
-                yield return row;
+                yield return each;
             }
 
-            if (read.Count < page)
+            // More where either list was cut at a page, or the merge was.
+            if (receipts.Count < page &&
+                shown.Count < page &&
+                merged.Count <= page)
             {
                 yield break;
             }
 
-            after = ScryDisclosureCursor.After(read[^1]);
+            if (read.Count > 0)
+            {
+                after = ScryDisclosureCursor.After(read[^1]);
+                continue;
+            }
+
+            // A page of receipts none of which was handed on: on from the last of them.
+            var (_, at, id, ordinal) = receipts[^1];
+            after = new(at, id, ordinal);
         }
+    }
+
+    static DateTimeOffset Listed(ScryRowDisclosure row) =>
+        row.Review?.At ?? row.Event.At;
+
+    // What was sent in each of a page of a row's receipts: its event, how the event ended, and the
+    // unit. One statement for each segment the page reaches, of that segment's own tables, with the
+    // receipts it holds written into it. A receipt whose unit was never handed on is left out.
+    async Task<List<ScryRowDisclosure>> Released(
+        List<(int Segment, DateTimeOffset At, Guid EventId, int Ordinal)> receipts,
+        byte[] row,
+        string source,
+        string text,
+        Cancel cancel)
+    {
+        var found = new List<ScryRowDisclosure>(receipts.Count);
+        if (receipts.Count == 0)
+        {
+            return found;
+        }
+
+        await using var connection = await OpenAsync(cancel);
+        foreach (var segment in receipts.GroupBy(_ => _.Segment))
+        {
+            var tables = sql.Segment(segment.Key);
+            var wanted = string.Join(", ", segment.Select(_ => $"(CAST('{_.EventId:D}' AS uniqueidentifier), {_.Ordinal.ToString(CultureInfo.InvariantCulture)})"));
+            await using var command = Command(
+                connection,
+                $"""
+                 SELECT {sql.Columns}, w.[Ordinal], n.[Content], n.[Via], n.[Version]
+                 FROM (VALUES {wanted}) w ([EventId], [Ordinal])
+                 JOIN {tables.Event} e ON e.[EventId] = w.[EventId]
+                 OUTER APPLY (SELECT TOP (1) x.[Outcome], x.[Units], x.[At] AS [ClosedAt], x.[Response] FROM {tables.Close} x WHERE x.[EventId] = e.[EventId] ORDER BY x.[Sequence] DESC) c
+                 {Unit("w.[EventId]", "w.[Ordinal]", "@row", tables.Entity, tables.Unit, tables.Answer, tables.ManifestRun, tables.RunEntity, tables.RunUnit, null)}
+                 WHERE c.[Units] IS NULL OR w.[Ordinal] < c.[Units];
+                 """);
+            command.Parameters.Add(new("@row", SqlDbType.Binary, 32) {Value = row});
+            command.Parameters.Add(new("@source", SqlDbType.NVarChar, -1) {Value = source});
+            command.Parameters.Add(new("@key", SqlDbType.NVarChar, -1) {Value = text});
+            await using var reader = await command.ExecuteReaderAsync(cancel);
+            while (await reader.ReadAsync(cancel))
+            {
+                found.Add(
+                    new(Event(reader), reader.GetInt32(19), ScryDisclosureAddress.From((byte[]) reader[20]), reader.GetString(21))
+                    {
+                        Close = Closed(reader),
+                        Version = Text(reader, 22)
+                    });
+            }
+        }
+
+        return found;
+    }
+
+    // The unit a receipt names, held to the row it is a receipt of: the unit's first slot that is this
+    // row, which a row joined to itself is in twice and was sent in once. Gone to by seeks alone. A
+    // unit kept as its batch's own is found by its place. One kept in a run is found by going to the
+    // part of the answer it is in, the run of that part's list it is in, and its offset there, each
+    // the last that starts at or before it, since a unit's place in an answer is the three starts
+    // added up and no index can seek that. Of one segment's tables where segment is null, and of the
+    // views over every segment, held to that segment, where it names one.
+    static string Unit(
+        string eventId,
+        string ordinal,
+        string rowHash,
+        string entity,
+        string unit,
+        string answer,
+        string manifestRun,
+        string runEntity,
+        string runUnit,
+        string? segment)
+    {
+        string In(string alias)
+        {
+            if (segment is null)
+            {
+                return "";
+            }
+
+            return $" AND {alias}.[Segment] = {segment}";
+        }
+
+        return $"""
+                CROSS APPLY (SELECT TOP (1) m.[Content], m.[Via], m.[Version] FROM
+                (
+                    SELECT k.[Slot], u.[Content], k.[Via], k.[Version] FROM {entity} k
+                    JOIN {unit} u ON u.[EventId] = k.[EventId] AND u.[Ordinal] = k.[Ordinal]{In("u")}
+                    WHERE k.[EventId] = {eventId}{In("k")} AND k.[Ordinal] = {ordinal}
+                      AND k.[RowHash] = {rowHash} AND k.[Source] = @source AND k.[RowKey] = @key
+                    UNION ALL
+                    SELECT r.[Slot], u.[Content], r.[Via], r.[Version]
+                    FROM (SELECT TOP (1) a.[Manifest], a.[Start] FROM {answer} a
+                          WHERE a.[EventId] = {eventId}{In("a")} AND a.[Start] <= {ordinal}
+                          ORDER BY a.[Start] DESC) a
+                    CROSS APPLY (SELECT TOP (1) l.[Run], l.[Start] FROM {manifestRun} l
+                                 WHERE l.[Manifest] = a.[Manifest]{In("l")} AND l.[Start] <= {ordinal} - a.[Start]
+                                 ORDER BY l.[Start] DESC) l
+                    JOIN {runEntity} r ON r.[Run] = l.[Run]{In("r")} AND r.[Offset] = {ordinal} - a.[Start] - l.[Start]
+                    JOIN {runUnit} u ON u.[Run] = r.[Run] AND u.[Offset] = r.[Offset]{In("u")}
+                    WHERE r.[RowHash] = {rowHash} AND r.[Source] = @source AND r.[RowKey] = @key
+                ) m ORDER BY m.[Slot]) n
+                """;
     }
 
     /// <inheritdoc />
