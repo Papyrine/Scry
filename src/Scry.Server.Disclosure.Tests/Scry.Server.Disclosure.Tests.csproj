@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <!--
+    The disclosure audit's stores, against a real SQL Server LocalDB. A project of its own so that a
+    database driver stays out of Scry.Tests, and a model of its own for the reason every test project
+    here has one: the schema is read off a whole assembly, so a source added for these tests would
+    join every context in whichever assembly it was added to.
+  -->
+  <ItemGroup>
+    <PackageReference Include="TUnit" />
+    <PackageReference Include="Verify.TUnit" />
+    <PackageReference Include="EfLocalDb" />
+    <PackageReference Include="DiffEngine" />
+    <!-- The disclosure explorer's questions, asked over HTTP without a browser or a port. -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <ProjectReference Include="..\Scry.Annotations\Scry.Annotations.csproj" />
+    <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
+    <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
+    <ProjectReference Include="..\Scry.Server.Disclosure.SqlServer\Scry.Server.Disclosure.SqlServer.csproj" />
+    <ProjectReference Include="..\Scry.Server.Disclosure.Explorer\Scry.Server.Disclosure.Explorer.csproj" />
+  </ItemGroup>
+</Project>

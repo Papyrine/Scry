@@ -72,6 +72,21 @@ public sealed partial class ScryProcessor
             CommandStatus.Failed => "failed",
             _ => "pending"
         };
+
+        // On record before it is handed on, like every answer. The command has been accepted and
+        // runs to its end whatever happens here: what a sink that refuses costs is being told how it
+        // stood, and the caller can ask again by id.
+        try
+        {
+            await DiscloseReceipt(record, first, caller, services, cancel);
+        }
+        catch (Exception exception)
+        {
+            CommandRecorder.Answered(activity, request.Command, "failed", Stopwatch.GetElapsedTime(started), exception.Message);
+            Audit(services, request, ScryQueryOutcome.Failed, first.Status, Stopwatch.GetElapsedTime(started), exception.Message, staleClient: false);
+            throw;
+        }
+
         CommandRecorder.Answered(activity, request.Command, outcome, Stopwatch.GetElapsedTime(started), first.Error);
         Audit(services, request, first.Status == CommandStatus.Failed ? ScryQueryOutcome.Failed : ScryQueryOutcome.Success, first.Status, Stopwatch.GetElapsedTime(started), Error(record, first), staleClient: false);
 
@@ -81,7 +96,9 @@ public sealed partial class ScryProcessor
             yield break;
         }
 
-        yield return await record.Completion.WaitAsync(cancel);
+        var landed = await record.Completion.WaitAsync(cancel);
+        await DiscloseReceipt(record, landed, caller, services, cancel);
+        yield return landed;
     }
 
     /// <summary>
@@ -99,20 +116,34 @@ public sealed partial class ScryProcessor
         var record = tracker.Find(id, caller) ??
                      throw new ScryCommandNotFoundException(ScryCommandNotFoundException.CommandMessage);
         var current = record.Current;
+
+        // Asked for again is told again, and each telling is one more time the caller was sent it.
+        // There are no services to say who is asking here, so it is whoever the transport named.
+        await DiscloseReceipt(record, current, caller, EmptyServiceProvider.Instance, cancel);
         yield return current;
         if (current.Status != CommandStatus.Pending)
         {
             yield break;
         }
 
-        yield return await record.Completion.WaitAsync(cancel);
+        var landed = await record.Completion.WaitAsync(cancel);
+        await DiscloseReceipt(record, landed, caller, EmptyServiceProvider.Instance, cancel);
+        yield return landed;
     }
 
     /// <summary>
     /// The commands this caller may send at all: every command this host serves whose policy allows
     /// them. Advisory — each command is decided again when it is sent.
     /// </summary>
-    public CommandCapabilities Capabilities(DbContext data, IServiceProvider services, IHeaderDictionary requestHeaders)
+    public CommandCapabilities Capabilities(DbContext data, IServiceProvider services, IHeaderDictionary requestHeaders) =>
+        Capabilities(data, services, requestHeaders, caller: null);
+
+    /// <summary>
+    /// The same, saying who is asking: what the disclosure audit records the answer under, where it
+    /// is on. A transport that knows its caller says so; one that passes null leaves it to
+    /// <see cref="ScryDisclosureOptions.Caller"/>.
+    /// </summary>
+    public CommandCapabilities Capabilities(DbContext data, IServiceProvider services, IHeaderDictionary requestHeaders, string? caller)
     {
         // Commands off: nothing is served, so there is nothing to send.
         if (options.MaxPendingCommands <= 0)
@@ -126,7 +157,20 @@ public sealed partial class ScryProcessor
                         (_.Policy is null || CommandPolicy.Allow(_.Policy, _.ClrType, context)))
             .Select(_ => _.Name)
             .ToList();
-        return CommandCapabilities.Create(allowed, schema.Stamp);
+        var capabilities = CommandCapabilities.Create(allowed, schema.Stamp);
+        if (disclosure is null)
+        {
+            return capabilities;
+        }
+
+        // What a caller may do is something about the caller, decided by policies that read the
+        // request: who was told it is recorded as any other answer is.
+        using var capture = disclosure.Begin(request: null, source: "", caller, services);
+        capture.Begin(ScryDisclosureKind.Capabilities);
+        capture.AddUnit(ScryDisclosureContentKind.Capabilities, ScryJson.SerializeToUtf8(capabilities));
+        capture.Commit();
+        capture.Released();
+        return capabilities;
     }
 
     /// <summary>
@@ -226,6 +270,16 @@ public sealed partial class ScryProcessor
             }
 
             var record = tracker.Accept(request, meta, caller);
+
+            // The row the command was sent against, as the disclosure audit names rows: worked out
+            // here, where the model that says what order a key is in is to hand, and kept with the
+            // command for every receipt it is ever answered with.
+            if (options.Disclosure is { } audit &&
+                meta.Target is { } aimed)
+            {
+                record.DisclosureKey = DisclosurePlanner.OrderedKey(data.Model, audit, aimed.ClrType, [.. meta.TargetKeys.Select(_ => _.Key)], keys);
+            }
+
             var envelope = new CommandEnvelope(request.Id, meta.Name, meta.ClrType, command, caller, meta.Target?.Name, keys, meta.Result);
             try
             {

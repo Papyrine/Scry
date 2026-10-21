@@ -1,0 +1,49 @@
+﻿[
+  {
+    Kind: List,
+    Source: Employee,
+    Caller: alice,
+    Node: node-1,
+    Sensitive: false,
+    Request: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Active"}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}}]},
+    Outcome: Released,
+    Released: 3,
+    Response: 7NJznuzm-5hJlCXbdygrQxjHu_GA1T29osBFHy2Th-8,
+    Fields: [
+      Employee.Active: Read,
+      Employee.Name: Returned,
+      Employee.Name: Read
+    ],
+    Units: [
+      {
+        Address: 0btsLdVTkQjQz26l-tHBz_vkmdYaMZ03w3-ffSpZgYA,
+        Kind: Row,
+        Content: {"name":"Aaron"},
+        Erased: false,
+        Rows: [
+          Employee[3]
+        ]
+      },
+      {
+        Ordinal: 1,
+        Address: jYZOwqul4Zp8OTk262vnlMtwXAsvxzg337Edi61ZUgk,
+        Kind: Row,
+        Content: {"name":"Alice"},
+        Erased: false,
+        Rows: [
+          Employee[1]
+        ]
+      },
+      {
+        Ordinal: 2,
+        Address: BBrL9lQn2ffxzshNQrSst3eKxZ2wb1U9U-JNekTymB8,
+        Kind: Row,
+        Content: {"name":"Carol"},
+        Erased: false,
+        Rows: [
+          Employee[2]
+        ]
+      }
+    ]
+  }
+]

@@ -303,6 +303,70 @@ public sealed class ScryOptions(Type contextType)
     public ScryMcpAccess Mcp { get; set; }
     // end-snippet
 
+    /// <summary>
+    /// The disclosure audit's settings, or null — the default — where it is off. Set by
+    /// <see cref="UseDisclosureAudit(IScryDisclosureSink, Action{ScryDisclosureOptions}?)"/>.
+    /// </summary>
+    public ScryDisclosureOptions? Disclosure { get; private set; }
+
+    /// <summary>
+    /// Turns the disclosure audit on: every answer handed to a caller is recorded with
+    /// <paramref name="sink"/> before it is sent, and an answer the sink does not accept is not sent.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off, nothing is recorded and nothing is paid. On, a recorded response is sent
+    /// <c>Cache-Control: no-store</c> unless the caller can ask whether it is still current: a query
+    /// asked by URL on a server with <see cref="QueryFreshness"/> set may be kept by the caller's own
+    /// cache, has to be asked about before each reuse, and the <c>304</c> that answers is recorded
+    /// before it is sent.
+    /// </para>
+    /// <para>
+    /// Every answer is recorded under a caller. <see cref="Caller"/> names them over HTTP, the hub
+    /// and MCP; see <see cref="ScryDisclosureOptions.Caller"/> for any other transport.
+    /// </para>
+    /// </remarks>
+    public void UseDisclosureAudit(IScryDisclosureSink sink, Action<ScryDisclosureOptions>? configure = null) =>
+        Disclose(configure).Sink = sink;
+
+    /// <summary>The same, for a sink built from the host's services — a connection, a path from configuration.</summary>
+    public void UseDisclosureAudit(Func<IServiceProvider, IScryDisclosureSink> factory, Action<ScryDisclosureOptions>? configure = null) =>
+        Disclose(configure).SinkFactory = factory;
+
+    /// <summary>
+    /// The same, for a sink that needs services of its own beside it. <paramref name="services"/> is
+    /// run by <c>AddScry</c>.
+    /// </summary>
+    public void UseDisclosureAudit(
+        Func<IServiceProvider, IScryDisclosureSink> factory,
+        Action<IServiceCollection> services,
+        Action<ScryDisclosureOptions>? configure = null)
+    {
+        var disclosure = Disclose(configure);
+        disclosure.SinkFactory = factory;
+        disclosure.Services = services;
+    }
+
+    ScryDisclosureOptions Disclose(Action<ScryDisclosureOptions>? configure)
+    {
+        var disclosure = new ScryDisclosureOptions();
+        configure?.Invoke(disclosure);
+        Disclosure = disclosure;
+        return disclosure;
+    }
+
+    // Who to record an answer under, where the audit is on. Null where it is off, so a host that never
+    // asked for the record pays nothing to name its callers.
+    internal string? DisclosureCaller(HttpContext context)
+    {
+        if (Disclosure is null)
+        {
+            return null;
+        }
+
+        return Caller(context);
+    }
+
     internal List<Type> Dispatchers { get; } = [];
 
     /// <summary>

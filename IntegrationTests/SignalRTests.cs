@@ -193,6 +193,29 @@ public class SignalRTests
         await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.SubscriptionLimit);
     }
 
+    // A caller's own limit counts the caller ScryOptions.Caller names, over the hub as over HTTP:
+    // a connection with no authenticated user is still the caller the server says it is, so it
+    // cannot hold more live queries than that caller may by opening them over the hub.
+    [Test]
+    public async Task ACallersLimitOverTheHubIsTheCallerTheServerNames()
+    {
+        await using var server = await Server.Start(
+            database,
+            options =>
+            {
+                options.MaxSubscriptionsPerCaller = 1;
+                options.Caller = _ => "alice";
+            });
+        server.Client.Reconnect = new GivesUp();
+        await using var held = server.Query.Order.LiveCount().GetAsyncEnumerator();
+        await Assert.That(await Next(held)).IsTrue();
+
+        await using var refused = server.Query.Order.LiveCount().GetAsyncEnumerator();
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(async () => await refused.MoveNextAsync()))!;
+
+        await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.SubscriptionLimit);
+    }
+
     // The hub hands back strings it holds whole, so the bound on what a response may carry applies to
     // it as it does over HTTP — to a query, to each entry of a batch, and to a stream as it goes.
     [Test]

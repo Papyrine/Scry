@@ -1,0 +1,82 @@
+@namespace Scry
+
+@*
+    The answers a caller was sent, newest first: what the caller view lists, and what the member view
+    lists under its verdict. Who, when and how each ended, and none of what any of them carried —
+    opening one is a question of its own.
+*@
+@if (Asked)
+{
+    <div class="results" data-testid="events" data-ready="@Ready">
+        <header class="results-head">
+            <h2 class="named" data-testid="events-heading">@Heading</h2>
+            @if (CanExport)
+            {
+                <span class="exports">
+                    Export
+                    <button type="button" class="link" data-testid="export-csv" @onclick="ExportCsv">CSV</button>
+                    <button type="button" class="link" data-testid="export-json" @onclick="ExportJson">JSON</button>
+                </span>
+            }
+        </header>
+        @if (note is not null)
+        {
+            <p class="note" data-testid="events-note">@note</p>
+        }
+        @if (failure is not null)
+        {
+            <p class="error" data-testid="events-error">@failure</p>
+        }
+        else if (Answered)
+        {
+            @if (ForMember)
+            {
+                <p class="@VerdictClass" data-testid="verdict">@Verdict</p>
+            }
+            else if (Nothing)
+            {
+                <p class="verdict no" data-testid="events-none">The record holds no answer sent to @Whom in that time.</p>
+            }
+
+            @if (Any)
+            {
+                <table class="grid" data-testid="events-table">
+                    <thead>
+                        <tr>
+                            <th>When (UTC)</th>
+                            <th>Answer</th>
+                            <th>Of</th>
+                            <th>Sent</th>
+                            <th>How it ended</th>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var answer in events)
+                        {
+                            <tr>
+                                <td class="mono nowrap">@When(answer)</td>
+                                <td>@answer.Kind</td>
+                                <td>@Of(answer)</td>
+                                <td>@Sent(answer)</td>
+                                <td>@Ended(answer)</td>
+                                <td>
+                                    @foreach (var flag in Flags(answer))
+                                    {
+                                        <span class="@FlagClass(flag)">@flag</span>
+                                    }
+                                </td>
+                                <td class="nowrap"><a href="@EventHref(answer)" data-testid="open-event">Open</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (HasMore)
+                {
+                    <button type="button" class="btn" data-testid="events-more" disabled="@loading" @onclick="More">Older</button>
+                }
+            }
+        }
+    </div>
+}

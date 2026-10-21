@@ -1,0 +1,133 @@
+@namespace Scry
+
+@*
+    Who received a row. Asked by the row's source and the values of its key; answered with every time
+    it left the server — to whom, when, which members went with it and which version of it — and
+    every reviewer who has since been shown one of those answers.
+*@
+<section class="view" data-testid="row-view">
+    <form class="question" @onsubmit="Ask">
+        <label class="field">
+            <span>Source</span>
+            <select data-testid="row-source" @bind="source">
+                @foreach (var option in Session.Sources)
+                {
+                    <option value="@option.Name" disabled="@Unkeyed(option)">@Label(option)</option>
+                }
+            </select>
+        </label>
+        <label class="field grow">
+            <span>Key</span>
+            <input data-testid="row-key" @bind="key" @bind:event="oninput" placeholder="@KeyHint" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+            <span>From (UTC)</span>
+            <input class="@FromClass" data-testid="row-from" @bind="from" @bind:event="oninput" placeholder="@Show.TimeHint" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+            <span>To (UTC)</span>
+            <input class="@ToClass" data-testid="row-to" @bind="to" @bind:event="oninput" placeholder="@Show.TimeHint" autocomplete="off" spellcheck="false" />
+        </label>
+        <button type="submit" class="btn primary" data-testid="row-ask" disabled="@Unaskable">Ask</button>
+    </form>
+
+    @if (NoSources)
+    {
+        <p class="muted" data-testid="row-empty">The record holds nothing yet: no answer has been recorded.</p>
+    }
+
+    @if (Asked)
+    {
+        <div class="results" data-testid="row-results" data-ready="@Ready">
+            <header class="results-head">
+                <h2 class="named" data-testid="row-heading">@Heading</h2>
+                @if (CanExport)
+                {
+                    <span class="exports">
+                        Export
+                        <button type="button" class="link" data-testid="export-csv" @onclick="ExportCsv">CSV</button>
+                        <button type="button" class="link" data-testid="export-json" @onclick="ExportJson">JSON</button>
+                    </span>
+                }
+            </header>
+            @if (note is not null)
+            {
+                <p class="note" data-testid="row-note">@note</p>
+            }
+            @if (failure is not null)
+            {
+                <p class="error" data-testid="row-error">@failure</p>
+            }
+            else if (Nothing)
+            {
+                <p class="verdict no" data-testid="row-none">The record does not say this row was ever sent to anybody.</p>
+            }
+            else if (Any)
+            {
+                <table class="grid" data-testid="row-table">
+                    <thead>
+                        <tr>
+                            <th>When (UTC)</th>
+                            <th>Received by</th>
+                            <th>In</th>
+                            <th>Members sent</th>
+                            <th>Version</th>
+                            <th>Reached by</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows)
+                        {
+                            <tr class="@RowClass(row)">
+                                <td class="mono nowrap">@When(row)</td>
+                                <td>@Receiver(row)</td>
+                                <td>@In(row)</td>
+                                <td>
+                                    @foreach (var member in row.Members)
+                                    {
+                                        <span class="@ChipClass(member)" title="@ChipTitle(member)">@ChipText(member)</span>
+                                    }
+                                </td>
+                                <td class="mono" title="@row.Content">@Version(row)</td>
+                                <td>@Reached(row)</td>
+                                <td class="nowrap"><a href="@EventHref(row)" data-testid="open-event">Open</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (HasMore)
+                {
+                    <button type="button" class="btn" data-testid="row-more" disabled="@loading" @onclick="More">Older</button>
+                }
+            }
+
+            @if (CanErase)
+            {
+                <div class="erase" data-testid="erase">
+                    <h3>Erase what was sent of this row</h3>
+                    <p class="muted">
+                        Removes the content of every answer that carried it. That it was sent, to whom and
+                        when stays in the record, and so does that it was erased, and by whom. This cannot be
+                        taken back.
+                    </p>
+                    <div class="question">
+                        <label class="field grow">
+                            <span>Type the key again to erase it</span>
+                            <input data-testid="erase-confirm" @bind="confirm" @bind:event="oninput" autocomplete="off" spellcheck="false" />
+                        </label>
+                        <button type="button" class="btn danger" data-testid="erase-button" disabled="@CannotErase" @onclick="Erase">Erase</button>
+                    </div>
+                    @if (erased is not null)
+                    {
+                        <p class="note" data-testid="erase-done">@erased</p>
+                    }
+                    @if (eraseFailure is not null)
+                    {
+                        <p class="error" data-testid="erase-error">@eraseFailure</p>
+                    }
+                </div>
+            }
+        </div>
+    }
+</section>

@@ -48,7 +48,12 @@ static class QueryEtag
         }
 
         var etag = Etag(processor.SchemaStamp, token, query, options.CacheScope?.Invoke(context));
-        if (!Matches(context, etag))
+
+        // Told that its copy is still current only once that has been recorded, where the disclosure
+        // audit is on. Where it cannot be — nothing is remembered of the query — the query is
+        // answered in full instead, which costs one answer and loses nothing.
+        if (!Matches(context, etag) ||
+            !await processor.ConfirmAsync(query, options.DisclosureCaller(context), context.RequestServices, context.RequestAborted))
         {
             // Only on a response that is about to carry rows. An ETag written here would otherwise end
             // up on a 400 as well, and a client that cached the rejection could later be told its copy

@@ -789,6 +789,7 @@ A worker on one of these reaches live queries through the target notification on
 
 - The payload is bound into the server's own class, through the properties the server allows, with unknown members refused, enums by name only, and nested depth bounded. The name the client sends is looked up among the server's commands; the client's class is never trusted.
 - A target the caller may not act on is answered exactly as one that is not there.
+- Where the [disclosure audit](disclosure-audit.md) is on, each receipt handed to a caller is recorded with the row the command was sent against, and so is the list of what a caller may send.
 - A command's outcome is given again only to the caller that sent it. Anyone else asking by its id is answered as if it were unknown.
 - Capabilities are advisory. They decide what a screen enables, never what the server accepts.
 - Commands are off by default, and off maps no route.

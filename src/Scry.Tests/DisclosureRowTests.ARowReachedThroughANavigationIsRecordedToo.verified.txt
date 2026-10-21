@@ -1,0 +1,36 @@
+﻿{
+  Sensitive: false,
+  Fields: [
+    Department.Name: Returned,
+    Employee.Active: Read,
+    Employee.Department: Traversed,
+    Employee.Manager: Traversed,
+    Employee.Name: Returned,
+    Employee.Name: Read
+  ],
+  Units: [
+    {
+      Content: {"name":"Aaron","manager":"Alice","managerDepartment":"Engineering","department":{"name":"Engineering"}},
+      Rows: [
+        Employee[3],
+        Employee[1] via Manager,
+        Department[1] via Manager.Department,
+        Department[1] via Department
+      ]
+    },
+    {
+      Content: {"name":"Alice","manager":null,"managerDepartment":null,"department":{"name":"Engineering"}},
+      Rows: [
+        Employee[1],
+        Department[1] via Department
+      ]
+    },
+    {
+      Content: {"name":"Carol","manager":null,"managerDepartment":null,"department":{"name":"Sales"}},
+      Rows: [
+        Employee[2],
+        Department[2] via Department
+      ]
+    }
+  ]
+}

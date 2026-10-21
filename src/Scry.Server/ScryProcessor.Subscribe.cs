@@ -88,21 +88,40 @@ public sealed partial class ScryProcessor
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
         string? caller,
-        [EnumeratorCancellation] Cancel cancel)
+        [EnumeratorCancellation] Cancel cancel,
+        string? resumeFrom = null,
+        string? recorded = null)
     {
         using var lease = subscriptions.Enter(caller, services);
         var headers = responseHeaders;
         string? last = null;
         var first = true;
+
+        // What ties this live query's answers together in the disclosure record, where there is one.
+        var correlation = Correlate();
+        var runs = 0;
         while (true)
         {
             using var output = new BoundedBufferWriter(options.MaxSubscriptionBytes);
-            var json = await Run(lease, request, data, services, requestHeaders, headers, output, first, cancel);
+            var (json, run) = await Run(lease, request, data, services, requestHeaders, headers, output, first, recorded ?? caller, Correlated(correlation, runs++), cancel);
             var id = Fingerprint.Of(json.Span);
 
             // Compared before it is sent, which is what keeps the timing of an answer from saying
             // anything: a write the caller may not see changes nothing here, so nothing goes out.
-            if (id != last)
+            var sent = id != last;
+
+            // Recorded once it is known to be going, and before it goes; a run whose answer had not
+            // changed sent nothing and records nothing. A first answer the caller already named is
+            // one it holds: told it still stands, it has been confirmed rather than sent.
+            var delivery = ScryDisclosureDelivery.Sent;
+            if (first &&
+                id == resumeFrom)
+            {
+                delivery = ScryDisclosureDelivery.Confirmed;
+            }
+
+            await Settle(run, sent, delivery, cancel);
+            if (sent)
             {
                 last = id;
                 yield return new(id, json);
@@ -117,7 +136,7 @@ public sealed partial class ScryProcessor
         }
     }
 
-    async ValueTask<ReadOnlyMemory<byte>> Run(
+    async ValueTask<(ReadOnlyMemory<byte> Json, SubscriptionRun Run)> Run(
         SubscriptionLease lease,
         QueryRequest request,
         DbContext data,
@@ -126,6 +145,8 @@ public sealed partial class ScryProcessor
         IHeaderDictionary responseHeaders,
         BoundedBufferWriter output,
         bool first,
+        string? caller,
+        string? correlation,
         Cancel cancel)
     {
         // Given back before the answer is handed on: a reader that is slow to take it holds its own
@@ -149,15 +170,17 @@ public sealed partial class ScryProcessor
             responseHeaders,
             output,
             cancel: cancel,
-            subscription: run);
+            subscription: run,
+            caller: caller,
+            correlation: correlation);
         lease.EndRun(run.Dependencies);
 
         // The rare envelope a drifted client is answered with, which the row writer does not produce.
         if (fallback is not null)
         {
-            return ScryJson.SerializeToUtf8(fallback);
+            return (ScryJson.SerializeToUtf8(fallback), run);
         }
 
-        return output.WrittenMemory;
+        return (output.WrittenMemory, run);
     }
 }

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Scry</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
+    <Description>Keeps the Scry disclosure audit in SQL Server: every answer a server sends is recorded in an outbox table before it leaves, and drained into append-only tables that say who received what.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- What the store does is SQL, and what is worth asserting about it is what lands in the tables.
+         The tests reach the statements and the drain directly rather than waiting on a timer for them. -->
+    <InternalsVisibleTo Include="Scry.Server.Disclosure.Tests" Key="$(ScryPublicKey)" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- The one dependency, and deliberately not EF: accepting a record is one parameterized INSERT on
+         the path of every answer, and the host's own context is not this package's to borrow. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
+    <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

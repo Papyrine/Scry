@@ -268,7 +268,7 @@ A refusal is an MCP tool error (`isError: true`) whose text is the same `ScryErr
 
 ## Who is asking
 
-The server is stateless. Each tool call is an HTTP request of its own, answered in that request's scope, so everything that decides who is asking works as it does for `MapScry`:
+The server is stateless. Each tool call is an HTTP request of its own, answered in that request's scope, so everything that decides who is asking works as it does for `MapScry`. That caller is also who the [disclosure audit](disclosure-audit.md), where it is on, records an agent's answers under: the schema it read, and each query's rows.
 
 - authentication middleware
 - `RequireAuthorization` on what `MapScryMcp` returns

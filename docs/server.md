@@ -424,6 +424,8 @@ For each request the server, in order:
 
 Because the projection is applied inside the query, only the requested columns are read from the database.
 
+Where the [disclosure audit](disclosure-audit.md) is on there is a step more, before anything is sent: the record of what the response carries is handed to the audit's sink, and the response waits for it to be accepted. The key of each row is read alongside the requested columns for that record, and is never sent.
+
 Terminal handling:
 
 - `Count` / `Any` execute as scalars.

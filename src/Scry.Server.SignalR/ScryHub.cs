@@ -52,7 +52,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 RequestHeaders,
                 new HeaderDictionary(),
                 limited,
-                cancel: Context.ConnectionAborted);
+                cancel: Context.ConnectionAborted,
+                caller: Recorded);
 
             // Written through the same budget, so the envelope a drifted client is answered with is
             // bounded as any other.
@@ -94,7 +95,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 output,
                 binary: null,
                 budget: ResponseBudget.For(options),
-                cancel: Context.ConnectionAborted);
+                cancel: Context.ConnectionAborted,
+                caller: Recorded);
             return Encoding.UTF8.GetString(output.WrittenMemory.Span);
         }
         catch (Exception exception) when (!Context.ConnectionAborted.IsCancellationRequested)
@@ -128,7 +130,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 RequestHeaders,
                 new HeaderDictionary(),
                 cancel,
-                budget: ResponseBudget.For(options));
+                budget: ResponseBudget.For(options),
+                caller: Recorded);
         }
         catch (Exception exception) when (!cancel.IsCancellationRequested)
         {
@@ -205,7 +208,10 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 services,
                 RequestHeaders,
                 new HeaderDictionary(),
-                Context.UserIdentifier,
+                // Counted against the caller ScryOptions.Caller names, as a subscription over HTTP is,
+                // so that one caller's subscriptions are one count whichever way they were opened.
+                // Recorded under the same name.
+                Caller,
                 cancel)
             .GetAsyncEnumerator(cancel);
         while (true)
@@ -298,7 +304,7 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
 
     /// <summary>The commands this caller may send, as the capabilities endpoint answers.</summary>
     public string Capabilities() =>
-        ScryJson.Serialize(processor.Capabilities(Data, services, RequestHeaders));
+        ScryJson.Serialize(processor.Capabilities(Data, services, RequestHeaders, Caller));
 
     // Receipts as the strings the client reads, and a refusal as the one item there is.
     static async IAsyncEnumerable<string> Receipts(IAsyncEnumerable<CommandReceipt> receipts, bool drifted, [EnumeratorCancellation] Cancel cancel)
@@ -355,6 +361,21 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
             }
 
             return Context.UserIdentifier;
+        }
+    }
+
+    // Who an answer is recorded under, where the disclosure audit is on: the same caller a command
+    // is sent as. Not asked where the audit is off, so a host without it names nobody per query.
+    string? Recorded
+    {
+        get
+        {
+            if (options.Disclosure is null)
+            {
+                return null;
+            }
+
+            return Caller;
         }
     }
 

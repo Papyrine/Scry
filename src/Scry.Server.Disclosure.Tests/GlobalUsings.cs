@@ -1,0 +1,12 @@
+global using System.Buffers;
+global using System.Linq.Expressions;
+global using System.Security.Cryptography;
+global using System.Text;
+global using Microsoft.Data.SqlClient;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Hosting;
+global using Scry;
+global using TUnit.Assertions.Enums;
+global using static VerifyTUnit.Verifier;
+global using EfLocalDb;
