@@ -37,6 +37,9 @@
          GHSA-2fmv-rv2c-59x7 cover up to 9.0.20. Remove once SqlClient asks for a patched one itself. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
     <PackageVersion Include="EfLocalDb" Version="27.2.5" />
+    <!-- Pinned only to lift Microsoft.Data.SqlClient's vulnerable transitive (GHSA-846f-f764-76mx,
+         GHSA-2fmv-rv2c-59x7). Drop it once SqlClient depends on a patched version. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <!-- Pinned to 5.3.0 (do not bump without running the Explorer UI tests). 5.6.0 is the next published
          version — nuget.org has no 5.4.x/5.5.x — and it calls System.Threading.Volatile.ReadBarrier, which
          the net10 mono-wasm interpreter does not implement: the managed fallback recurses into itself and
