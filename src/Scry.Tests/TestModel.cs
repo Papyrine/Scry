@@ -938,8 +938,25 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     /// is read-only by design — writing to it would leak into every other test in the assembly — so
     /// anything that has to insert builds its own and disposes it.
     /// </summary>
-    public static Task<SqlDatabase<TestContext>> CreateIsolated(string name) =>
-        sqlInstance.Build(name);
+    /// <remarks>
+    /// Each build copies the template's files and attaches them, and the first login waits for that
+    /// attach. Two dozen tests doing it at once on a CI runner's disk ran past the 15 second connect
+    /// timeout inside EfLocalDb, so only two builds run at a time; the tests themselves stay parallel.
+    /// </remarks>
+    public static async Task<SqlDatabase<TestContext>> CreateIsolated(string name)
+    {
+        await isolatedBuilds.WaitAsync();
+        try
+        {
+            return await sqlInstance.Build(name);
+        }
+        finally
+        {
+            isolatedBuilds.Release();
+        }
+    }
+
+    static SemaphoreSlim isolatedBuilds = new(2);
 
     static void Seed(TestContext context)
     {
