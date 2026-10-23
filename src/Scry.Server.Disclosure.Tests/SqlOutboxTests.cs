@@ -16,8 +16,10 @@ public class SqlOutboxTests
     public async Task AQuestionOfTheStoreIsNotBoundByHowLongAnAcceptWaits()
     {
         await using var database = await Clinic.Instance.Build();
+        // Seeded at the default limit: a first insert into a fresh database on a loaded machine can
+        // take longer than the short limit the question is held against.
+        await Store(database).AppendAsync(Clinic.Batch(1), Cancel.None);
         var store = Store(database, _ => _.AcceptTimeout = TimeSpan.FromSeconds(1));
-        await store.AppendAsync(Clinic.Batch(1), Cancel.None);
 
         await using var holding = new SqlConnection(database.ConnectionString);
         await holding.OpenAsync();
