@@ -1077,6 +1077,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     throw Reject("Join is not supported over a joined group — aggregate it to a number instead.");
                 }
 
+                ValidateAggregateShape(aggregate);
                 if (aggregate.Function != AggregateFn.Count)
                 {
                     if (aggregate.Selector is not { } selector)
@@ -1090,6 +1091,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 else if (aggregate.Selector is not null)
                 {
                     throw Reject("Count over a joined group does not take a selector.");
+                }
+
+                // The predicate is read against the inner side too, and it is the one leg of a join a
+                // Count carries: left unvalidated it would reach the builder as the only expression in
+                // a request that no allow-list had seen.
+                if (aggregate.Predicate is { } filtered)
+                {
+                    ValidatePredicate(filtered, innerType);
                 }
 
                 sawAggregate = true;

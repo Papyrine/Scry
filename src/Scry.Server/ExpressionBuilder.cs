@@ -1375,6 +1375,14 @@ sealed class ExpressionBuilder(
     // One step of a member path: the value of a member, read off the value the path has reached.
     Expression Step(Expression expression, Type ownerType, Member member, ref bool policied)
     {
+        // The validator refuses an attachment wherever a path names one, so reaching here means a
+        // request got past it. Its bytes are fetched through the attachment endpoint, under that
+        // endpoint's policy, and are the one value the builder refuses to read on its own account.
+        if (member.Kind == MemberKind.Attachment)
+        {
+            throw new ScryValidationException($"'{schema.WireName(ownerType)}.{member.Name}' is an attachment, whose value no query reads.");
+        }
+
         // Computed for the row the path has reached rather than read off it, and never traversed —
         // the validator refuses a path continuing past one, and a bool has no members to continue to.
         if (member.Kind == MemberKind.Capability)

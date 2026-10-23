@@ -115,6 +115,42 @@ public class GroupJoinTests
         await Assert.That(rows.Sum(_ => _.Headcount)).IsEqualTo(context.Tickets.Count(_ => _.IsOpen));
     }
 
+    // A filtered count folds only the inner rows its predicate keeps. The generated client does not
+    // write one over a joined group, so this is the hand-built shape, kept exercised because the
+    // validator reads the predicate against the inner side on this leg alone.
+    [Test]
+    public async Task CountsTheInnerRowsAPredicateKeeps()
+    {
+        await using var context = TestContext.CreateSeeded();
+
+        var request = QueryRequest.Create(
+            "Department",
+            [
+                new JoinOp(
+                    "Employee",
+                    JoinKind.Group,
+                    new MemberNode(["Id"]),
+                    new MemberNode(["DepartmentId"]),
+                    InnerPredicate: null,
+                    [
+                        new("Department", JoinSide.Outer, ["Name"]),
+                        new("Headcount", JoinSide.Inner, [])
+                        {
+                            Aggregate = new(AggregateFn.Count, Selector: null)
+                            {
+                                Predicate = new MemberNode(["Active"])
+                            }
+                        }
+                    ])
+            ]);
+
+        var response = SharedProcessor.Instance.Execute(request, context);
+        var rows = response.Payload.EnumerateArray().ToList();
+
+        var sales = rows.Single(_ => _.GetProperty("department").GetString() == "Sales");
+        await Assert.That(sales.GetProperty("headcount").GetInt32()).IsEqualTo(1);
+    }
+
     [Test]
     public async Task RejectsReadingTheInnerSideDirectly()
     {

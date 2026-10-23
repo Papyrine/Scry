@@ -73,6 +73,40 @@ public class SecurityTests
             "Employee",
             [new SelectOp(new([new("Doc", new NodeValue(new MemberNode(["Manager", "Document"])))]))]));
 
+    // A Count over a joined group carries a predicate read against the inner side, which no other
+    // check in the request sees. Left unvalidated, each row's count would answer one question about
+    // the attachment's bytes, and enough questions read the attachment past its policy.
+    [Test]
+    public Task RejectsAttachmentInJoinAggregatePredicate() =>
+        AssertRejected(
+            QueryRequest.Create(
+                "Contract",
+                [
+                    new JoinOp(
+                        "Contract",
+                        JoinKind.Group,
+                        new MemberNode(["Id"]),
+                        new MemberNode(["Id"]),
+                        InnerPredicate: null,
+                        [
+                            new("Name", JoinSide.Outer, ["Name"]),
+                            new("Hit", JoinSide.Inner, [])
+                            {
+                                Aggregate = new(AggregateFn.Count, Selector: null)
+                                {
+                                    Predicate = new BinaryNode(
+                                        BinaryOp.GreaterThan,
+                                        new CallNode(
+                                            KnownFunction.BytesElementAt,
+                                            new MemberNode(["Document"]),
+                                            [new ConstNode("0", ClrTypeTag.Int32)]),
+                                        new ConstNode("127", ClrTypeTag.Int32))
+                                }
+                            }
+                        ])
+                ]),
+            reason: "Its value is fetched through the attachment endpoint");
+
     [Test]
     public Task RejectsTakeOverMaxPageSize() =>
         AssertRejected(
