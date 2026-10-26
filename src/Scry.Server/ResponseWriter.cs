@@ -207,7 +207,7 @@ static class ResponseWriter
         Utf8JsonWriter json,
         ProjectionPlan plan,
         PlanShapeWriter writer,
-        object[] row,
+        object?[] row,
         BinaryPartCollector? binary,
         DisclosureCapture? capture)
     {
@@ -220,14 +220,14 @@ static class ResponseWriter
         capture.WriteRow(json, plan, row, binary);
     }
 
-    public static object[] Row(object row, QueryExecutor.RowSet set)
+    public static object?[] Row(object row, QueryExecutor.RowSet set)
     {
         if (set.Deduplicated)
         {
             return ExpressionBuilder.ReadDistinctRow(row);
         }
 
-        return (object[])row;
+        return (object?[])row;
     }
 
     /// <summary>Opens a batch envelope: its version, then the array its entries are written into.</summary>
@@ -530,7 +530,7 @@ sealed class PlanShapeWriter
         return child;
     }
 
-    public void WriteRow(Utf8JsonWriter json, object[] row, BinaryPartCollector? binary = null) =>
+    public void WriteRow(Utf8JsonWriter json, object?[] row, BinaryPartCollector? binary = null) =>
         WriteObject(json, root, row, binary);
 
     /// <summary>
@@ -547,10 +547,10 @@ sealed class PlanShapeWriter
     /// <param name="row">The projected row.</param>
     /// <param name="capture">What records a binary value's digest.</param>
     /// <param name="leftOut">Per slot, whether the slot is left out of the record and marked in its place.</param>
-    public void WriteCanonicalRow(Utf8JsonWriter json, object[] row, DisclosureCapture capture, IReadOnlyList<bool>? leftOut = null) =>
+    public void WriteCanonicalRow(Utf8JsonWriter json, object?[] row, DisclosureCapture capture, IReadOnlyList<bool>? leftOut = null) =>
         WriteCanonical(json, root, row, capture, leftOut);
 
-    static void WriteCanonical(Utf8JsonWriter json, Node node, object[] row, DisclosureCapture capture, IReadOnlyList<bool>? leftOut)
+    static void WriteCanonical(Utf8JsonWriter json, Node node, object?[] row, DisclosureCapture capture, IReadOnlyList<bool>? leftOut)
     {
         json.WriteStartObject();
         foreach (var child in node.Children!)
@@ -580,7 +580,7 @@ sealed class PlanShapeWriter
         json.WriteEndObject();
     }
 
-    static void WriteObject(Utf8JsonWriter json, Node node, object[] row, BinaryPartCollector? binary)
+    static void WriteObject(Utf8JsonWriter json, Node node, object?[] row, BinaryPartCollector? binary)
     {
         json.WriteStartObject();
         foreach (var child in node.Children!)

@@ -201,7 +201,7 @@ sealed class DisclosureCapture(
     /// Records one row and writes it into the response: the same bytes, written once, unless the row
     /// carries a binary value.
     /// </summary>
-    public void WriteRow(Utf8JsonWriter json, ProjectionPlan plan, object[] row, BinaryPartCollector? binary)
+    public void WriteRow(Utf8JsonWriter json, ProjectionPlan plan, object?[] row, BinaryPartCollector? binary)
     {
         var writer = plan.Writer;
 
@@ -229,7 +229,7 @@ sealed class DisclosureCapture(
     /// Records one row that something else is writing: the path that shapes rows into objects, and a
     /// stream holding rows back. Returns how many bytes the row's record came to.
     /// </summary>
-    public int AddRow(ProjectionPlan plan, object[] row)
+    public int AddRow(ProjectionPlan plan, object?[] row)
     {
         Identify(plan, row);
         var kind = RowKind(plan);
@@ -292,7 +292,7 @@ sealed class DisclosureCapture(
     /// record is what is sent. So a row written ahead of being recorded — to learn its length before it
     /// is committed to — is hashed where it lies rather than written again.
     /// </summary>
-    public void AddWritten(ProjectionPlan plan, object[] row, ReadOnlySpan<byte> written)
+    public void AddWritten(ProjectionPlan plan, object?[] row, ReadOnlySpan<byte> written)
     {
         Identify(plan, row);
         var address = Tagged(ScryDisclosureContentKind.Row, written);
@@ -304,7 +304,7 @@ sealed class DisclosureCapture(
     // what was asked for, in the slots past the ones that are written. A key with a null in it is a
     // row that was not there — a navigation that led nowhere, a row a policy hid, the unmatched side
     // of an outer join — and is recorded as nothing.
-    void Identify(ProjectionPlan plan, object[] row)
+    void Identify(ProjectionPlan plan, object?[] row)
     {
         if (plan.Entities is not { } slots)
         {
@@ -327,7 +327,7 @@ sealed class DisclosureCapture(
 
     // A key as the record holds one: the JSON array of its values. Written through the scratch
     // buffer, which the row that follows takes over.
-    string? Key(object[] row, DisclosureSlot slot)
+    string? Key(object?[] row, DisclosureSlot slot)
     {
         for (var index = 0; index < slot.Count; index++)
         {
@@ -351,7 +351,7 @@ sealed class DisclosureCapture(
     }
 
     // A row's version as the record holds one: the JSON value of the member named for it.
-    string? Version(object[] row, DisclosureSlot slot)
+    string? Version(object?[] row, DisclosureSlot slot)
     {
         if (!slot.Versioned ||
             row[slot.First + slot.Count] is not { } value)
@@ -481,7 +481,7 @@ sealed class DisclosureCapture(
         return address;
     }
 
-    ReadOnlySpan<byte> Canonical(PlanShapeWriter writer, object[] row, bool bytes, IReadOnlyList<bool>? leftOut, ScryDisclosureContentKind kind)
+    ReadOnlySpan<byte> Canonical(PlanShapeWriter writer, object?[] row, bool bytes, IReadOnlyList<bool>? leftOut, ScryDisclosureContentKind kind)
     {
         var json = Scratch(kind);
         if (bytes)

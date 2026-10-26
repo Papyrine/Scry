@@ -1444,7 +1444,7 @@ public sealed partial class ScryProcessor
         PlanShapeWriter writer,
         Utf8JsonWriter json,
         PooledBufferWriter buffer,
-        object[] row,
+        object?[] row,
         BinaryPartCollector? binary,
         ResponseBudget? budget,
         QueryRecorder recorder)

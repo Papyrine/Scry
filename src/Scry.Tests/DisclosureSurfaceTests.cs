@@ -319,7 +319,7 @@ public class DisclosureSurfaceTests
                     ending.Token,
                     resumeFrom)
                 .GetAsyncEnumerator(ending.Token);
-            await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
+            await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience, ending.Token)).IsTrue();
             return answers.Current.Id;
         }
     }

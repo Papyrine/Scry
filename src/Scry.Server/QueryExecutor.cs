@@ -23,7 +23,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// exists — so unlike a <see cref="RowSet"/> there is nothing left to defer.
     /// </summary>
     internal readonly record struct PageSet(
-        IReadOnlyList<object[]> Rows,
+        IReadOnlyList<object?[]> Rows,
         ProjectionPlan Plan,
         bool HasMore,
         string? Cursor,
@@ -38,7 +38,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     internal readonly record struct Terminal(
         ResultKind Kind,
         object? Value,
-        object[]? Row,
+        object?[]? Row,
         ProjectionPlan? Plan,
         BinaryPartCollector? Binary);
 
@@ -350,7 +350,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     /// <summary>The same, for a row already read out into its values.</summary>
-    internal static Dictionary<string, object?> ShapeValues(object[] values, RowSet set) =>
+    internal static Dictionary<string, object?> ShapeValues(object?[] values, RowSet set) =>
         Shape(values, set.Plan, set.Binary);
 
     /// <summary>Shapes one row of a <see cref="RowSet"/> into its response object.</summary>
@@ -361,7 +361,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return Shape(ExpressionBuilder.ReadDistinctRow(row), set.Plan, set.Binary);
         }
 
-        return Shape((object[]) row, set.Plan, set.Binary);
+        return Shape((object?[]) row, set.Plan, set.Binary);
     }
 
     /// <summary>
@@ -410,7 +410,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         {
             if (Plan is { } plan)
             {
-                return Single((object[]?)value, plan, Binary);
+                return Single((object?[]?)value, plan, Binary);
             }
 
             return Scalar(value);
@@ -421,7 +421,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// A page, unread: the rows to fetch — one more than the page holds, to learn whether a further
     /// page exists — and how what came back becomes the page and its envelope.
     /// </summary>
-    internal readonly record struct PagePlan(IQueryable<object[]> Rows, Func<List<object[]>, PageSet> Finish);
+    internal readonly record struct PagePlan(IQueryable<object?[]> Rows, Func<List<object?[]>, PageSet> Finish);
 
     // Walks the pipeline once and plans exactly one of three things: a folding terminal's call, the
     // unread rows of a list result, which the caller materializes or streams, or a page's fetch.
@@ -878,7 +878,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
     // The one-argument overload: the terminal's predicate, where it had one, was applied as a filter
     // before this.
-    static Plan Picks(List<DeniedRowProbe> probes, IQueryable<object[]> rows, string method, ProjectionPlan plan, BinaryPartCollector? binary) =>
+    static Plan Picks(List<DeniedRowProbe> probes, IQueryable<object?[]> rows, string method, ProjectionPlan plan, BinaryPartCollector? binary) =>
         new(probes, new Fold(rows, QueryComposition.Call(method, [typeof(object[])], rows.Expression), plan, binary), null, null);
 
     static Plan Lists(List<DeniedRowProbe> probes, RowSet rows) =>
@@ -889,7 +889,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// the same resolution and <b>row policy</b> the outer did, before the two meet — so a join can
     /// only narrow, and no row hidden from a direct query of the inner source is observable through one.
     /// </summary>
-    (IQueryable<object[]> Query, ProjectionPlan Plan) BuildJoined(
+    (IQueryable<object?[]> Query, ProjectionPlan Plan) BuildJoined(
         ExpressionBuilder builder,
         IQueryable outer,
         Type outerType,
@@ -917,7 +917,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var (outerKey, innerKey) = builder.BuildJoinKeys(join.OuterKey, outerType, join.InnerKey, innerType);
         var (selector, shape, binarySlots, entities, leftOut) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
 
-        var joined = (IQueryable<object[]>)QueryComposition.Compose(
+        var joined = (IQueryable<object?[]>)QueryComposition.Compose(
             outer,
             QueryComposition.Call(
                 JoinMethod(join.Kind),
@@ -1100,7 +1100,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         public ScryAttachmentResult Finish(object? row)
         {
-            if (row is object[] found)
+            if (row is object?[] found)
             {
                 return new()
                 {
@@ -1286,7 +1286,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return predicate!;
     }
 
-    static (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
+    static (IQueryable<object?[]> Query, ProjectionPlan Plan) BuildProjected(
         ExpressionBuilder builder,
         IQueryable query,
         Type elementType,
@@ -1532,8 +1532,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             query,
             QueryComposition.Call("GroupBy", [elementType, keyType], query.Expression, Expression.Quote(keySelector)));
 
-    static IQueryable<object[]> ApplySelect(IQueryable query, LambdaExpression selector) =>
-        (IQueryable<object[]>)QueryComposition.Compose(
+    static IQueryable<object?[]> ApplySelect(IQueryable query, LambdaExpression selector) =>
+        (IQueryable<object?[]>)QueryComposition.Compose(
             query,
             QueryComposition.Call("Select", [query.ElementType, typeof(object[])], query.Expression, Expression.Quote(selector)));
 
@@ -1566,30 +1566,30 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// Objects, where <c>object[]</c> compares by reference and nothing would ever match, so those
     /// compare the row values instead.
     /// </summary>
-    static IQueryable<object[]> ApplyDistinct(IQueryable<object[]> query, SourceKind kind)
+    static IQueryable<object?[]> ApplyDistinct(IQueryable<object?[]> query, SourceKind kind)
     {
         if (kind == SourceKind.Poco)
         {
             return query.Distinct(RowComparer.Instance);
         }
 
-        return (IQueryable<object[]>)QueryComposition.Compose(
+        return (IQueryable<object?[]>)QueryComposition.Compose(
             query,
             QueryComposition.Call("Distinct", [typeof(object[])], query.Expression));
     }
 
     sealed class RowComparer :
-        IEqualityComparer<object[]>
+        IEqualityComparer<object?[]>
     {
         public static RowComparer Instance = new();
 
-        public bool Equals(object[]? x, object[]? y) =>
+        public bool Equals(object?[]? x, object?[]? y) =>
             x is not null &&
             y is not null &&
             x.Length == y.Length &&
             x.Zip(y).All(_ => Equals(_.First, _.Second));
 
-        public int GetHashCode(object[] row)
+        public int GetHashCode(object?[] row)
         {
             var hash = new HashCode();
             foreach (var value in row)
@@ -1665,9 +1665,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         // Fetch one extra row to detect a further page without issuing a second COUNT query. Composed
         // through ApplyPaging rather than Queryable.Take so the count is bound, not inlined.
-        var fetch = (IQueryable<object[]>)ApplyPaging(projected, "Take", size + 1);
+        var fetch = (IQueryable<object?[]>)ApplyPaging(projected, "Take", size + 1);
 
-        PageSet Finish(List<object[]> rows)
+        PageSet Finish(List<object?[]> rows)
         {
             var hasMore = rows.Count > size;
             if (hasMore)
@@ -1772,7 +1772,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     static Terminal Scalar(object? value) =>
         new(ResultKind.Scalar, value, Row: null, Plan: null, Binary: null);
 
-    static Terminal Single(object[]? row, ProjectionPlan plan, BinaryPartCollector? binary) =>
+    static Terminal Single(object?[]? row, ProjectionPlan plan, BinaryPartCollector? binary) =>
         new(ResultKind.Single, Value: null, row, plan, binary);
 
     /// <summary>
@@ -1799,7 +1799,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return QueryResponse.Create(ResultKind.Single, payload);
     }
 
-    static Dictionary<string, object?> Shape(object[] row, ProjectionPlan plan, BinaryPartCollector? binary)
+    static Dictionary<string, object?> Shape(object?[] row, ProjectionPlan plan, BinaryPartCollector? binary)
     {
         var root = new Dictionary<string, object?>(StringComparer.Ordinal);
         for (var i = 0; i < plan.Shape.Count; i++)

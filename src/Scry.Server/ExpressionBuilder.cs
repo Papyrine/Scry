@@ -704,12 +704,12 @@ sealed class ExpressionBuilder(
     /// so the property reads are compiled once per closed row type — bounded by the
     /// <see cref="DistinctRow"/> arities the schema can produce — rather than reflected per value.
     /// </summary>
-    public static object[] ReadDistinctRow(object row) =>
+    public static object?[] ReadDistinctRow(object row) =>
         distinctReaders.GetOrAdd(row.GetType(), DistinctReader)(row);
 
-    static ConcurrentDictionary<Type, Func<object, object[]>> distinctReaders = new();
+    static ConcurrentDictionary<Type, Func<object, object?[]>> distinctReaders = new();
 
-    static Func<object, object[]> DistinctReader(Type type)
+    static Func<object, object?[]> DistinctReader(Type type)
     {
         var row = Expression.Parameter(typeof(object), "row");
         var typed = Expression.Convert(row, type);
@@ -718,7 +718,7 @@ sealed class ExpressionBuilder(
             .Select(Expression (_) => Expression.Convert(Expression.Property(typed, _), typeof(object)))
             .ToArray();
 
-        return Expression.Lambda<Func<object, object[]>>(Expression.NewArrayInit(typeof(object), values), row)
+        return Expression.Lambda<Func<object, object?[]>>(Expression.NewArrayInit(typeof(object), values), row)
             .Compile();
     }
 

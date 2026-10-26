@@ -383,7 +383,7 @@ public sealed partial class ScryProcessor
         PooledBufferWriter chunk = new();
         Utf8JsonWriter? json;
         List<(int Offset, int Length)> slices = [];
-        List<object[]> held = [];
+        List<object?[]> held = [];
         int pulled;
         int handed;
         bool finished;
@@ -412,7 +412,7 @@ public sealed partial class ScryProcessor
         }
 
         /// <summary>A held row as its values, for a caller that writes it itself.</summary>
-        public object[] Row(int index) =>
+        public object?[] Row(int index) =>
             held[index];
 
         /// <summary>Whether every row of the stream holds no binary value, so its line is held ready.</summary>
@@ -487,7 +487,7 @@ public sealed partial class ScryProcessor
         }
 
         // The next row, or null at the end of the read — its real end, or one a limit or a fault made.
-        async ValueTask<object[]?> Pull()
+        async ValueTask<object?[]?> Pull()
         {
             bool moved;
             try
@@ -518,7 +518,7 @@ public sealed partial class ScryProcessor
         }
 
         // Takes a row into the chunk and records it. Returns how many bytes it added.
-        int Hold(object[] row)
+        int Hold(object?[] row)
         {
             if (!written)
             {
@@ -712,7 +712,7 @@ public sealed partial class ScryProcessor
         PlanShapeWriter writer,
         Utf8JsonWriter json,
         PooledBufferWriter buffer,
-        object[] row,
+        object?[] row,
         BinaryPartCollector? binary,
         ResponseBudget? budget)
     {
