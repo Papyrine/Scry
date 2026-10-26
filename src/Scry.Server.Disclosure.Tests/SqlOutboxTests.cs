@@ -52,7 +52,7 @@ public class SqlOutboxTests
 
         var refused = Assert.Throws<ArgumentException>(() => Store(database, _ => _.CommandTimeout = TimeSpan.Zero));
 
-        await Assert.That(refused!.Message).Contains("CommandTimeout must be greater than zero");
+        await Assert.That(refused.Message).Contains("CommandTimeout must be greater than zero");
     }
 
     [Test]

@@ -112,7 +112,11 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
 
     /// <summary>Whether the answer returns a member the model marks sensitive.</summary>
     public bool Sensitive =>
-        fields.Any(_ => _.Sensitive && _.Use is ScryDisclosureFieldUse.Returned or ScryDisclosureFieldUse.Aggregated);
+        fields.Any(_ => _ is
+        {
+            Sensitive: true,
+            Use: ScryDisclosureFieldUse.Returned or ScryDisclosureFieldUse.Aggregated
+        });
 
     /// <summary>
     /// Every member read, in an order that depends on nothing but what they are — so two requests of

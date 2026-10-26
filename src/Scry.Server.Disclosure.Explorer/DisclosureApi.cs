@@ -536,7 +536,7 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             listed = reader.MemberReceivedBy(member.Caller, member.Source, member.Member, cancel: cancel);
         }
 
-        await foreach (var entry in listed)
+        await foreach (var entry in listed.WithCancellation(cancel))
         {
             if (wanted.Count == options.ExportLimit)
             {
@@ -607,7 +607,7 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
         context.RequestServices.GetRequiredService<IScryDisclosureReader>();
 
     static IResult Refuse(int status, string message) =>
-        Results.Json(new Refusal(message), DisclosureJson.Default.Refusal, statusCode: status);
+        Results.Json(new(message), DisclosureJson.Default.Refusal, statusCode: status);
 
     // A question as JSON, and nothing else: a form cannot send application/json, which keeps a
     // cross-site one from being read as a question — the rule the query endpoints apply.

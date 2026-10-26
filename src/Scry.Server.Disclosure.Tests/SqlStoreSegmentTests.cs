@@ -109,10 +109,10 @@ public class SqlStoreSegmentTests
             _ =>
             {
                 _.Keep = 1;
-                _.Retire = async (archive, cancel) =>
+                _.Retire = (archive, cancel) =>
                 {
                     handed = archive.Segment;
-                    await archive.WriteTo(copy, cancel);
+                    return archive.WriteTo(copy, cancel);
                 };
             });
         var who = new Who();
@@ -193,7 +193,7 @@ public class SqlStoreSegmentTests
             await Assert.That(asked).IsEqualTo(2);
             await Assert.That(gone[0].Retired).IsNotNull();
             await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000002].[DisclosureEvent]")).IsEqualTo(1);
-            await Assert.That((await kept.ReceiversOf("Patient", [1]).ToListAsync())).Count().IsEqualTo(1);
+            await Assert.That(await kept.ReceiversOf("Patient", [1]).ToListAsync()).Count().IsEqualTo(1);
         }
     }
 
@@ -255,7 +255,7 @@ public class SqlStoreSegmentTests
         {
             // The first went into a segment that held nothing, and each after it found one that did.
             await Assert.That(await kept.SegmentsAsync()).Count().IsEqualTo(3);
-            await Assert.That((await kept.ReceiversOf("Patient", [1]).ToListAsync())).Count().IsEqualTo(3);
+            await Assert.That(await kept.ReceiversOf("Patient", [1]).ToListAsync()).Count().IsEqualTo(3);
         }
     }
 
@@ -561,7 +561,7 @@ public class SqlStoreSegmentTests
         await kept.DrainAsync();
         var reported = new List<long>();
         var whole = await kept.VerifyWholeChainAsync(new Collect(reported), stretch: 3);
-        await SqlStores.Execute(database, "UPDATE [scry_000001].[DisclosureEvent] SET [Caller] = N'somebody.else' WHERE [EventId] = (SELECT [EventId] FROM [scry_000001].[DisclosureBatch] WHERE [Link] = 6)");
+        await Execute(database, "UPDATE [scry_000001].[DisclosureEvent] SET [Caller] = N'somebody.else' WHERE [EventId] = (SELECT [EventId] FROM [scry_000001].[DisclosureBatch] WHERE [Link] = 6)");
         var broken = await kept.VerifyWholeChainAsync(stretch: 3);
 
         using (Assert.Multiple())
@@ -609,7 +609,7 @@ public class SqlStoreSegmentTests
         var intact = (await kept.VerifyChainAsync()).Intact;
         var toldKept = await Told(kept);
         var toldMemory = await Told(memory);
-        await SqlStores.Execute(database, "UPDATE [scry_000001].[DisclosureEvent] SET [Agent] = N'somebody.else'");
+        await Execute(database, "UPDATE [scry_000001].[DisclosureEvent] SET [Agent] = N'somebody.else'");
 
         using (Assert.Multiple())
         {

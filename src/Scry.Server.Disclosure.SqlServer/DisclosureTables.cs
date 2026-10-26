@@ -314,9 +314,7 @@ sealed class DisclosureTables
              JOIN {s}.[DisclosureRunUnit] u ON u.[Run] = r.[Run] AND u.[Offset] = r.[Offset]
              """);
         Table(script, s, "DisclosureShape",
-            """
-            [Address] binary(32) NOT NULL CONSTRAINT [PK_DisclosureShape] PRIMARY KEY CLUSTERED
-            """);
+            "[Address] binary(32) NOT NULL CONSTRAINT [PK_DisclosureShape] PRIMARY KEY CLUSTERED");
         Table(script, s, "DisclosureField",
             """
             [Shape] binary(32) NOT NULL,

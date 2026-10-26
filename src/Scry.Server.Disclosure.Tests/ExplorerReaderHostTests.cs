@@ -156,7 +156,7 @@ public class ExplorerReaderHostTests
     {
         var services = new ServiceCollection();
         var thrown = Assert.Throws<ArgumentException>(() => services.AddSqlServerDisclosureRecord("Server=.", _ => _.Keep = 12));
-        await Assert.That(thrown!.Message).Contains("serving nodes");
+        await Assert.That(thrown.Message).Contains("serving nodes");
     }
 
     static async Task<WebApplication> Reader(Action<IServiceCollection> register, bool export = false)

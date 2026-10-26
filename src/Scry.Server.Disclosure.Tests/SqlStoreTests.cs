@@ -384,8 +384,8 @@ public class SqlStoreTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(keep!.Message).Contains("never rolled or retired");
-            await Assert.That(plain!.Message).Contains("LedgerTables is false");
+            await Assert.That(keep.Message).Contains("never rolled or retired");
+            await Assert.That(plain.Message).Contains("LedgerTables is false");
             await Assert.That(roll!.Message).Contains("never rolled");
         }
     }

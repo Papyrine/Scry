@@ -199,7 +199,7 @@ public class ExplorerApiTests
         var seen = new List<string>();
         foreach (var (name, host) in new[] {("production", production), ("development", development), ("no-export", opened)})
         {
-            foreach (var (path, body) in new (string, string?)[] {("", null), ("css/app.css", null), ("api/catalog", null), ("api/status", null), ("api/export", export), ("api/erase", erase)})
+            foreach (var (path, body) in new[] {("", null), ("css/app.css", null), ("api/catalog", null), ("api/status", null), ("api/export", export), ("api/erase", erase)})
             {
                 using var response = await host.Ask(path, body);
                 seen.Add($"{name} /{path} {(int) response.StatusCode}");

@@ -417,9 +417,7 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         await using (var mark = Command(
                          connection,
-                         $"""
-                          UPDATE o SET o.[Unreadable] = 1 FROM {sql.Outbox} o JOIN #batch b ON b.[Position] = o.[Position] WHERE b.[Readable] = 0;
-                          """,
+                         $"UPDATE o SET o.[Unreadable] = 1 FROM {sql.Outbox} o JOIN #batch b ON b.[Position] = o.[Position] WHERE b.[Readable] = 0;",
                          transaction))
         {
             await mark.ExecuteNonQueryAsync(cancel);

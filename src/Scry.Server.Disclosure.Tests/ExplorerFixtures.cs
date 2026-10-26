@@ -136,10 +136,10 @@ sealed class ExplorerHost :
         return text;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         Client.Dispose();
-        await app.DisposeAsync();
+        return app.DisposeAsync();
     }
 
     /// <summary>

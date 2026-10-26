@@ -518,7 +518,7 @@ public sealed class ScryDisclosureJournal :
     /// with a whole group after it, was whole once and has been damaged since: that is not something
     /// to repair by forgetting records that were acknowledged, so the journal refuses to open.
     /// </remarks>
-    long Scan(string path, long start, bool last, out long records)
+    static long Scan(string path, long start, bool last, out long records)
     {
         records = 0;
         using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read | FileShare.Delete);

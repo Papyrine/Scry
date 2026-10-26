@@ -291,12 +291,10 @@ sealed class SwitchedSink(IScryDisclosureSink inner) :
     IScryDisclosureSink,
     IScryDisclosureStatus
 {
-    bool down;
-
     public bool Down
     {
-        get => Volatile.Read(ref down);
-        set => Volatile.Write(ref down, value);
+        get => Volatile.Read(ref field);
+        set => Volatile.Write(ref field, value);
     }
 
     public void Append(ScryDisclosureBatch batch)

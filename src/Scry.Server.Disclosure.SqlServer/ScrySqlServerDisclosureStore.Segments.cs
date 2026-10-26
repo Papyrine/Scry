@@ -157,7 +157,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             connection,
             $"""
              SELECT (SELECT COUNT_BIG(*) FROM {tables.Batch}), (SELECT COUNT_BIG(*) FROM {tables.Event}), (SELECT MIN(e.[At]) FROM {tables.Event} e), (SELECT MAX(e.[At]) FROM {tables.Event} e),
-                    ({Size});
+                    ({size});
              """);
         command.Parameters.AddWithValue("@schema", tables.Schema);
         await using var reader = await command.ExecuteReaderAsync(cancel);
@@ -182,7 +182,7 @@ public sealed partial class ScrySqlServerDisclosureStore
     }
 
     // How much of the database a segment takes: every page of every table of its schema.
-    const string Size =
+    const string size =
         "SELECT ISNULL(SUM(a.[total_pages]), 0) * 8192 FROM sys.objects o JOIN sys.partitions p ON p.[object_id] = o.[object_id] JOIN sys.allocation_units a ON a.[container_id] IN (p.[hobt_id], p.[partition_id]) WHERE o.[schema_id] = SCHEMA_ID(@schema) AND o.[type] = 'U'";
 
     // The end of a segment: out of the views the record is read through, its tables dropped, and a
@@ -439,7 +439,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             return false;
         }
 
-        await using var command = Command(connection, Size, transaction);
+        await using var command = Command(connection, size, transaction);
         command.Parameters.AddWithValue("@schema", sql.Segment(current.Number).Schema);
         return (long) (await command.ExecuteScalarAsync(cancel))! >= bytes;
     }
@@ -551,7 +551,11 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         var (_, last, rolled) = known.Value;
         var reached = rolled
-            .Where(_ => _.From is { } first && _.To is { } final && (to is null || first <= to) && (from is null || final >= from))
+            .Where(_ => _ is
+            {
+                From: { } first,
+                To: { } final
+            } && (to is null || first <= to) && (from is null || final >= from))
             .Select(_ => _.Number.ToString(CultureInfo.InvariantCulture))
             .ToList();
         if (reached.Count == rolled.Count)
