@@ -4,39 +4,39 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.13" />
     <!-- Scry.Client.SignalR's one dependency. The server half needs none: a hub is the shared framework's. -->
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
     <!-- The change backplanes' one dependency each. Nothing else Scry ships references any of them. -->
-    <PackageVersion Include="StackExchange.Redis" Version="3.4.20" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.4.5" />
     <PackageVersion Include="MessagePipe" Version="1.8.2" />
     <PackageVersion Include="NServiceBus" Version="10.2.9" />
     <!-- 8.x on purpose: the 8.5 line is the last under Apache-2.0, and MassTransit 9 needs a commercial
          licence. Do not move it to 9 without deciding that. -->
-    <PackageVersion Include="MassTransit" Version="9.2.4" />
+    <PackageVersion Include="MassTransit" Version="9.2.3" />
     <PackageVersion Include="Rebus" Version="8.9.5" />
     <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
-    <PackageVersion Include="WolverineFx" Version="6.54.0" />
+    <PackageVersion Include="WolverineFx" Version="6.51.1" />
     <!-- Core Wolverine no longer compiles handler chains at runtime. The adapter needs neither; the tests
          run in dynamic mode, so they bring the compiler. A host picks this or static codegen itself. -->
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.54.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.51.1" />
     <!-- Scry.Server.Mcp's one dependency: the official MCP SDK's streamable-HTTP server. -->
-    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.13" />
     <PackageVersion Include="Delta.EF" Version="9.0.1" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
     <!-- Scry.Server.Disclosure.SqlServer's one dependency. At the version EfLocalDb already brings to
          the tests, so that pinning it here moves nothing else in the tree. -->
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.1" />
-    <PackageVersion Include="EfLocalDb" Version="27.2.6" />
+    <PackageVersion Include="EfLocalDb" Version="27.2.5" />
     <!-- Pinned only to lift Microsoft.Data.SqlClient's vulnerable transitive (GHSA-846f-f764-76mx,
          GHSA-2fmv-rv2c-59x7). Drop it once SqlClient depends on a patched version. -->
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <!-- Pinned to 5.3.0 (do not bump without running the Explorer UI tests). 5.6.0 is the next published
          version — nuget.org has no 5.4.x/5.5.x — and it calls System.Threading.Volatile.ReadBarrier, which
          the net10 mono-wasm interpreter does not implement: the managed fallback recurses into itself and
@@ -67,9 +67,9 @@
          runtime compiler's own floor of 5.0.0 would resolve the rest of the family off the pin. -->
     <PackageVersion Include="Microsoft.CodeAnalysis" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Scripting" Version="5.3.0" Pinned="true" />
-    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.13" />
+    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.12" />
     <PackageVersion Include="BlazorMonaco" Version="3.5.0" />
-    <PackageVersion Include="TUnit" Version="1.76.28" />
+    <PackageVersion Include="TUnit" Version="1.75.0" />
     <PackageVersion Include="Verify" Version="33.3.4" />
     <PackageVersion Include="Verify.TUnit" Version="33.3.4" />
     <PackageVersion Include="Verify.SourceGenerators" Version="2.5.0" />
