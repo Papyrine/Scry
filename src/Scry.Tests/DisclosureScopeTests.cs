@@ -544,8 +544,8 @@ public class DisclosureScopeTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(key!.Message).Contains("'Employee.Id' out of the record, and it is part of the key");
-            await Assert.That(version!.Message).Contains("'Employee.Status' out of the record, and it is the member named as a row's version");
+            await Assert.That(key.Message).Contains("'Employee.Id' out of the record, and it is part of the key");
+            await Assert.That(version.Message).Contains("'Employee.Status' out of the record, and it is the member named as a row's version");
         }
     }
 
