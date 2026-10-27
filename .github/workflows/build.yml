@@ -36,6 +36,11 @@ jobs:
         with:
           global-json-file: global.json
 
+      # The disclosure explorer's page leaves out the time zone database, which relinks the runtime and
+      # needs the WebAssembly build tools. -net10 because the SDK is a major ahead of the target.
+      - name: Install wasm-tools-net10 workload
+        run: dotnet workload install wasm-tools-net10
+
       # Keyed on everything that decides the package graph. restore-keys lets a changed graph start
       # from the previous cache rather than empty.
       - name: Cache NuGet packages
