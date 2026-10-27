@@ -67,6 +67,10 @@ public class BrowserHost :
         // UseStaticWebAssets() call means the WASM client is served in this environment too.
         server.StartInfo.Environment["DOTNET_ENVIRONMENT"] = "Development";
         server.StartInfo.Environment["SAMPLE_DATABASE"] = $"Browser{Interlocked.Increment(ref launches)}";
+        // The server writes to the test run's console, and at Information ASP.NET Core and EF Core log
+        // every request and command: nearly the whole CI log. Warnings and errors still come through.
+        server.StartInfo.Environment["Logging__LogLevel__Microsoft.AspNetCore"] = "Warning";
+        server.StartInfo.Environment["Logging__LogLevel__Microsoft.EntityFrameworkCore"] = "Warning";
         Configure(server.StartInfo.Environment);
 
         var template = templates.GetOrAdd(Project, _ => new());
