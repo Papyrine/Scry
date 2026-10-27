@@ -21,6 +21,10 @@
     <!-- The explorer is English-only; don't ship localized BCL/Roslyn resource assemblies in the
          published WASM (smaller embed, and no spurious satellites for the packaging project). -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- English-only for the same reason, so the ICU data is not published either. Needs no workload:
+         it only leaves the icudt_*.dat files out, and Roslyn's diagnostics read their messages from
+         the English resources above. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />

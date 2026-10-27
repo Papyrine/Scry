@@ -39,6 +39,32 @@ public class ExplorerPageTests
         }
     }
 
+    /// <summary>
+    /// The build is written in by the same rewrite, so it is hashed as it is served too: the embedded
+    /// page has it in markup, but a script that ever names it must not lose its hash.
+    /// </summary>
+    [Test]
+    public async Task WritesTheVersionInBeforeHashing()
+    {
+        var page = Build("<script>window.version = '__SCRY_VERSION__';</script>");
+        var served = $"window.version = '{ExplorerAssets.Version}';";
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(page.Html).Contains(served);
+            await Assert.That(page.Policy).Contains(Sha256(served));
+            await Assert.That(page.Policy).DoesNotContain(Sha256("window.version = '__SCRY_VERSION__';"));
+        }
+    }
+
+    /// <summary>
+    /// The package's informational version with its commit cut to seven characters:
+    /// v0.1.0-beta.14+1ebbf46.
+    /// </summary>
+    [Test]
+    public async Task TheVersionIsShortened() =>
+        await Assert.That(ExplorerAssets.Version).Matches(@"^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9a-f]{7})?$");
+
     /// <summary>Every inline script, in document order; the ones with a src are the origin's to allow.</summary>
     [Test]
     public async Task HashesEveryInlineScriptAndNoSourcedOne()
@@ -103,8 +129,8 @@ public class ExplorerPageTests
 
     /// <summary>
     /// The embedded page through the same builder. What the browser suite proves at the far end, this
-    /// pins at the near one: the real page has exactly the two inline scripts the policy names, and
-    /// its base href is the route it was mounted at.
+    /// pins at the near one: the real page has exactly the two inline scripts the policy names, its
+    /// base href is the route it was mounted at, and its loading screen says which build it is.
     /// </summary>
     [Test]
     public async Task BuildsTheEmbeddedPage()
@@ -113,12 +139,16 @@ public class ExplorerPageTests
             ExplorerAssets.Instance.ReadText("index.html"),
             "/tools/scry",
             new());
+        var hashes = ExplorerAssets.InlineScriptHashes(page.Html);
 
         using (Assert.Multiple())
         {
             await Assert.That(page.Html).Contains("""<base href="/tools/scry/" />""");
             await Assert.That(page.Html).DoesNotContain("__SCRY_BASE__");
-            await Assert.That(ExplorerAssets.InlineScriptHashes(page.Html)).Count().IsEqualTo(2);
+            await Assert.That(page.Html).Contains($"""<p class="loading-version">{ExplorerAssets.Version}</p>""");
+            await Assert.That(page.Html).DoesNotContain("__SCRY_VERSION__");
+            await Assert.That(hashes).Count().IsEqualTo(2);
+            await Assert.That(page.Policy).Contains($"script-src 'self' 'wasm-unsafe-eval' {string.Join(' ', hashes)};");
         }
     }
 

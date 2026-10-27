@@ -58,7 +58,6 @@ a {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
     min-height: 60vh;
     color: var(--muted);
 }
@@ -67,6 +66,7 @@ a {
     content: "";
     width: 26px;
     height: 26px;
+    margin-bottom: 1rem;
     border: 3px solid var(--border-strong);
     border-top-color: var(--accent);
     border-radius: 50%;
@@ -75,6 +75,33 @@ a {
 
 @keyframes spin {
     to { transform: rotate(1turn); }
+}
+
+.loading p {
+    margin: 0;
+}
+
+/* The build, written in by the server, tucked under the message. */
+.loading-version {
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+}
+
+/* Why the app could not start, in place of the spinner; selectable, so it can be pasted into a report. */
+.loading-error {
+    max-width: min(40rem, calc(100vw - 2rem));
+    margin-top: 1rem;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    text-align: center;
+    user-select: text;
+}
+
+.loading.failed::before {
+    display: none;
 }
 
 .loading-hint::before {

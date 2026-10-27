@@ -271,7 +271,7 @@ public static class ScryExplorerExtensions
     /// </summary>
     internal static ExplorerPage Build(string html, string basePath, ScryExplorerOptions options)
     {
-        html = html.Replace("__SCRY_BASE__", basePath.TrimEnd('/') + "/");
+        html = ExplorerAssets.Rewrite(html, basePath);
 
         return new(
             html,

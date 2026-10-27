@@ -19,10 +19,13 @@
          be told the hash of; and nothing is lost by going without, since every asset is revalidated
          against a tag made from its content. -->
     <WasmFingerprintAssets>false</WasmFingerprintAssets>
-    <!-- Every time on the page is shown in UTC and every number as an invariant one, so it needs
-         neither the globalization data nor the time zone database. They ship all the same: leaving
-         them out means relinking the runtime, which needs the wasm-tools workload, and a build that
-         asks every machine for a workload costs more than the bytes do. -->
+    <!-- Every time on the page is shown in UTC and every number as an invariant one (Show.cs), so it
+         needs neither the globalization data nor the time zone database. The ICU data is left out
+         with no workload: InvariantGlobalization only stops the icudt_*.dat files being published.
+         The time zone database still ships, since leaving that out does relink the runtime, which
+         needs the wasm-tools workload, and a build that asks every machine for a workload costs more
+         than the bytes do. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>

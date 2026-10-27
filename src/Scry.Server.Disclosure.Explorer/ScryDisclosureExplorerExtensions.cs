@@ -201,7 +201,7 @@ public static class ScryDisclosureExplorerExtensions
     /// </summary>
     internal static DisclosurePage Build(string html, string basePath)
     {
-        html = html.Replace("__SCRY_BASE__", basePath.TrimEnd('/') + "/");
+        html = ExplorerAssets.Rewrite(html, basePath);
         return new(
             html,
             // Hashed after the rewrite, so a token that ever moves inside a script takes its hash with it.

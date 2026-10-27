@@ -68,6 +68,43 @@ sealed partial class ExplorerAssets
     public bool HasAssets => pathToResource.ContainsKey("index.html");
 
     /// <summary>
+    /// The build, as the loading screen shows it: <c>v0.1.0-beta.14+1ebbf46</c>, the package's
+    /// informational version with its commit cut to seven characters. On the loading screen because
+    /// that is what shows before .NET is running, so a page a browser kept from an earlier deploy, or
+    /// one that never starts, still says which build it is.
+    /// </summary>
+    public static string Version { get; } = ReadVersion();
+
+    static string ReadVersion()
+    {
+        var version = typeof(ExplorerAssets).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+        if (version is null)
+        {
+            return "";
+        }
+
+        var plus = version.IndexOf('+');
+        if (plus >= 0 && version.Length > plus + 8)
+        {
+            version = version[..(plus + 8)];
+        }
+
+        return $"v{version}";
+    }
+
+    /// <summary>
+    /// The embedded page with what only the server knows written in: the base href of the route it is
+    /// mounted at, and the build it is. What both explorers serve, and what they hash and tag — so this
+    /// runs first, and a token that ever moves inside a script takes its hash with it.
+    /// </summary>
+    public static string Rewrite(string html, string basePath) =>
+        html
+            .Replace("__SCRY_BASE__", basePath.TrimEnd('/') + "/")
+            .Replace("__SCRY_VERSION__", Version);
+
+    /// <summary>
     /// The <c>'sha256-…'</c> source expressions for <paramref name="html"/>'s inline scripts, in
     /// document order. What a <c>script-src</c> lists to allow exactly those scripts and no other
     /// inline one.

@@ -18,13 +18,57 @@
 </head>
 <body>
     <div id="app">
-        <div class="loading">Loading Scry Disclosures…</div>
+        <div class="loading">
+            <p class="loading-message">Loading Scry Disclosures…</p>
+            <!-- Rewritten at serve time to the build the package is (ExplorerAssets.Version). -->
+            <p class="loading-version">__SCRY_VERSION__</p>
+            <p class="loading-error" hidden></p>
+        </div>
     </div>
     <div id="blazor-error-ui">
         Something on this page went wrong.
         <a href="" class="reload">Reload</a>
     </div>
     <script src="js/disclosure.js"></script>
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <!--
+        Blazor is started here rather than by itself, so that a boot that fails, or a browser without
+        WebAssembly, is written on the loading screen in place of the spinner: otherwise it is only in
+        the console, and the page looks like it is still loading. Once the app has rendered the loading
+        screen is gone, and the listeners write nothing.
+    -->
+    <script>
+        (() => {
+            const loading = document.querySelector('#app .loading');
+            const fail = reason => {
+                if (!loading.isConnected) {
+                    return;
+                }
+
+                loading.classList.add('failed');
+                loading.querySelector('.loading-message').textContent = 'Scry Disclosures could not start';
+                const error = loading.querySelector('.loading-error');
+                error.textContent = String(reason?.message ?? reason ?? 'Unknown error');
+                error.hidden = false;
+            };
+            addEventListener('error', event => fail(event.error ?? event.message));
+            addEventListener('unhandledrejection', event => fail(event.reason));
+
+            if (typeof WebAssembly !== 'object') {
+                fail('This browser has WebAssembly turned off, and Scry Disclosures runs on it. On an iPhone or iPad, Lockdown Mode turns it off.');
+                return;
+            }
+
+            // A base href that is not where the page is mounted sends every request below it to a 404,
+            // and the first sign is that the script above never ran. Saying which address failed is
+            // what makes that plain.
+            if (typeof Blazor !== 'object') {
+                fail(`${new URL('_framework/blazor.webassembly.js', document.baseURI)} did not load.`);
+                return;
+            }
+
+            Blazor.start().catch(fail);
+        })();
+    </script>
 </body>
 </html>

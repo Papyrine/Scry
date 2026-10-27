@@ -351,6 +351,24 @@ public class ExplorerApiTests
         }
     }
 
+    // The embedded page through the same builder: both its tokens written in, the build on its loading
+    // screen, and its two inline scripts (the theme, and the one that starts Blazor) named by the policy.
+    [Test]
+    public async Task BuildsTheEmbeddedPage()
+    {
+        var page = ScryDisclosureExplorerExtensions.Build(ExplorerAssets.Instance.ReadText("index.html"), "/audit");
+        var hashes = ExplorerAssets.InlineScriptHashes(page.Html);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(page.Html).Contains("""<base href="/audit/" />""");
+            await Assert.That(page.Html).Contains($"""<p class="loading-version">{ExplorerAssets.Version}</p>""");
+            await Assert.That(page.Html).DoesNotContain("__SCRY_");
+            await Assert.That(hashes).Count().IsEqualTo(2);
+            await Assert.That(page.Policy).Contains($"script-src 'self' 'wasm-unsafe-eval' {string.Join(' ', hashes)};");
+        }
+    }
+
     // Erasing is off until a host turns it on, wants the key typed twice, and is recorded twice over:
     // as a question, before it is done, and as the erasure, naming who asked.
     [Test]
