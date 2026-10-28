@@ -20,10 +20,10 @@
     <PackageVersion Include="MassTransit" Version="9.2.4" />
     <PackageVersion Include="Rebus" Version="8.9.5" />
     <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
-    <PackageVersion Include="WolverineFx" Version="6.54.0" />
+    <PackageVersion Include="WolverineFx" Version="6.56.0" />
     <!-- Core Wolverine no longer compiles handler chains at runtime. The adapter needs neither; the tests
          run in dynamic mode, so they bring the compiler. A host picks this or static codegen itself. -->
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.54.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.56.0" />
     <!-- Scry.Server.Mcp's one dependency: the official MCP SDK's streamable-HTTP server. -->
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
