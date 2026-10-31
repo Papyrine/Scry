@@ -201,7 +201,7 @@ The one rejection that *is* the client's own doing reads differently — `does n
 
 The `page` terminal targets a **non-grouped** query. Out of scope:
 
-- **Grouped / aggregated results.** A `page` over a `GroupBy` → `Select` pipeline is **rejected** at validation (`Paging is not supported over a grouped query`); grouped results use `Skip`/`Take`.
+- **Grouped / aggregated results.** A `page` over a `GroupBy` → `Select` pipeline is **rejected** at validation (`Paging is not supported over a grouped query`), and so are `Skip` and `Take` after a `GroupBy`: groups have no order to slice. Written before the `GroupBy`, they narrow the rows that are grouped.
 - **`Single` / `First` terminals.** These already bound their result and take no page.
 - **Nullable / nav-path / unordered keys.** Not seek-safe — served by offset with no cursor (see [the seek-safe rule](#the-seek-safe-rule)). True keyset over nullable columns (NULL-ordering aware) is the remaining hard corner and is not currently supported.
 

@@ -156,6 +156,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case SkipOp skip:
+                    // A group has no order of its own to slice — OrderBy is refused after GroupBy — and
+                    // the executor applies a slice to the rows as it meets it, while the grouping and
+                    // its projection are applied after every row operator. Written after GroupBy it
+                    // would slice the rows that feed the groups and answer with aggregates over them.
+                    EnsureNotGrouped(sawGroupBy, "Skip");
                     sawOuterFilter = true;
                     EnsurePageableDistinct(sawDistinct, sawOrdering, projection, "Skip");
                     EnsureOrdered(sawOrdering, "Skip");
@@ -163,6 +168,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case TakeOp take:
+                    EnsureNotGrouped(sawGroupBy, "Take");
                     sawOuterFilter = true;
                     EnsurePageableDistinct(sawDistinct, sawOrdering, projection, "Take");
                     EnsureOrdered(sawOrdering, "Take");
@@ -316,6 +322,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case LastOp last:
+                    // The ordering it would read from is the rows', written before the grouping; the
+                    // groups themselves have none, and the provider refuses Last without one.
+                    EnsureNotGrouped(sawGroupBy, "Last");
                     if (!sawOrdering)
                     {
                         throw Reject("Last requires an ordered query — add an OrderBy.");

@@ -58,9 +58,33 @@ sealed class ExpressionBuilder(
     {
         var parameter = Expression.Parameter(type, "e");
         var outer = Enter(ScryDisclosureFieldUse.Read);
-        var body = Build(predicate, parameter, typeof(bool));
+        var body = BuildCondition(predicate, parameter);
         Leave(outer);
         return Expression.Lambda(EnsureCondition(body), parameter);
+    }
+
+    /// <summary>
+    /// Builds what is read as a condition: a predicate, a conditional's test, an operand of AndAlso,
+    /// OrElse or Not.
+    /// </summary>
+    /// <remarks>
+    /// A boolean read through a policied navigation arrives widened to <c>bool?</c>: a row the policy
+    /// hides reads as SQL NULL, and a projection's shaper has to be able to carry that. A condition
+    /// shapes nothing, so it reads the boolean through the widening — exactly what it reads off an
+    /// optional navigation the row does not have. Only that widening is read through: a member that is
+    /// itself a <c>bool?</c> is no condition, and is refused as one.
+    /// </remarks>
+    Expression BuildCondition(Node node, Expression row)
+    {
+        var built = Build(node, row, typeof(bool));
+        if (built is UnaryExpression {NodeType: ExpressionType.Convert, Operand: var read} &&
+            built.Type == typeof(bool?) &&
+            read.Type == typeof(bool))
+        {
+            return read;
+        }
+
+        return built;
     }
 
     // A predicate that is not a condition — a bare text member as a Where — would fail only when the
@@ -1281,14 +1305,14 @@ sealed class ExpressionBuilder(
     {
         var parameter = Expression.Parameter(QueryComposition.Close(typeof(IGrouping<,>), key, element), "g");
         var outer = Enter(ScryDisclosureFieldUse.Read);
-        var body = Build(predicate, parameter, typeof(bool));
+        var body = BuildCondition(predicate, parameter);
         Leave(outer);
         return Expression.Lambda(EnsureCondition(body), parameter);
     }
 
     Expression BuildConditional(ConditionalNode conditional, Expression row)
     {
-        var test = Build(conditional.Test, row, typeof(bool));
+        var test = BuildCondition(conditional.Test, row);
 
         // The first branch built decides the type the other is built against. A bare null has no
         // type to decide with — built first it would read as text and mismatch a number on the other
@@ -1467,8 +1491,8 @@ sealed class ExpressionBuilder(
 
         if (binary.Op is BinaryOp.AndAlso or BinaryOp.OrElse)
         {
-            var leftBool = Build(binary.Left, row, typeof(bool));
-            var rightBool = Build(binary.Right, row, typeof(bool));
+            var leftBool = BuildCondition(binary.Left, row);
+            var rightBool = BuildCondition(binary.Right, row);
             if (binary.Op == BinaryOp.AndAlso)
             {
                 return Expression.AndAlso(leftBool, rightBool);
@@ -1553,10 +1577,14 @@ sealed class ExpressionBuilder(
 
     UnaryExpression BuildUnary(UnaryNode unary, Expression row)
     {
-        var operand = Build(unary.Operand, row, unary.Op == UnaryOp.Not ? typeof(bool) : null);
+        if (unary.Op == UnaryOp.Not)
+        {
+            return Expression.Not(BuildCondition(unary.Operand, row));
+        }
+
+        var operand = Build(unary.Operand, row, null);
         return unary.Op switch
         {
-            UnaryOp.Not => Expression.Not(operand),
             UnaryOp.Negate => Expression.Negate(operand),
             _ => throw new ScryValidationException($"Unsupported unary operator '{unary.Op}'.")
         };

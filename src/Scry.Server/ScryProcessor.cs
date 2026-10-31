@@ -955,15 +955,25 @@ public sealed partial class ScryProcessor
         ResponseWriter.BeginBatch(json);
         var correlation = Correlate();
         var index = 0;
+        var headers = responseHeaders;
         foreach (var query in request.Queries)
         {
-            await WriteEntryAsync(json, entry, query, data, services, requestHeaders, responseHeaders, binary, budget, caller, Correlated(correlation, index++), cancel);
+            await WriteEntryAsync(json, entry, query, data, services, requestHeaders, headers, binary, budget, caller, Correlated(correlation, index++), cancel);
 
             // Between entries, never inside one: an entry is written to a buffer of its own and inserted
             // whole precisely so a failure part-way through its rows is still reported as that entry's
             // own result, which nothing already on the wire could be replaced by.
             if (spill?.ShouldDrain(json.BytesPending) == true)
             {
+                // The headers leave with the first bytes, and a started response refuses a write to
+                // them. So what the entries still to come would mark the response with is marked now,
+                // and they are handed a dictionary of their own, as a live query's later runs are.
+                if (!spill.Committed)
+                {
+                    MarkAhead(request.Queries, index, responseHeaders);
+                    headers = new HeaderDictionary();
+                }
+
                 await json.FlushAsync(cancel);
                 await spill.DrainAsync(cancel);
             }
@@ -971,6 +981,35 @@ public sealed partial class ScryProcessor
 
         ResponseWriter.EndBatch(json, schema.Stamp);
         await json.FlushAsync(cancel);
+    }
+
+    // What the entries a batch has yet to answer would write to its headers, written before they can
+    // be refused: no-store, where one of them projects a sensitive member or may be recorded by the
+    // disclosure audit, which marks every recorded answer no-store and decides an excluded root's only
+    // once it has been walked. Ahead of the answer rather than with it, so it is the cautious reading:
+    // an entry that ends up unrecorded leaves the batch no-store, which costs a response no cache would
+    // have kept anyway. A policy's own write to the headers of a later entry is not made at all.
+    void MarkAhead(IReadOnlyList<QueryRequest> queries, int answered, IHeaderDictionary responseHeaders)
+    {
+        if (answered >= queries.Count)
+        {
+            return;
+        }
+
+        if (disclosure is not null)
+        {
+            responseHeaders.CacheControl = "no-store";
+            return;
+        }
+
+        for (var index = answered; index < queries.Count; index++)
+        {
+            if (SensitiveWalk.Inspect(queries[index], schema.Sensitive.IsSensitive).InProjection)
+            {
+                responseHeaders.CacheControl = "no-store";
+                return;
+            }
+        }
     }
 
     // The envelope-level rejections, which are the only way a batch fails as a whole: they are checked

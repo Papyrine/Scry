@@ -51,20 +51,8 @@ public static class ScrySignalRClient
             await using var receipts = connection
                 .StreamAsync<string>(method, argument, stopping.Token)
                 .GetAsyncEnumerator(stopping.Token);
-            while (true)
+            while (await Next(connection, receipts))
             {
-                try
-                {
-                    if (!await receipts.MoveNextAsync())
-                    {
-                        break;
-                    }
-                }
-                catch (InvalidOperationException exception) when (connection.State != HubConnectionState.Connected)
-                {
-                    throw new IOException("The hub connection is not connected.", exception);
-                }
-
                 yield return ScryJson.DeserializeReceipt(Answer(receipts.Current));
             }
         }
@@ -134,7 +122,8 @@ public static class ScrySignalRClient
 
     // A sequence that ends is asked for again by the client, and one that throws ends the live query
     // unless the failure is one a later attempt could get past — which is decided from the exception,
-    // and so from the code the hub put on its marker.
+    // and so from the code the hub put on its marker. A connection that dropped is one: the client
+    // asks again at once, while the connection is still coming back, and is refused for it.
     static async IAsyncEnumerable<QueryResponse> Answers(
         HubConnection connection,
         QueryRequest request,
@@ -143,15 +132,32 @@ public static class ScrySignalRClient
         using var stopping = CancelSource.CreateLinkedTokenSource(cancel);
         try
         {
-            var answers = connection.StreamAsync<string>(ScryHubProtocol.Subscribe, ScryJson.Serialize(request), stopping.Token);
-            await foreach (var answer in answers)
+            await using var answers = connection
+                .StreamAsync<string>(ScryHubProtocol.Subscribe, ScryJson.Serialize(request), stopping.Token)
+                .GetAsyncEnumerator(stopping.Token);
+            while (await Next(connection, answers))
             {
-                yield return ScryJson.DeserializeResponse((ReadOnlyMemory<byte>)Answer(answer));
+                yield return ScryJson.DeserializeResponse((ReadOnlyMemory<byte>)Answer(answers.Current));
             }
         }
         finally
         {
             await Stop(stopping);
+        }
+    }
+
+    // The next item of a stream the client asks for again when it ends. A hub connection that is not
+    // connected refuses a stream as a mistake in the call; it is said as the connection failure it is,
+    // which is what the client asks again past, rather than given up on.
+    static async ValueTask<bool> Next<T>(HubConnection connection, IAsyncEnumerator<T> enumerator)
+    {
+        try
+        {
+            return await enumerator.MoveNextAsync();
+        }
+        catch (InvalidOperationException exception) when (connection.State != HubConnectionState.Connected)
+        {
+            throw new IOException("The hub connection is not connected.", exception);
         }
     }
 

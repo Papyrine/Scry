@@ -136,8 +136,8 @@ public ScryBatch Batch()
 | `Where(predicate)` | `where` | Filters rows. Written after `GroupBy` it filters groups instead — see [below](#filtering-groups). Not allowed after `Select`. |
 | `OrderBy(key)` / `OrderByDescending(key)` | `orderBy` | Key must be a scalar member. Not allowed after `GroupBy` or `Select`. |
 | `ThenBy(key)` / `ThenByDescending(key)` | `thenBy` | Must follow an `OrderBy`. |
-| `Skip(n)` | `skip` | `n` must be non-negative. |
-| `Take(n)` | `take` | `n` must be non-negative and `<= MaxPageSize`. |
+| `Skip(n)` | `skip` | `n` must be non-negative. Not allowed after `GroupBy`. |
+| `Take(n)` | `take` | `n` must be non-negative and `<= MaxPageSize`. Not allowed after `GroupBy`. |
 | `OfType<T>()` | `ofType` | Narrows to a derived type — see [below](#narrowing-to-a-derived-type). Later operators read the derived type. |
 | `SelectMany(collection)` | `selectMany` | Flattens a `[QueryableCollection]` — see [below](#flattening-a-collection). One per query; later operators read the element. |
 | `GroupBy(key)` | `groupBy` | One key, or up to eight members grouped at once. At most one `GroupBy`, and it must be followed by a `Select`. |
@@ -1437,6 +1437,7 @@ Constraints:
 
 - One group key, or up to eight members grouped at once. Each may be a member of the row or an expression computed from it.
 - `OrderBy` and `ThenBy` are not allowed after `GroupBy`; a `Where` after it is a [group filter](#filtering-groups).
+- Groups have no order to slice, so `Skip`, `Take` and `Last` are not allowed after `GroupBy` either. Written before it, `Skip` and `Take` narrow the rows that are grouped.
 - The key and aggregates may be [composed into expressions](#computed-projection-members) — `_.Sum(…) / _.Count()`.
 - Nested projections are not allowed in a grouped `Select`.
 - Referencing a non-key member throws `A predicate after GroupBy may only reference the group key or aggregates.`, whether it is named directly or buried in an expression.

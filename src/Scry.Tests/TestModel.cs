@@ -216,6 +216,12 @@ public struct Workstation
 
     [Sensitive]
     public string Extension { get; set; }
+
+    // Declared after Extension and named before it, so the type's sensitivity line is spelled in a
+    // different order by declaration than by name. The generator reads members in the first and the
+    // server describes them in the second, and both hash the line whole.
+    [Sensitive]
+    public string? Badge { get; set; }
 }
 
 /// <summary>

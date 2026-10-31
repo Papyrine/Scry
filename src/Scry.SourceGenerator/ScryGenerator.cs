@@ -807,9 +807,13 @@ public class ScryGenerator :
     /// </remarks>
     static string Sensitivity(SourceInfo source)
     {
+        // Sorted, because the joined value is hashed whole and the two sides meet the members in
+        // different orders: this one in declaration order, the server in the name order it describes
+        // them in. Mirrored by Schema.Sensitivity.
         var names = source.Properties
             .Where(_ => _.IsSensitive)
             .Select(_ => _.Name)
+            .OrderBy(_ => _, StringComparer.Ordinal)
             .ToList();
         if (source.IsSensitive)
         {

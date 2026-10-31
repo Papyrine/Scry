@@ -209,6 +209,37 @@ public class NavigationPolicyTests
         await Assert.That(rows.Select(_ => $"{_.Name}:{_.Manager ?? "<null>"}:{_.ManagerDepartment ?? "<null>"}").ToArray()).IsEquivalentTo(["Aaron:Alice:Engineering", "Alice:<null>:<null>", "Carol:<null>:<null>"], CollectionOrdering.Matching);
     }
 
+    // A boolean read through a policied navigation is widened for the shaper, and a condition used to
+    // be handed the widened bool? and refuse it as no condition at all — so the query was refused for
+    // the sole reason that the navigation's source carries a policy.
+    [Test]
+    public async Task ABooleanThroughAPoliciedNavigationIsACondition()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, BothPolicied());
+
+        // Aaron is the one visible employee with a manager, and that manager is active.
+        var bare = await client.Source<Employee>("Employee")
+            .Where(_ => _.Manager!.Active)
+            .Select(_ => new {_.Name})
+            .ToListAsync();
+        var combined = await client.Source<Employee>("Employee")
+            .Where(_ => _.Manager!.Active && _.Active)
+            .Select(_ => new {_.Name})
+            .ToListAsync();
+        var tested = await client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Name)
+            .Select(_ => new {_.Name, Managed = _.Manager!.Active ? "yes" : "no"})
+            .ToListAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(bare.Select(_ => _.Name)).IsEquivalentTo(["Aaron"]);
+            await Assert.That(combined.Select(_ => _.Name)).IsEquivalentTo(["Aaron"]);
+            await Assert.That(tested.Select(_ => $"{_.Name}:{_.Managed}")).IsEquivalentTo(["Aaron:yes", "Alice:no", "Carol:no"], CollectionOrdering.Matching);
+        }
+    }
+
     /// <summary>Hides the inactive employee, so a traversal into Employee has rows to hide too.</summary>
     class ActiveEmployeesOnlyPolicy :
         IReturnablePolicy<Employee>

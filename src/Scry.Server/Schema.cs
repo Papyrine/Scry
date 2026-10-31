@@ -266,9 +266,12 @@ sealed partial class Schema
     /// </remarks>
     static string Sensitivity(ScryTypeInfo type)
     {
+        // Sorted here too, though the members already arrive in name order: the generator meets them
+        // in declaration order, and the joined value is hashed whole. Mirrors ScryGenerator.Sensitivity.
         var names = type.Members
             .Where(_ => _.IsSensitive)
             .Select(_ => _.Name)
+            .OrderBy(_ => _, StringComparer.Ordinal)
             .ToList();
         if (type.IsSensitive)
         {

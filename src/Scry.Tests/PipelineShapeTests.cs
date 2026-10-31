@@ -31,6 +31,46 @@ public class PipelineShapeTests
     public async Task GroupByWithoutASelectIsRefused() =>
         await Assert.That(Rejects("Order", [new GroupByOp([new MemberNode(["Region"])])])).Contains("GroupBy must be followed by a Select");
 
+    // The executor slices rows as it meets the slice and applies the grouping after every row
+    // operator, so a slice written after GroupBy was answered with aggregates over the sliced rows
+    // rather than with a slice of the groups. An ordering written before the grouping is what let it
+    // through: it ordered the rows, and the groups have none.
+    [Test]
+    [Arguments("Skip")]
+    [Arguments("Take")]
+    [Arguments("Last")]
+    public async Task ASliceAfterGroupByIsRefused(string op)
+    {
+        QueryOp after = op switch
+        {
+            "Skip" => new SkipOp(1),
+            "Take" => new TakeOp(2),
+            _ => new LastOp(OrDefault: false, Predicate: null)
+        };
+
+        await Assert.That(Rejects("Order", [byRegion, groupByRegion, regionCounts, after])).Contains($"{op} is not allowed after GroupBy");
+    }
+
+    [Test]
+    public async Task ASliceBeforeGroupByGroupsTheSlicedRows()
+    {
+        var response = Execute("Order", [new OrderByOp(new MemberNode(["Id"]), Descending: false), new TakeOp(1), groupByRegion, regionCounts]);
+
+        var group = response.Payload.EnumerateArray().Single();
+        await Assert.That(group.GetProperty("count").GetInt32()).IsEqualTo(1);
+    }
+
+    static OrderByOp byRegion = new(new MemberNode(["Region"]), Descending: false);
+
+    static GroupByOp groupByRegion = new([new MemberNode(["Region"])]);
+
+    static SelectOp regionCounts = new(
+        new(
+        [
+            new("Region", new NodeValue(new MemberNode(["Region"]))),
+            new("Count", new NodeValue(new AggregateNode(AggregateFn.Count, Selector: null)))
+        ]));
+
     [Test]
     [Arguments("Where")]
     [Arguments("OrderBy")]

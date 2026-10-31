@@ -127,6 +127,48 @@ public class SignalRTests
         await Assert.That(answers.Current).IsEqualTo(1);
     }
 
+    // A live query asked while the hub connection is down — as the client asks again at once when a
+    // connection ends, before it is back — is refused as a call on a closed connection. That is a
+    // connection failure to ask again past, as it is for a pending command, not one that ends the live
+    // query. Asked on a stopped connection here because stopping one does not end its streams in this
+    // host, so the drop itself cannot be what leads to the asking.
+    [Test]
+    public async Task ALiveQueryOutlivesTheConnection()
+    {
+        await using var server = await Server.Start(database);
+        server.Client.Reconnect = new Every(TimeSpan.FromMilliseconds(50));
+        var seen = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var down = new TaskCompletionSource<ScrySubscriptionState>(TaskCreationOptions.RunContinuationsAsynchronously);
+        server.Client.LiveActivity += _ =>
+        {
+            seen.Enqueue($"{_.State} {_.Failure?.GetType().Name}");
+            if (_ is {State: ScrySubscriptionState.Reconnecting, Failure: IOException} or {State: ScrySubscriptionState.Faulted})
+            {
+                down.TrySetResult(_.State);
+            }
+        };
+
+        await server.Connection.StopAsync();
+        await using var answers = server.Query.Order
+            .LiveCount(_ => _.Region == "HubReconnect")
+            .GetAsyncEnumerator();
+        var moving = Next(answers);
+        await Task.WhenAny(down.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+        await Assert.That(down.Task.IsCompleted).IsTrue().Because(string.Join(" | ", seen));
+        await Assert.That(await down.Task).IsEqualTo(ScrySubscriptionState.Reconnecting);
+
+        await server.Connection.StartAsync();
+        await Assert.That(await moving).IsTrue();
+        await Assert.That(answers.Current).IsZero();
+    }
+
+    sealed class Every(TimeSpan delay) :
+        IScryRetryPolicy
+    {
+        public TimeSpan? NextDelay(ScryRetryContext context) =>
+            delay;
+    }
+
     // Caught by the code that catches it over HTTP: the same type, and the same code on it.
     [Test]
     public async Task ARejectionSurfacesAsItDoesOverHttp()

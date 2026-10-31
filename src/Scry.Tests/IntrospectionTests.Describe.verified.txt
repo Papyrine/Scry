@@ -1283,6 +1283,16 @@
       Model: WorkstationQueryModel,
       Members: [
         {
+          Name: Badge,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: true,
+          IsCapability: false
+        },
+        {
           Name: Extension,
           TypeDisplay: string,
           NeedsNullDefault: true,
@@ -1474,5 +1484,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: BSxNRf9Zn544Liux
+  SchemaStamp: 9oaNXxdznoihumz8
 }
