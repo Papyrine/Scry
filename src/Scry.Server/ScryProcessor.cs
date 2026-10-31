@@ -1181,29 +1181,6 @@ public sealed partial class ScryProcessor
         return (begin, RecordedRows(rows, options.MaxStreamRows, recorder, capture, options.Disclosure!.StreamChunkBytes, cancel));
     }
 
-    /// <summary>
-    /// Streams like <see cref="Stream(QueryRequest, DbContext, IServiceProvider, IHeaderDictionary, IHeaderDictionary, Cancel)"/>,
-    /// but each row arrives as its finished JSON bytes, written by the plan's shape writer — the
-    /// buffer is valid until the next row is pulled.
-    /// </summary>
-    internal (ScryStreamMarker Begin, bool Binary, IAsyncEnumerable<ReadOnlyMemory<byte>> Rows) StreamBuffered(
-        QueryRequest request,
-        DbContext data,
-        IServiceProvider services,
-        IHeaderDictionary requestHeaders,
-        IHeaderDictionary responseHeaders,
-        Cancel cancel = default,
-        BinaryPartCollector? binary = null,
-        ResponseBudget? budget = null,
-        string? caller = null)
-    {
-        var (begin, rows, recorder, capture) = StreamCore(request, data, services, requestHeaders, responseHeaders, binary, caller);
-        // Whether any row can divert — known from the plan before the first byte, which is what lets
-        // the transport commit to a multipart content type up front, data-independently.
-        var diverting = binary is not null && rows.Plan.BinarySlots is not null;
-        return (begin, diverting, Streamed(rows, budget, recorder, capture, cancel));
-    }
-
     // A stream's lines: as they are read, or — where the disclosure audit is on — held back a chunk at
     // a time until the record of each chunk is accepted.
     IAsyncEnumerable<ReadOnlyMemory<byte>> Streamed(
@@ -1222,8 +1199,10 @@ public sealed partial class ScryProcessor
     }
 
     /// <summary>
-    /// <see cref="StreamBuffered"/> with what comes before the first row — the policies brought up
-    /// to date, the probes — awaited rather than blocked on. What the HTTP endpoint runs.
+    /// Streams like <see cref="Stream(QueryRequest, DbContext, IServiceProvider, IHeaderDictionary, IHeaderDictionary, Cancel)"/>,
+    /// but each row arrives as its finished JSON bytes, written by the plan's shape writer — the
+    /// buffer is valid until the next row is pulled. What comes before the first row — the policies
+    /// brought up to date, the probes — is awaited rather than blocked on. What the HTTP endpoint runs.
     /// </summary>
     internal async ValueTask<(ScryStreamMarker Begin, bool Binary, IAsyncEnumerable<ReadOnlyMemory<byte>> Rows)> StreamBufferedAsync(
         QueryRequest request,
@@ -1303,6 +1282,8 @@ public sealed partial class ScryProcessor
             }
         }
 
+        // Whether any row can divert — known from the plan before the first byte, which is what lets
+        // the transport commit to a multipart content type up front, data-independently.
         var diverting = binary is not null && rows.Plan.BinarySlots is not null;
         return (Begin(drifted), diverting, Streamed(rows, budget, recorder, capture, cancel));
     }
@@ -1312,9 +1293,7 @@ public sealed partial class ScryProcessor
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
-        IHeaderDictionary responseHeaders,
-        BinaryPartCollector? binary = null,
-        string? caller = null)
+        IHeaderDictionary responseHeaders)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, options, request, services, streamed: true);
@@ -1323,11 +1302,10 @@ public sealed partial class ScryProcessor
         var streaming = false;
         try
         {
-            capture = Disclose(request, request.Root, caller, services, responseHeaders);
+            capture = Disclose(request, request.Root, caller: null, services, responseHeaders);
             capture?.Begin(ScryDisclosureKind.Stream);
             rows = executor.Stream(request, data, new(services, requestHeaders, responseHeaders)
             {
-                Binary = binary,
                 Disclosure = capture
             });
             if (capture is {Recording: null})

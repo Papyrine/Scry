@@ -203,7 +203,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// <remarks>
     /// This is also the only place that knows the projection plan before the first row is read, so it
     /// is where <paramref name="spill"/> is told whether it may send anything early. The decision is
-    /// the plan's rather than the data's — the same rule <c>StreamBuffered</c> applies to a different
+    /// the plan's rather than the data's — the same rule <c>StreamBufferedAsync</c> applies to a different
     /// question — because a plan carrying no binary slot can never produce a part, and so can never
     /// need one to precede JSON that has already gone out.
     /// </remarks>

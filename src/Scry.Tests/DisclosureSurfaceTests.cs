@@ -31,7 +31,7 @@ public class DisclosureSurfaceTests
 
         await using var context = TestContext.CreateSeeded();
         var plain = await Lines(SharedProcessor.Instance, context);
-        var (_, _, rows) = processor.StreamBuffered(Disclosures.Names(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), new HeaderDictionary());
+        var (_, _, rows) = await processor.StreamBufferedAsync(Disclosures.Names(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), new HeaderDictionary());
         List<string> lines = [];
         await foreach (var row in rows)
         {
@@ -135,7 +135,7 @@ public class DisclosureSurfaceTests
             await using var context = TestContext.CreateSeeded();
             var options = new ScryOptions(typeof(TestContext));
             Limit(options);
-            var (_, _, rows) = asked.StreamBuffered(
+            var (_, _, rows) = await asked.StreamBufferedAsync(
                 Disclosures.Names(),
                 context,
                 EmptyServiceProvider.Instance,
@@ -166,7 +166,7 @@ public class DisclosureSurfaceTests
         await using var services = Services(auditor);
 
         await using var context = TestContext.CreateSeeded();
-        var (_, _, rows) = processor.StreamBuffered(Disclosures.Names(), context, services, new HeaderDictionary(), new HeaderDictionary());
+        var (_, _, rows) = await processor.StreamBufferedAsync(Disclosures.Names(), context, services, new HeaderDictionary(), new HeaderDictionary());
         List<string> lines = [];
         await Assert.ThrowsExactlyAsync<ScryDisclosureException>(
             async () =>
@@ -216,7 +216,7 @@ public class DisclosureSurfaceTests
         {
             await using var context = TestContext.CreateSeeded();
             var collector = new BinaryPartCollector();
-            var (_, diverting, rows) = asked.StreamBuffered(
+            var (_, diverting, rows) = await asked.StreamBufferedAsync(
                 request,
                 context,
                 EmptyServiceProvider.Instance,
@@ -544,7 +544,7 @@ public class DisclosureSurfaceTests
 
     static async Task<List<string>> Lines(ScryProcessor processor, TestContext context)
     {
-        var (_, _, rows) = processor.StreamBuffered(Disclosures.Names(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), new HeaderDictionary());
+        var (_, _, rows) = await processor.StreamBufferedAsync(Disclosures.Names(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), new HeaderDictionary());
         List<string> lines = [];
         await foreach (var row in rows)
         {

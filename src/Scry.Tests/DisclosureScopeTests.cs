@@ -253,7 +253,7 @@ public class DisclosureScopeTests
         var (processor, store) = Disclosures.Audited(configure: _ => _.Exclude<Department>());
         await using var context = TestContext.CreateSeeded();
 
-        var (_, _, rows) = processor.StreamBuffered(DepartmentNames(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), new HeaderDictionary());
+        var (_, _, rows) = await processor.StreamBufferedAsync(DepartmentNames(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), new HeaderDictionary());
         var count = 0;
         await foreach (var _ in rows)
         {
@@ -514,7 +514,7 @@ public class DisclosureScopeTests
 
     static async Task<List<string>> Streamed(ScryProcessor processor, TestContext context)
     {
-        var (_, _, rows) = processor.StreamBuffered(Disclosures.Names(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), new HeaderDictionary());
+        var (_, _, rows) = await processor.StreamBufferedAsync(Disclosures.Names(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), new HeaderDictionary());
         List<string> lines = [];
         await foreach (var row in rows)
         {
