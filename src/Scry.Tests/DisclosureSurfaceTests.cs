@@ -401,7 +401,7 @@ public class DisclosureSurfaceTests
         await using var reading = host.Database.NewDbContext();
         var may = host.Processor.Capabilities(reading, host.Services, new HeaderDictionary(), "alice");
 
-        var events = await Disclosures.Events(store, "alice");
+        var events = await Disclosures.Events(store);
         using (Assert.Multiple())
         {
             await Assert.That(sent.Single().Status).IsEqualTo(CommandStatus.Completed);

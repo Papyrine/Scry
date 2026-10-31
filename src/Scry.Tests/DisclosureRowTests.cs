@@ -322,7 +322,7 @@ public class DisclosureRowTests
         await Disclosures.Buffered(processor, Employees.Where(_ => _.Active).ToScryRequest(new CountOp()), caller: "carol");
 
         // Aaron's key, read off the record rather than assumed.
-        var listed = (await Disclosures.Events(store, "alice")).Single();
+        var listed = (await Disclosures.Events(store)).Single();
         var aaron = (await store.Reconstruct(listed.Event.Id))!.Units[0].Entities.Single();
         var key = JsonSerializer.Deserialize<int[]>(aaron.Key)!.Cast<object?>().ToList();
 

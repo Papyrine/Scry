@@ -43,7 +43,7 @@ public class ExplorerReaderHostTests
             await Assert.That(waiting).IsEqualTo(1);
             await Assert.That(before).IsEmpty();
             // The question about the row, and the look at how the record stands.
-            await Assert.That(after.Select(_ => _.Question)).IsEquivalentTo([ScryDisclosureQuestion.Row, ScryDisclosureQuestion.Status], CollectionOrdering.Any);
+            await Assert.That(after.Select(_ => _.Question)).IsEquivalentTo([ScryDisclosureQuestion.Row, ScryDisclosureQuestion.Status]);
             await Assert.That(after.All(_ => _ is {Reviewer: "auditor.lee", Node: "admin"})).IsTrue();
             await Assert.That(await serving.SegmentsAsync()).Count().IsEqualTo(1);
 
