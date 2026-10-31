@@ -64,7 +64,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
 
             return Encoding.UTF8.GetString(output.WrittenMemory.Span);
         }
-        catch (Exception exception) when (!Context.ConnectionAborted.IsCancellationRequested)
+        catch (Exception exception)
+            when (!Context.ConnectionAborted.IsCancellationRequested)
         {
             return Failure(exception, Drifted(parsed));
         }
@@ -99,7 +100,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 caller: Recorded);
             return Encoding.UTF8.GetString(output.WrittenMemory.Span);
         }
-        catch (Exception exception) when (!Context.ConnectionAborted.IsCancellationRequested)
+        catch (Exception exception)
+            when (!Context.ConnectionAborted.IsCancellationRequested)
         {
             return Failure(exception, drifted: false);
         }
@@ -133,7 +135,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 budget: ResponseBudget.For(options),
                 caller: Recorded);
         }
-        catch (Exception exception) when (!cancel.IsCancellationRequested)
+        catch (Exception exception)
+            when (!cancel.IsCancellationRequested)
         {
             failure = Failure(exception, drifted);
         }
@@ -155,7 +158,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                     break;
                 }
             }
-            catch (Exception exception) when (!cancel.IsCancellationRequested)
+            catch (Exception exception)
+                when (!cancel.IsCancellationRequested)
             {
                 failure = Failure(exception, drifted);
             }
@@ -223,7 +227,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                     break;
                 }
             }
-            catch (Exception exception) when (!cancel.IsCancellationRequested)
+            catch (Exception exception)
+                when (!cancel.IsCancellationRequested)
             {
                 failure = Failure(exception, drifted);
             }
@@ -320,7 +325,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                     break;
                 }
             }
-            catch (Exception exception) when (!cancel.IsCancellationRequested)
+            catch (Exception exception)
+                when (!cancel.IsCancellationRequested)
             {
                 failure = CommandFailure(exception, drifted);
             }

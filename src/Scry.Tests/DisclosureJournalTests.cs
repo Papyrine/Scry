@@ -502,7 +502,10 @@ public class DisclosureJournalTests
             {
                 Directory.Delete(Path, recursive: true);
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            catch (Exception exception)
+                when (exception is
+                          IOException or
+                          UnauthorizedAccessException)
             {
                 // Left for the operating system's own tidying of its temporary directory.
             }

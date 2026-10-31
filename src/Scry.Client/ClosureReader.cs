@@ -507,7 +507,8 @@ static partial class ClosureReader
         {
             return target.DynamicInvoke(arguments);
         }
-        catch (TargetInvocationException exception) when (exception.InnerException is { } inner)
+        catch (TargetInvocationException exception)
+            when (exception.InnerException is { } inner)
         {
             ExceptionDispatchInfo.Capture(inner).Throw();
             throw;

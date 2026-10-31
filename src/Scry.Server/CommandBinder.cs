@@ -87,7 +87,11 @@ sealed class CommandBinder
         {
             command = payload.Deserialize(meta.ClrType, options);
         }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
+        catch (Exception exception)
+            when (exception is
+                      JsonException or
+                      NotSupportedException or
+                      InvalidOperationException)
         {
             throw new ScryValidationException(Describe(meta, payload, exception));
         }

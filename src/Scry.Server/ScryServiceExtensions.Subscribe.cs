@@ -129,7 +129,8 @@ public static partial class ScryServiceExtensions
                 exception.Message,
                 ScryErrorCode.SubscriptionLimit);
         }
-        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (context.RequestAborted.IsCancellationRequested)
         {
             // Nobody is left to answer.
         }
@@ -151,7 +152,8 @@ public static partial class ScryServiceExtensions
                 return false;
             }
         }
-        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (context.RequestAborted.IsCancellationRequested)
         {
             return false;
         }

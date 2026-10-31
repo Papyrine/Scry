@@ -155,7 +155,8 @@ sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions optio
         }
         // The caller going away while the sink was asked is the one failure that is nobody's: there
         // is nobody left to send to, and nothing was sent.
-        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (cancel.IsCancellationRequested)
         {
             throw;
         }

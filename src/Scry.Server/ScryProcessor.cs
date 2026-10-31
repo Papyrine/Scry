@@ -361,7 +361,8 @@ public sealed partial class ScryProcessor
             capture?.Released();
             return result;
         }
-        catch (ScryValidationException exception) when (drifted)
+        catch (ScryValidationException exception)
+            when (drifted)
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
@@ -425,7 +426,8 @@ public sealed partial class ScryProcessor
             capture?.Released();
             return result;
         }
-        catch (ScryValidationException exception) when (drifted)
+        catch (ScryValidationException exception)
+            when (drifted)
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
@@ -575,7 +577,8 @@ public sealed partial class ScryProcessor
         // A rejected query from a client that was generated against a different model surface is far
         // more likely stale than hostile; say so, instead of leaving an unexplained rejection. A
         // matching stamp (or none) reports the plain validation message.
-        catch (ScryValidationException exception) when (drifted)
+        catch (ScryValidationException exception)
+            when (drifted)
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
@@ -734,7 +737,8 @@ public sealed partial class ScryProcessor
 
             return null;
         }
-        catch (ScryValidationException exception) when (drifted)
+        catch (ScryValidationException exception)
+            when (drifted)
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
@@ -1264,7 +1268,8 @@ public sealed partial class ScryProcessor
 
             streaming = true;
         }
-        catch (ScryValidationException exception) when (drifted)
+        catch (ScryValidationException exception)
+            when (drifted)
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
@@ -1333,7 +1338,8 @@ public sealed partial class ScryProcessor
 
             streaming = true;
         }
-        catch (ScryValidationException exception) when (drifted)
+        catch (ScryValidationException exception)
+            when (drifted)
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {

@@ -83,7 +83,11 @@ public sealed record ScryChange(IReadOnlyList<string> Entities, Guid Origin)
             change = new(names, node);
             return true;
         }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
+        catch (Exception exception)
+            when (exception is
+                      JsonException or
+                      InvalidOperationException or
+                      FormatException)
         {
             return false;
         }

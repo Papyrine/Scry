@@ -2850,7 +2850,11 @@ sealed class ExpressionBuilder(
         // client generated before the member's representation changed server-side — so it is reported
         // as a rejected query rather than surfacing as a server fault.
         catch (Exception exception) when (
-            exception is FormatException or OverflowException or InvalidCastException or ArgumentException)
+            exception is
+                FormatException or
+                OverflowException or
+                InvalidCastException or
+                ArgumentException)
         {
             throw new ScryValidationException($"'{value}' is not a valid {underlying.Name} value.");
         }

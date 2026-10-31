@@ -110,7 +110,8 @@ public sealed class SnippetExecutor
         {
             return (QueryRequest) runner.GetMethod("Run")!.Invoke(null, [query])!;
         }
-        catch (TargetInvocationException exception) when (exception.InnerException is { } inner)
+        catch (TargetInvocationException exception)
+            when (exception.InnerException is { } inner)
         {
             // Reflection wraps whatever the snippet threw — the translator refusing a call that is
             // client-side code, a variable's initializer failing — in an exception whose own message

@@ -181,7 +181,8 @@ sealed class SubscriptionHub(ScryOptions options, ScryChanges changes)
 
                     last = token;
                 }
-                catch (Exception exception) when (exception is not OperationCanceledException)
+                catch (Exception exception)
+                    when (exception is not OperationCanceledException)
                 {
                     QueryRecorder.SignalFailed("probe", exception);
                 }

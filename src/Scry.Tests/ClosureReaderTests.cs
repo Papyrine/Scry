@@ -176,7 +176,10 @@ public class ClosureReaderTests
             expression = build();
         }
         // A node the factory refuses is one the compiler could not have emitted.
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        catch (Exception exception)
+            when (exception is
+                      ArgumentException or
+                      InvalidOperationException)
         {
             return 0;
         }
@@ -234,7 +237,8 @@ public class ClosureReaderTests
         {
             return answer();
         }
-        catch (TargetInvocationException exception) when (exception.InnerException is { } inner)
+        catch (TargetInvocationException exception)
+            when (exception.InnerException is { } inner)
         {
             return inner.GetType();
         }

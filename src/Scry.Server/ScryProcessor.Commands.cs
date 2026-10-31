@@ -294,7 +294,8 @@ public sealed partial class ScryProcessor
 
             return record;
         }
-        catch (ScryValidationException exception) when (drifted)
+        catch (ScryValidationException exception)
+            when (drifted)
         {
             throw new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
@@ -384,7 +385,8 @@ public sealed partial class ScryProcessor
         {
             Fail(envelope.Id, exception.Message, exception);
         }
-        catch (OperationCanceledException exception) when (stopping.IsCancellationRequested)
+        catch (OperationCanceledException exception)
+            when (stopping.IsCancellationRequested)
         {
             Fail(envelope.Id, "The server stopped before the command finished.", exception);
         }

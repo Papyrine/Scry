@@ -108,7 +108,7 @@ public async Task<ScryCommandOutcome<TResult>> SendCommandAsync<TCommand, TResul
     where TCommand : class =>
     ScryCommandOutcome<TResult>.From(await SendCommand(command, cancel));
 ```
-<sup><a href='/src/Scry.Client/ScryClient.Commands.cs#L198-L228' title='Snippet source file'>snippet source</a> | <a href='#snippet-sendCommandApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.Commands.cs#L199-L229' title='Snippet source file'>snippet source</a> | <a href='#snippet-sendCommandApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Through the generated facade, a command is a method call:
@@ -733,22 +733,25 @@ public static ScryOptions UseWolverineCommands(this ScryOptions options, Action<
     return options;
 }
 
-/// <summary>On the server's Wolverine options: the handler that hears how each command ended.</summary>
-public static WolverineOptions AddScryCommandCompletions(this WolverineOptions options)
+extension(WolverineOptions options)
 {
-    options.Discovery.IncludeType(typeof(WolverineCommandCompletedHandler));
-    return options;
-}
+    /// <summary>On the server's Wolverine options: the handler that hears how each command ended.</summary>
+    public WolverineOptions AddScryCommandCompletions()
+    {
+        options.Discovery.IncludeType(typeof(WolverineCommandCompletedHandler));
+        return options;
+    }
 
-/// <summary>
-/// On a worker's Wolverine options: responds to each message a Scry server sent as a command with
-/// how it ended, once its handler has returned. For a message that ends in the error queue, add
-/// <see cref="AndScryFailure"/> to the error policy that sends it there.
-/// </summary>
-public static WolverineOptions UseScryCommands(this WolverineOptions options)
-{
-    options.Policies.AddMiddleware(typeof(ScryCommandMiddleware), _ => _.MessageType != typeof(WolverineCommandCompleted));
-    return options;
+    /// <summary>
+    /// On a worker's Wolverine options: responds to each message a Scry server sent as a command with
+    /// how it ended, once its handler has returned. For a message that ends in the error queue, add
+    /// <see cref="AndScryFailure"/> to the error policy that sends it there.
+    /// </summary>
+    public WolverineOptions UseScryCommands()
+    {
+        options.Policies.AddMiddleware(typeof(ScryCommandMiddleware), _ => _.MessageType != typeof(WolverineCommandCompleted));
+        return options;
+    }
 }
 
 /// <summary>
@@ -774,7 +777,7 @@ public static void SetScryResult(this IMessageContext context, object result)
     ScryCommandMiddleware.SetResult(envelope, JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options));
 }
 ```
-<sup><a href='/src/Scry.Server.Wolverine/ScryWolverineExtensions.cs#L6-L65' title='Snippet source file'>snippet source</a> | <a href='#snippet-useWolverineCommands' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Wolverine/ScryWolverineExtensions.cs#L6-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-useWolverineCommands' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A worker on one of these reaches live queries through the target notification on completion, a change probe, or the poll.

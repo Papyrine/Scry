@@ -97,7 +97,8 @@ static class ScryMcpTools
 
             return Answer(Encoding.UTF8.GetString(output.WrittenMemory.Span));
         }
-        catch (Exception exception) when (!cancel.IsCancellationRequested)
+        catch (Exception exception)
+            when (!cancel.IsCancellationRequested)
         {
             return QueryFailure(exception);
         }
@@ -169,7 +170,8 @@ static class ScryMcpTools
 
             return Answer(ScryJson.Serialize(enumerator.Current));
         }
-        catch (Exception exception) when (!cancel.IsCancellationRequested)
+        catch (Exception exception)
+            when (!cancel.IsCancellationRequested)
         {
             return CommandFailure(exception);
         }

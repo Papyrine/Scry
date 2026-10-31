@@ -583,7 +583,8 @@ public static class ScryJson
         {
             return NotNull(JsonSerializer.Deserialize(json, info), what);
         }
-        catch (Exception exception) when (IsMalformed(exception))
+        catch (Exception exception)
+            when (IsMalformed(exception))
         {
             throw Invalid(exception, what);
         }
@@ -598,7 +599,8 @@ public static class ScryJson
         {
             return NotNull(JsonSerializer.Deserialize(utf8, info), what);
         }
-        catch (Exception exception) when (IsMalformed(exception))
+        catch (Exception exception)
+            when (IsMalformed(exception))
         {
             throw Invalid(exception, what);
         }

@@ -363,7 +363,8 @@ public static partial class ScryServiceExtensions
                 await WriteLine(context, row);
             }
         }
-        catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+        catch (Exception exception)
+            when (!context.RequestAborted.IsCancellationRequested)
         {
             // The status is long since sent, so this is the only channel left to say the rows are not
             // the whole answer. A validation message is the client's own doing and is safe to repeat;
@@ -473,17 +474,21 @@ public static partial class ScryServiceExtensions
 
             await spill.CompleteAsync(context.RequestAborted);
         }
-        catch (ScryValidationException exception) when (!context.Response.HasStarted)
+        catch (ScryValidationException exception)
+            when (!context.Response.HasStarted)
         {
             // Envelope-level only: a per-entry rejection never reaches here.
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ErrorCodes.Classify(exception));
         }
-        catch (ScryPermissionException exception) when (!context.Response.HasStarted)
+        catch (ScryPermissionException exception)
+            when (!context.Response.HasStarted)
         {
             // Envelope-level only in the same way: an entry's denial is answered in that entry's result.
             await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, ScryErrorCode.Forbidden);
         }
-        catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
+        catch (Exception)
+            when (!context.Response.HasStarted &&
+                  !context.RequestAborted.IsCancellationRequested)
         {
             await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ScryErrorCode.ExecutionFailed);
         }
@@ -611,7 +616,8 @@ public static partial class ScryServiceExtensions
             }
             // The one thing that can fail here that is the server's: the disclosure audit would not
             // take the record of telling the caller its copy is still current. So it is not told.
-            catch (ScryDisclosureException) when (!context.RequestAborted.IsCancellationRequested)
+            catch (ScryDisclosureException)
+                when (!context.RequestAborted.IsCancellationRequested)
             {
                 await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ScryErrorCode.ExecutionFailed);
                 return;
@@ -712,15 +718,19 @@ public static partial class ScryServiceExtensions
 
             await spill.CompleteAsync(context.RequestAborted);
         }
-        catch (ScryValidationException exception) when (!context.Response.HasStarted)
+        catch (ScryValidationException exception)
+            when (!context.Response.HasStarted)
         {
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ErrorCodes.Classify(exception), exception.RequiresBody);
         }
-        catch (ScryPermissionException exception) when (!context.Response.HasStarted)
+        catch (ScryPermissionException exception)
+            when (!context.Response.HasStarted)
         {
             await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, ScryErrorCode.Forbidden);
         }
-        catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
+        catch (Exception)
+            when (!context.Response.HasStarted &&
+                  !context.RequestAborted.IsCancellationRequested)
         {
             // Never leak internals (stack traces, SQL) to the client.
             await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ErrorCodes.Failed(drifted));
@@ -806,14 +816,17 @@ public static partial class ScryServiceExtensions
             context.Response.ContentLength = value.Length;
             await context.Response.Body.WriteAsync(value, context.RequestAborted);
         }
-        catch (ScryValidationException exception) when (!context.Response.HasStarted)
+        catch (ScryValidationException exception)
+            when (!context.Response.HasStarted)
         {
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ErrorCodes.Classify(exception));
         }
         // Not once the bytes have begun to go out: a status cannot be set on a started response, and
         // a caller that went away mid-download is what makes the write throw, which is nothing to
         // answer or to report.
-        catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
+        catch (Exception)
+            when (!context.Response.HasStarted &&
+                  !context.RequestAborted.IsCancellationRequested)
         {
             await WriteError(context, StatusCodes.Status500InternalServerError, "Attachment fetch failed.", ErrorCodes.Failed(drifted));
         }

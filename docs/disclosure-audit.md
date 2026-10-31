@@ -488,7 +488,7 @@ public sealed class ScryDisclosureJournalOptions
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 }
 ```
-<sup><a href='/src/Scry.Server/ScryDisclosureJournal.cs#L1164-L1200' title='Snippet source file'>snippet source</a> | <a href='#snippet-disclosureJournalOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryDisclosureJournal.cs#L1172-L1208' title='Snippet source file'>snippet source</a> | <a href='#snippet-disclosureJournalOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each group written is framed with its length and a checksum, and a group is durable before the next is written. A background shipper forwards batches to the sink behind in order and advances a checkpoint. On recovery a damaged group at the very end of the last segment is a write the crash cut short, and is dropped: nothing in it was acknowledged. A damaged group anywhere else refuses to start. Delivery to the sink behind is at-least-once, and every sink is idempotent on `(EventId, Sequence)`. A byte budget bounds the backlog: past it, appends fail and responses fail closed. A write or a flush that fails breaks the journal until the process restarts, since what reached the disk is then unknown.

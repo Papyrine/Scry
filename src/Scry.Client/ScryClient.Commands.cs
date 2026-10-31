@@ -145,7 +145,8 @@ public sealed partial class ScryClient :
         {
             read = await transport(cancel).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (cancel.IsCancellationRequested)
         {
             throw;
         }
@@ -312,7 +313,8 @@ public sealed partial class ScryClient :
         {
             // Still being handled: answered as pending below.
         }
-        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (cancel.IsCancellationRequested)
         {
             // The caller stopped waiting and the command did not: it is followed where anyone can see.
             List(request, model, command, sent, follower, context);
@@ -435,7 +437,8 @@ public sealed partial class ScryClient :
                         }
                     }
                 }
-                catch (Exception exception) when (!token.IsCancellationRequested)
+                catch (Exception exception)
+                    when (!token.IsCancellationRequested)
                 {
                     switch (Classify(exception, reattached: attempt > 1))
                     {
@@ -480,7 +483,8 @@ public sealed partial class ScryClient :
                 }
             }
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (token.IsCancellationRequested)
         {
             return Lost(request, attempt, failure: null, "The client was disposed before the command's outcome arrived.");
         }
@@ -514,8 +518,14 @@ public sealed partial class ScryClient :
 
             // About the moment rather than the command.
             ScryRequestException {Code: ScryErrorCode.ExecutionFailed} => CommandEnding.AskAgain,
-            ScryRequestException {Code: ScryErrorCode.Unknown} unknown when (int) unknown.StatusCode >= 500 ||
-                                                                             unknown.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests => CommandEnding.AskAgain,
+            ScryRequestException
+                {
+                    Code: ScryErrorCode.Unknown
+                } unknown
+                when (int) unknown.StatusCode >= 500 ||
+                     unknown.StatusCode is
+                         HttpStatusCode.RequestTimeout or
+                         HttpStatusCode.TooManyRequests => CommandEnding.AskAgain,
             HttpRequestException or IOException or TimeoutException or OperationCanceledException => CommandEnding.AskAgain,
 
             // A rejection asking again would meet again.

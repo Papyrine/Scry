@@ -74,7 +74,8 @@ public sealed partial class ScrySqlServerDisclosureStore
                 await DrainAsync(stop);
                 problem = null;
             }
-            catch (OperationCanceledException) when (stop.IsCancellationRequested)
+            catch (OperationCanceledException)
+                when (stop.IsCancellationRequested)
             {
                 return;
             }

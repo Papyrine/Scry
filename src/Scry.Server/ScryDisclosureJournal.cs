@@ -418,7 +418,10 @@ public sealed class ScryDisclosureJournal :
             using var handle = File.OpenHandle(directory);
             RandomAccess.FlushToDisk(handle);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception)
+            when (exception is
+                      IOException or
+                      UnauthorizedAccessException)
         {
         }
     }
@@ -773,7 +776,8 @@ public sealed class ScryDisclosureJournal :
                         await inner.AppendAsync(batch, stop);
                     }
                 }
-                catch (OperationCanceledException) when (stop.IsCancellationRequested)
+                catch (OperationCanceledException)
+                    when (stop.IsCancellationRequested)
                 {
                     throw;
                 }
@@ -791,7 +795,8 @@ public sealed class ScryDisclosureJournal :
                 QueryRecorder.JournalBytes(-length);
             }
         }
-        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (stop.IsCancellationRequested)
         {
         }
         catch (Exception exception)
@@ -1090,7 +1095,10 @@ public sealed class ScryDisclosureJournal :
         {
             await DrainAsync().WaitAsync(options.DrainTimeout);
         }
-        catch (Exception exception) when (exception is TimeoutException or ScryDisclosureException)
+        catch (Exception exception)
+            when (exception is
+                      TimeoutException or
+                      ScryDisclosureException)
         {
             // Left for the next process to ship.
         }
