@@ -22,22 +22,25 @@ public static class ScryWolverineExtensions
         return options;
     }
 
-    /// <summary>On the server's Wolverine options: the handler that hears how each command ended.</summary>
-    public static WolverineOptions AddScryCommandCompletions(this WolverineOptions options)
+    extension(WolverineOptions options)
     {
-        options.Discovery.IncludeType(typeof(WolverineCommandCompletedHandler));
-        return options;
-    }
+        /// <summary>On the server's Wolverine options: the handler that hears how each command ended.</summary>
+        public WolverineOptions AddScryCommandCompletions()
+        {
+            options.Discovery.IncludeType(typeof(WolverineCommandCompletedHandler));
+            return options;
+        }
 
-    /// <summary>
-    /// On a worker's Wolverine options: responds to each message a Scry server sent as a command with
-    /// how it ended, once its handler has returned. For a message that ends in the error queue, add
-    /// <see cref="AndScryFailure"/> to the error policy that sends it there.
-    /// </summary>
-    public static WolverineOptions UseScryCommands(this WolverineOptions options)
-    {
-        options.Policies.AddMiddleware(typeof(ScryCommandMiddleware), _ => _.MessageType != typeof(WolverineCommandCompleted));
-        return options;
+        /// <summary>
+        /// On a worker's Wolverine options: responds to each message a Scry server sent as a command with
+        /// how it ended, once its handler has returned. For a message that ends in the error queue, add
+        /// <see cref="AndScryFailure"/> to the error policy that sends it there.
+        /// </summary>
+        public WolverineOptions UseScryCommands()
+        {
+            options.Policies.AddMiddleware(typeof(ScryCommandMiddleware), _ => _.MessageType != typeof(WolverineCommandCompleted));
+            return options;
+        }
     }
 
     /// <summary>

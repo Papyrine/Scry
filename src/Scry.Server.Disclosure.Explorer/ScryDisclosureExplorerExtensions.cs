@@ -6,66 +6,65 @@ namespace Scry;
 /// </summary>
 public static class ScryDisclosureExplorerExtensions
 {
-    /// <summary>Maps the disclosure explorer under <paramref name="route"/> (default <c>/scry-disclosures</c>).</summary>
-    public static IEndpointConventionBuilder MapScryDisclosureExplorer(
-        this IEndpointRouteBuilder endpoints,
-        string route = "/scry-disclosures") =>
-        endpoints.MapScryDisclosureExplorer(_ => _.Route = route);
-
-    /// <summary>Maps the disclosure explorer with explicit <see cref="ScryDisclosureExplorerOptions"/>.</summary>
-    /// <remarks>
-    /// <para>
-    /// Everything it maps is behind <see cref="ScryDisclosureExplorerOptions.EnableGuard"/> and
-    /// answers <c>404</c> where that says no, so a closed explorer cannot be told from one never
-    /// mapped. <c>RequireAuthorization</c> on what this returns reaches every route.
-    /// </para>
-    /// <para>
-    /// Reading the record is recorded. Every question is written to the record, through the same
-    /// sink the answers went through, before it is answered — and is not answered where that fails.
-    /// </para>
-    /// <para>
-    /// The host need not serve queries. One that only reads the record registers it with
-    /// <c>AddScryDisclosureRecord</c> (or the SQL Server store's <c>AddSqlServerDisclosureRecord</c>)
-    /// and needs no model and no <c>AddScry</c>.
-    /// </para>
-    /// </remarks>
-    public static IEndpointConventionBuilder MapScryDisclosureExplorer(
-        this IEndpointRouteBuilder endpoints,
-        Action<ScryDisclosureExplorerOptions> configure)
+    extension(IEndpointRouteBuilder endpoints)
     {
-        var options = new ScryDisclosureExplorerOptions();
-        configure(options);
-        if (options.ExportLimit < 1)
+        /// <summary>Maps the disclosure explorer under <paramref name="route"/> (default <c>/scry-disclosures</c>).</summary>
+        public IEndpointConventionBuilder MapScryDisclosureExplorer(string route = "/scry-disclosures") =>
+            endpoints.MapScryDisclosureExplorer(_ => _.Route = route);
+
+        /// <summary>Maps the disclosure explorer with explicit <see cref="ScryDisclosureExplorerOptions"/>.</summary>
+        /// <remarks>
+        /// <para>
+        /// Everything it maps is behind <see cref="ScryDisclosureExplorerOptions.EnableGuard"/> and
+        /// answers <c>404</c> where that says no, so a closed explorer cannot be told from one never
+        /// mapped. <c>RequireAuthorization</c> on what this returns reaches every route.
+        /// </para>
+        /// <para>
+        /// Reading the record is recorded. Every question is written to the record, through the same
+        /// sink the answers went through, before it is answered — and is not answered where that fails.
+        /// </para>
+        /// <para>
+        /// The host need not serve queries. One that only reads the record registers it with
+        /// <c>AddScryDisclosureRecord</c> (or the SQL Server store's <c>AddSqlServerDisclosureRecord</c>)
+        /// and needs no model and no <c>AddScry</c>.
+        /// </para>
+        /// </remarks>
+        public IEndpointConventionBuilder MapScryDisclosureExplorer(Action<ScryDisclosureExplorerOptions> configure)
         {
-            throw new ArgumentException($"{nameof(ScryDisclosureExplorerOptions)}.{nameof(options.ExportLimit)} must be greater than zero. {nameof(options.EnableExport)} is what turns exporting off.");
+            var options = new ScryDisclosureExplorerOptions();
+            configure(options);
+            if (options.ExportLimit < 1)
+            {
+                throw new ArgumentException($"{nameof(ScryDisclosureExplorerOptions)}.{nameof(options.ExportLimit)} must be greater than zero. {nameof(options.EnableExport)} is what turns exporting off.");
+            }
+
+            var basePath = "/" + options.Route.Trim('/');
+            var assets = ExplorerAssets.Instance;
+            if (!assets.HasAssets)
+            {
+                // At startup rather than as a 500 on the first visit, as the query explorer does.
+                throw new InvalidOperationException(
+                    "Scry.Server.Disclosure.Explorer holds no embedded UI, so MapScryDisclosureExplorer has nothing to serve. " +
+                    "The UI is published and embedded by the EmbedDisclosureUi target in Scry.Server.Disclosure.Explorer.csproj; " +
+                    "a package or local build without it is incomplete.");
+            }
+
+            Require(endpoints.ServiceProvider);
+
+            // Built here rather than per request: everything about the page is fixed by the route.
+            var page = Build(assets.ReadText("index.html"), basePath);
+
+            var group = endpoints.MapGroup(basePath);
+
+            // Before the catch-all below, though a literal route would win over it anyway.
+            new DisclosureApi(options).Map(group.MapGroup("/api"));
+
+            // The cast forces the RouteHandler (Delegate) overload, as in MapScryExplorer.
+            group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, page)));
+            group.MapGet("/{**path}", (HttpContext context, string path) =>
+                Serve(context, path, options, assets, page));
+            return group;
         }
-
-        var basePath = "/" + options.Route.Trim('/');
-        var assets = ExplorerAssets.Instance;
-        if (!assets.HasAssets)
-        {
-            // At startup rather than as a 500 on the first visit, as the query explorer does.
-            throw new InvalidOperationException(
-                "Scry.Server.Disclosure.Explorer holds no embedded UI, so MapScryDisclosureExplorer has nothing to serve. " +
-                "The UI is published and embedded by the EmbedDisclosureUi target in Scry.Server.Disclosure.Explorer.csproj; " +
-                "a package or local build without it is incomplete.");
-        }
-
-        Require(endpoints.ServiceProvider);
-
-        // Built here rather than per request: everything about the page is fixed by the route.
-        var page = Build(assets.ReadText("index.html"), basePath);
-
-        var group = endpoints.MapGroup(basePath);
-
-        // Before the catch-all below, though a literal route would win over it anyway.
-        new DisclosureApi(options).Map(group.MapGroup("/api"));
-
-        // The cast forces the RouteHandler (Delegate) overload, as in MapScryExplorer.
-        group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, page)));
-        group.MapGet("/{**path}", (HttpContext context, string path) =>
-            Serve(context, path, options, assets, page));
-        return group;
     }
 
     // Said at startup, where whoever wired the host is reading, rather than as a failure the first

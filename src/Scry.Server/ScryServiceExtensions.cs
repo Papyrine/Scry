@@ -91,46 +91,49 @@ public static partial class ScryServiceExtensions
         services.AddHttpContextAccessor();
     }
 
-    /// <summary>
-    /// Registers the disclosure record for a host that reads it and serves no queries: an admin
-    /// application with the disclosure explorer on it, apart from the servers that answer. Needs no
-    /// model and no <c>AddScry</c>: what it registers is the store, as whichever of reader, eraser,
-    /// status and verifier it is, and <see cref="ScryDisclosureReviews"/> to record what is read.
-    /// </summary>
     /// <param name="services">The host's services.</param>
-    /// <param name="sink">
-    /// The store the serving nodes record to, or a sink in front of it. What a reviewer asks is
-    /// recorded with it, before it is answered.
-    /// </param>
-    /// <param name="configure">
-    /// The audit's settings. Of them only <see cref="ScryDisclosureOptions.AllowAnonymous"/>,
-    /// <see cref="ScryDisclosureOptions.AddressKey"/>, <see cref="ScryDisclosureOptions.Node"/> and
-    /// <see cref="ScryDisclosureOptions.Clock"/> are read here; the same lambda the serving nodes
-    /// are configured with can be passed, so that the key is the same.
-    /// </param>
-    public static IServiceCollection AddScryDisclosureRecord(this IServiceCollection services, IScryDisclosureSink sink, Action<ScryDisclosureOptions>? configure = null)
+    extension(IServiceCollection services)
     {
-        var disclosure = new ScryDisclosureOptions();
-        configure?.Invoke(disclosure);
-        disclosure.Sink = sink;
-        AddDisclosure(services, disclosure);
-        return services;
-    }
+        /// <summary>
+        /// Registers the disclosure record for a host that reads it and serves no queries: an admin
+        /// application with the disclosure explorer on it, apart from the servers that answer. Needs no
+        /// model and no <c>AddScry</c>: what it registers is the store, as whichever of reader, eraser,
+        /// status and verifier it is, and <see cref="ScryDisclosureReviews"/> to record what is read.
+        /// </summary>
+        /// <param name="sink">
+        /// The store the serving nodes record to, or a sink in front of it. What a reviewer asks is
+        /// recorded with it, before it is answered.
+        /// </param>
+        /// <param name="configure">
+        /// The audit's settings. Of them only <see cref="ScryDisclosureOptions.AllowAnonymous"/>,
+        /// <see cref="ScryDisclosureOptions.AddressKey"/>, <see cref="ScryDisclosureOptions.Node"/> and
+        /// <see cref="ScryDisclosureOptions.Clock"/> are read here; the same lambda the serving nodes
+        /// are configured with can be passed, so that the key is the same.
+        /// </param>
+        public IServiceCollection AddScryDisclosureRecord(IScryDisclosureSink sink, Action<ScryDisclosureOptions>? configure = null)
+        {
+            var disclosure = new ScryDisclosureOptions();
+            configure?.Invoke(disclosure);
+            disclosure.Sink = sink;
+            AddDisclosure(services, disclosure);
+            return services;
+        }
 
-    /// <summary>
-    /// Registers change reporting on its own, for a process that writes the data a Scry server reads
-    /// but serves no queries itself — a worker handling messages, an importer. With
-    /// <see cref="ScryChangeInterceptor"/> on its contexts and an <see cref="IScryChangeBackplane"/>
-    /// registered, what it saves reaches the live queries held by the nodes that do serve them.
-    /// </summary>
-    /// <remarks>
-    /// <c>AddScry</c> registers the same two services, so a host calling that needs nothing from this.
-    /// </remarks>
-    public static IServiceCollection AddScryChanges(this IServiceCollection services)
-    {
-        services.TryAddSingleton(_ => new ScryChanges().Attach(_));
-        services.TryAddSingleton<ScryChangeInterceptor>();
-        return services;
+        /// <summary>
+        /// Registers change reporting on its own, for a process that writes the data a Scry server reads
+        /// but serves no queries itself — a worker handling messages, an importer. With
+        /// <see cref="ScryChangeInterceptor"/> on its contexts and an <see cref="IScryChangeBackplane"/>
+        /// registered, what it saves reaches the live queries held by the nodes that do serve them.
+        /// </summary>
+        /// <remarks>
+        /// <c>AddScry</c> registers the same two services, so a host calling that needs nothing from this.
+        /// </remarks>
+        public IServiceCollection AddScryChanges()
+        {
+            services.TryAddSingleton(_ => new ScryChanges().Attach(_));
+            services.TryAddSingleton<ScryChangeInterceptor>();
+            return services;
+        }
     }
 
     /// <summary>Maps the query-execution endpoint at <paramref name="pattern"/>.</summary>

@@ -3,48 +3,47 @@ namespace Scry;
 /// <summary>Opt-in mapping for the Scry query explorer (a self-contained Blazor WASM debugging UI).</summary>
 public static class ScryExplorerExtensions
 {
-    /// <summary>Maps the Scry query explorer under <paramref name="route"/> (default <c>/scry</c>).</summary>
-    public static IEndpointConventionBuilder MapScryExplorer(
-        this IEndpointRouteBuilder endpoints,
-        string route = "/scry") =>
-        endpoints.MapScryExplorer(_ => _.Route = route);
-
-    /// <summary>Maps the Scry query explorer with explicit <see cref="ScryExplorerOptions"/>.</summary>
-    public static IEndpointConventionBuilder MapScryExplorer(
-        this IEndpointRouteBuilder endpoints,
-        Action<ScryExplorerOptions> configure)
+    extension(IEndpointRouteBuilder endpoints)
     {
-        var options = new ScryExplorerOptions();
-        configure(options);
+        /// <summary>Maps the Scry query explorer under <paramref name="route"/> (default <c>/scry</c>).</summary>
+        public IEndpointConventionBuilder MapScryExplorer(string route = "/scry") =>
+            endpoints.MapScryExplorer(_ => _.Route = route);
 
-        var basePath = "/" + options.Route.Trim('/');
-        var assets = ExplorerAssets.Instance;
-        if (!assets.HasAssets)
+        /// <summary>Maps the Scry query explorer with explicit <see cref="ScryExplorerOptions"/>.</summary>
+        public IEndpointConventionBuilder MapScryExplorer(Action<ScryExplorerOptions> configure)
         {
-            // At startup rather than as a 500 on the first visit. A build that embedded no UI can
-            // never serve the explorer, whatever the guard decides, so the only thing waiting
-            // achieves is that the sentence arrives as a stack trace to whoever browsed there.
-            throw new InvalidOperationException(
-                "Scry.Server.Explorer holds no embedded explorer UI, so MapScryExplorer has nothing to serve. " +
-                "The UI is published and embedded by the EmbedExplorerUi target in Scry.Server.Explorer.csproj; " +
-                "a package or local build without it is incomplete.");
+            var options = new ScryExplorerOptions();
+            configure(options);
+
+            var basePath = "/" + options.Route.Trim('/');
+            var assets = ExplorerAssets.Instance;
+            if (!assets.HasAssets)
+            {
+                // At startup rather than as a 500 on the first visit. A build that embedded no UI can
+                // never serve the explorer, whatever the guard decides, so the only thing waiting
+                // achieves is that the sentence arrives as a stack trace to whoever browsed there.
+                throw new InvalidOperationException(
+                    "Scry.Server.Explorer holds no embedded explorer UI, so MapScryExplorer has nothing to serve. " +
+                    "The UI is published and embedded by the EmbedExplorerUi target in Scry.Server.Explorer.csproj; " +
+                    "a package or local build without it is incomplete.");
+            }
+
+            // Built here rather than per request: everything about the page is fixed by the route.
+            var page = Render(options, basePath, assets);
+
+            var group = endpoints.MapGroup(basePath);
+            // Schema introspection the UI reads on load (literal route wins over the asset catch-all).
+            group.MapGet("/introspect", (HttpContext context, ScryProcessor processor) =>
+                Introspect(context, options, processor));
+            group.MapPost("/sql", (HttpContext context, ScryProcessor processor) =>
+                Sql(context, options, processor));
+            // The cast forces the RouteHandler (Delegate) overload; a bare HttpContext=>IResult lambda
+            // would otherwise bind to the RequestDelegate overload and fail to compile.
+            group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, page)));
+            group.MapGet("/{**path}", (HttpContext context, string path) =>
+                Serve(context, path, options, assets, page));
+            return group;
         }
-
-        // Built here rather than per request: everything about the page is fixed by the route.
-        var page = Render(options, basePath, assets);
-
-        var group = endpoints.MapGroup(basePath);
-        // Schema introspection the UI reads on load (literal route wins over the asset catch-all).
-        group.MapGet("/introspect", (HttpContext context, ScryProcessor processor) =>
-            Introspect(context, options, processor));
-        group.MapPost("/sql", (HttpContext context, ScryProcessor processor) =>
-            Sql(context, options, processor));
-        // The cast forces the RouteHandler (Delegate) overload; a bare HttpContext=>IResult lambda
-        // would otherwise bind to the RequestDelegate overload and fail to compile.
-        group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, page)));
-        group.MapGet("/{**path}", (HttpContext context, string path) =>
-            Serve(context, path, options, assets, page));
-        return group;
     }
 
     /// <summary>
