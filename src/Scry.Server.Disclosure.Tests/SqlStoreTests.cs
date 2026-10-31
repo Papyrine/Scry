@@ -869,7 +869,7 @@ public class SqlStoreTests
 
         // Closed as a container that knows nothing of asynchronous disposal would close it, which the
         // store has to put up with: it is handed out by a factory, so the container closes it.
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var kept = provider.GetRequiredService<ScrySqlServerDisclosureStore>();
         var hosted = provider.GetServices<IHostedService>().ToList();
         var left = Clinic.Batch(1);

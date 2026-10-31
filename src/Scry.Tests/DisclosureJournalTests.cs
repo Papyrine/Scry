@@ -156,7 +156,7 @@ public class DisclosureJournalTests
         var whole = new FileInfo(segment).Length;
         var groups = Groups(segment);
 
-        using (var file = new FileStream(segment, FileMode.Open, FileAccess.ReadWrite))
+        await using (var file = new FileStream(segment, FileMode.Open, FileAccess.ReadWrite))
         {
             switch (damage)
             {
@@ -208,7 +208,7 @@ public class DisclosureJournalTests
         await Stopped(directory, [.. Enumerable.Range(0, 3).Select(Batch)]);
         var segment = directory.Segments().Single();
         var first = Groups(segment)[0];
-        using (var file = new FileStream(segment, FileMode.Open, FileAccess.ReadWrite))
+        await using (var file = new FileStream(segment, FileMode.Open, FileAccess.ReadWrite))
         {
             file.Seek(first.Offset + 30, SeekOrigin.Begin);
             file.WriteByte(0xFF);
