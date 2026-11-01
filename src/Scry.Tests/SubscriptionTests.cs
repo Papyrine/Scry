@@ -185,6 +185,23 @@ public class SubscriptionTests
         await Assert.That(exception!.Message).Contains("64 bytes");
     }
 
+    // A drifted client's answer is the general envelope, which carries the enum aliases. It is held to
+    // the same limit as any other.
+    [Test]
+    public async Task ADriftedClientsAnswerIsHeldToTheSameLimit()
+    {
+        await using var reading = TestContext.CreateSeeded();
+        var processor = Live(_ => _.MaxSubscriptionBytes = 64);
+        var request = Regions() with
+        {
+            Stamp = "stamp-from-an-older-model"
+        };
+        await using var answers = processor.Subscribe(request, reading).GetAsyncEnumerator();
+
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(async () => await answers.MoveNextAsync());
+        await Assert.That(exception!.Message).Contains("64 bytes");
+    }
+
     [Test]
     public async Task OnePastTheServersLimitIsRefused()
     {

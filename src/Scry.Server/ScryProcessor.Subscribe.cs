@@ -162,7 +162,7 @@ public sealed partial class ScryProcessor
         }
 
         var run = new SubscriptionRun();
-        var fallback = await TryExecuteBufferedAsync(
+        await TryExecuteBufferedAsync(
             request,
             data,
             services,
@@ -175,12 +175,8 @@ public sealed partial class ScryProcessor
             correlation: correlation);
         lease.EndRun(run.Dependencies);
 
-        // The rare envelope a drifted client is answered with, which the row writer does not produce.
-        if (fallback is not null)
-        {
-            return (ScryJson.SerializeToUtf8(fallback), run);
-        }
-
+        // A live run is always written into its output, the drifted client's envelope included, so
+        // that the subscription's byte limit bounds every answer.
         return (output.WrittenMemory, run);
     }
 }

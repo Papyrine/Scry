@@ -419,6 +419,31 @@ public class CommandPipelineTests
         }
     }
 
+    // A caller that leaves inside the sync window has still had its command accepted: it is audited as
+    // pending when the caller goes, and again when it finishes.
+    [Test]
+    public async Task ACommandWhoseCallerLeftInsideTheWindowIsAudited()
+    {
+        await using var host = await CommandHost.Start("CommandLeftInWindow");
+        host.Script.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var leaving = new CancelSource();
+        var sending = host.Send("RenameShift", new {id = 1, name = "Night"}, cancel: leaving.Token);
+        await WaitFor(() => !host.Script.Seen.IsEmpty);
+        await leaving.CancelAsync();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => sending.WaitAsync(patience));
+        await WaitFor(() => host.Audited.Count == 1);
+
+        host.Script.Gate.SetResult();
+        await WaitFor(() => host.Audited.Count == 2);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(host.Audited[0].CommandStatus).IsEqualTo(CommandStatus.Pending);
+            await Assert.That(host.Audited[1].CommandStatus).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(host.ShiftName()).IsEqualTo("Night");
+        }
+    }
+
     [Test]
     public async Task ARefusalIsAudited()
     {

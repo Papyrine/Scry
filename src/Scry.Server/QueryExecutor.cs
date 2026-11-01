@@ -75,6 +75,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     public async ValueTask<QueryResponse> ExecuteAsync(QueryRequest request, DbContext db, CallScope scope, Cancel cancel)
     {
         var plan = Walk(request, db, scope);
+        ListenFor(plan, db, scope);
         await PrepareAsync(plan, scope, cancel);
         var capture = scope.Disclosure?.Recording;
         if (plan.Fold is { } fold)
@@ -184,6 +185,19 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
     }
 
+    // Read off the plan rather than the request: by now the policies are in the query, so a table
+    // only a policy reads is one the live query listens for. The probes apply subsets of the same
+    // policies, so they name nothing the query itself does not.
+    static void ListenFor(Plan plan, DbContext db, CallScope scope)
+    {
+        if (scope.Subscription is { } subscription)
+        {
+            subscription.Dependencies = DependencyWalker.Read(
+                db.Model,
+                [plan.Fold?.Query.Expression, plan.Fold?.Call, plan.Page?.Rows.Expression, plan.Rows?.Rows.Expression]);
+        }
+    }
+
     static async ValueTask PrepareAsync(Plan plan, CallScope scope, Cancel cancel)
     {
         await scope.Cached.RefreshAsync(cancel);
@@ -217,17 +231,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         Cancel cancel)
     {
         var plan = Walk(request, db, scope);
-
-        // Read off the plan rather than the request: by now the policies are in the query, so a table
-        // only a policy reads is one the live query listens for. The probes apply subsets of the same
-        // policies, so they name nothing the query itself does not.
-        if (scope.Subscription is { } subscription)
-        {
-            subscription.Dependencies = DependencyWalker.Read(
-                db.Model,
-                [plan.Fold?.Query.Expression, plan.Fold?.Call, plan.Page?.Rows.Expression, plan.Rows?.Rows.Expression]);
-        }
-
+        ListenFor(plan, db, scope);
         await PrepareAsync(plan, scope, cancel);
 
         // Told what kind of answer this is before the writer's first row: a response that is sent as

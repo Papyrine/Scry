@@ -676,7 +676,8 @@ public sealed partial class ScryProcessor
                     Stamp = schema.Stamp,
                     EnumAliases = schema.EnumAliases
                 };
-                if (capture is null)
+                if (capture is null &&
+                    subscription is null)
                 {
                     recorder.Succeeded(fallback);
                     return fallback;
@@ -684,8 +685,15 @@ public sealed partial class ScryProcessor
 
                 // Written here rather than handed back for the caller to write, as it is where the
                 // audit is off. A transport's size limit refuses a response as it is written, and a
-                // refusal has to come before the record of the answer is accepted, never after it.
+                // refusal has to come before the record of the answer is accepted, never after it. A
+                // live run's output is that limit, so its answer is written here with the audit off too.
                 ResponseWriter.Write(output, fallback);
+                if (capture is null)
+                {
+                    recorder.Succeeded(fallback);
+                    return null;
+                }
+
                 if (subscription is not null)
                 {
                     subscription.Capture = capture;

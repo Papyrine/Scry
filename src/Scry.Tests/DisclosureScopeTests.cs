@@ -638,6 +638,44 @@ public class DisclosureScopeTests
         }
     }
 
+    // A collection left out takes what is read of its rows, as a navigation left out does, even where
+    // its rows are a source of their own: an answer folded from nothing else is not recorded, and one
+    // that reads anything else marks the slot.
+    [Test]
+    public async Task AnExcludedCollectionTakesWhatIsReadOfItsRows()
+    {
+        var (processor, store) = Disclosures.Audited(configure: _ => _.Exclude<Order>(_ => _.Lines));
+        var orders = Disclosures.From<Order>("Order");
+        var through = orders
+            .Select(_ => new
+            {
+                Total = _.Lines.Sum(_ => _.Price)
+            })
+            .ToScryRequest();
+        var beside = orders
+            .OrderBy(_ => _.Id)
+            .Select(_ => new
+            {
+                _.Id,
+                Total = _.Lines.Sum(_ => _.Price)
+            })
+            .ToScryRequest();
+
+        await Disclosures.Buffered(processor, through);
+        var sent = await Disclosures.Buffered(processor, beside);
+        var unaudited = await Disclosures.Buffered(SharedProcessor.Instance, beside);
+
+        var events = await Disclosures.Events(store);
+        await Assert.That(events).Count().IsEqualTo(1);
+        var answer = (await store.Reconstruct(events[0].Event.Id))!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(sent.AsSpan().SequenceEqual(unaudited)).IsTrue();
+            await Assert.That(answer.Units).IsNotEmpty();
+            await Assert.That(answer.Units.All(_ => Encoding.UTF8.GetString(_.Content.Bytes.Span).EndsWith(",\"total\":{\"$excluded\":true}}"))).IsTrue();
+        }
+    }
+
     // Nobody has to be named for an answer of nothing but excluded members, and somebody does for
     // any other: which it is, is known once the query has been read.
     [Test]

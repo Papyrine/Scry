@@ -80,6 +80,23 @@ public class DependencyWalkerTests
         }
     }
 
+    // A client generated against another model is answered through the general path, which carries
+    // the enum aliases; what it read is read all the same, or the query would be asked again on every
+    // change anywhere.
+    [Test]
+    public async Task ADriftedClientsQueryIsReadAllTheSame()
+    {
+        var request = Capture()
+                          .Source<Order>("Order")
+                          .Where(_ => _.Lines.Any())
+                          .ToScryRequest(new CountOp()) with
+                      {
+                          Stamp = "stamp-from-an-older-model"
+                      };
+
+        await Assert.That(await Read(request)).IsEquivalentTo(Names<Order, OrderLine>());
+    }
+
     // The client never named Department. The policy did, and a change there changes what this caller
     // may see — which is why the query is read as it ran rather than as it was asked.
     [Test]

@@ -73,6 +73,16 @@ public sealed partial class ScryProcessor
             _ => "pending"
         };
 
+        // The caller left before it was answered. Nothing is sent, so nothing is disclosed, but the
+        // accepted command is audited as it stood and its activity closed before the cancellation
+        // is surfaced.
+        if (cancel.IsCancellationRequested)
+        {
+            CommandRecorder.Answered(activity, request.Command, outcome, Stopwatch.GetElapsedTime(started), first.Error);
+            Audit(services, request, first.Status == CommandStatus.Failed ? ScryQueryOutcome.Failed : ScryQueryOutcome.Success, first.Status, Stopwatch.GetElapsedTime(started), Error(record, first), staleClient: false);
+            cancel.ThrowIfCancellationRequested();
+        }
+
         // On record before it is handed on, like every answer. The command has been accepted and
         // runs to its end whatever happens here: what a sink that refuses costs is being told how it
         // stood, and the caller can ask again by id.
@@ -320,6 +330,12 @@ public sealed partial class ScryProcessor
             catch (TimeoutException)
             {
                 // Still running: answered as pending below.
+            }
+            catch (OperationCanceledException)
+                when (cancel.IsCancellationRequested)
+            {
+                // The caller left, but the command was accepted and runs on: marked pending below, so
+                // that its end is still audited.
             }
         }
 

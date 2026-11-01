@@ -314,8 +314,11 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     {
         if (schema.TryGetSourceForType(element, out _))
         {
+            // The rows of a collection the host left out take the exclusion with them, as the row a
+            // navigation the host left out reaches does.
             return new(SourceName(element), Prefix: "", Via: "", Rooted: false, origin.Row)
             {
+                Left = origin.Left,
                 SourceLeft = settings.Excludes(element)
             };
         }
