@@ -442,12 +442,18 @@ public partial class App
         {
             var json = await Http.GetStringAsync("introspect");
             introspection = ScryJson.DeserializeIntrospection(json);
+
+            // Fetched at boot only after the schema, so a boot whose schema fetch failed has none yet.
+            scryReferences ??= await SnippetExecutor.FetchReferencesAsync(Http);
             var replaced = workspace;
-            workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences!);
+            workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences);
             replaced?.Dispose();
             await workspace.WarmAsync();
             executor = null;
             error = null;
+
+            // A boot that failed registered no completion or hover against a workspace it never had.
+            await TryRegister();
         }
         catch (Exception exception)
         {

@@ -1180,6 +1180,37 @@ public class UiSnapshotTests :
         await Assert.That(editors).IsEqualTo(1);
     }
 
+    // A schema that could not be read at boot is read again from the rail, and the explorer is then
+    // as one that booted. The references are fetched after the schema at boot, so a refetch is the
+    // first to need them.
+    [Test]
+    public async Task ExplorerRecoversFromAFailedFirstSchemaRead()
+    {
+        var page = await NewPageAsync();
+        var refused = 0;
+        await page.RouteAsync(
+            "**/introspect",
+            async route =>
+            {
+                if (Interlocked.Increment(ref refused) == 1)
+                {
+                    await route.FulfillAsync(new() {Status = 500, Body = "down"});
+                    return;
+                }
+
+                await route.ContinueAsync();
+            });
+
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToBeVisibleAsync(new() {Timeout = 90_000});
+
+        await page.Locator("[data-testid='rail-refetch']").ClickAsync();
+        await page.WaitForSelectorAsync("main[data-ready]", 90);
+
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
+    }
+
     // The Ctrl+Enter editor action runs the query without clicking Run.
     [Test]
     public async Task ExplorerRunViaKeyboard()

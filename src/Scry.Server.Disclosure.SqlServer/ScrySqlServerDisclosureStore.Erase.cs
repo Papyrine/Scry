@@ -307,7 +307,9 @@ public sealed partial class ScrySqlServerDisclosureStore
     // Whether every row the batch's units were read from is filed among the row's receipts, under
     // when its answer was given. The receipts are not in the digest, being made from what is, but a
     // row's receipts are how who received it is found, so one taken away would hide that it was sent.
-    // Each is looked up by the whole of its key.
+    // Each is looked up by the whole of its key — but for when it was given, where the batch is a
+    // later part of an answer whose event is in a segment since retired, and is filed under when it
+    // was accepted.
     async Task<bool> Receipted(SqlConnection connection, int segment, ScryDisclosureBatch batch, Cancel cancel)
     {
         var expected = batch.Entities
@@ -324,8 +326,8 @@ public sealed partial class ScrySqlServerDisclosureStore
         await using var command = Command(
             connection,
             $"""
-             SELECT t.[RowHash], t.[Ordinal] FROM {tables.Receipt} t JOIN {tables.Event} e ON e.[EventId] = @event
-             WHERE t.[RowHash] IN ({rows}) AND t.[At] = e.[At] AND t.[EventId] = @event AND t.[Ordinal] IN ({ordinals});
+             SELECT t.[RowHash], t.[Ordinal] FROM {tables.Receipt} t LEFT JOIN {tables.Event} e ON e.[EventId] = @event
+             WHERE t.[RowHash] IN ({rows}) AND (e.[At] IS NULL OR t.[At] = e.[At]) AND t.[EventId] = @event AND t.[Ordinal] IN ({ordinals});
              """);
         command.Parameters.AddWithValue("@event", batch.EventId);
         var found = new HashSet<(string Row, int Ordinal)>();

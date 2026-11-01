@@ -58,6 +58,41 @@ public class StreamReadTests
         await Assert.That(await Drain(client)).IsEqualTo(1);
     }
 
+    // A browser's fetch reads a body whole before handing any of it over unless the request asks
+    // otherwise, which would make a stream a buffered list and an attachment a byte array in memory.
+    [Test]
+    public async Task AStreamAndAnAttachmentAskForTheirBodiesAsTheyArrive()
+    {
+        var streaming = new HttpRequestOptionsKey<bool>("WebAssemblyEnableStreamingResponse");
+        List<bool> asked = [];
+        var client = Stubbed(request =>
+        {
+            asked.Add(request.Options.TryGetValue(streaming, out var on) && on);
+            if (request.RequestUri!.AbsolutePath.EndsWith("/attachment"))
+            {
+                return new(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent([1, 2, 3])
+                };
+            }
+
+            return new(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"$scry":"begin","version":1,"stamp":"s"}""" + "\n" + """{"$scry":"end"}""" + "\n",
+                    Encoding.UTF8,
+                    ScryStream.ContentType)
+            };
+        });
+
+        await Drain(client);
+        await using (await client.OpenAttachmentAsync(AttachmentRequest.Create("Employee", "Photo", []), Cancel.None))
+        {
+        }
+
+        await Assert.That(asked).IsEquivalentTo([true, true], CollectionOrdering.Matching);
+    }
+
     static async Task<int> Drain(ScryClient client)
     {
         var count = 0;

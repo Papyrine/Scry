@@ -468,6 +468,56 @@ public class SqlStoreSegmentTests
         }
     }
 
+    // An answer that outlives the segment it began in has nowhere of its own to put its last part,
+    // which goes to the segment being written to. What it sent is still filed among the receipts of
+    // the rows it sent, and the chain still checks.
+    [Test]
+    public async Task APartOfAnAnswerWhoseSegmentWasRetiredIsStillReceipted()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var kept = Store(
+            database,
+            _ =>
+            {
+                _.Keep = 1;
+                _.Retire = (_, _) => Task.CompletedTask;
+            });
+        var first = Clinic.Batch(1);
+        var begun = new ScryDisclosureBatch
+        {
+            EventId = first.EventId,
+            Begin = first.Begin,
+            Units = first.Units,
+            Contents = first.Contents,
+            Entities = [new(0, 0, "Patient", "[1]", "")]
+        };
+        var last = Clinic.Batch(2);
+        var later = new ScryDisclosureBatch
+        {
+            EventId = begun.EventId,
+            Sequence = 1,
+            Units = [new(1, last.Units[0].Content)],
+            Contents = last.Contents,
+            Entities = [new(1, 0, "Patient", "[2]", "")],
+            Close = last.Close
+        };
+
+        await kept.AppendAsync(begun, Cancel.None);
+        await kept.DrainAsync();
+        await kept.RollAsync();
+        await kept.RetireAsync();
+        await kept.AppendAsync(later, Cancel.None);
+        await kept.DrainAsync();
+
+        var check = await kept.VerifyWholeChainAsync();
+        using (Assert.Multiple())
+        {
+            await Assert.That((await kept.SegmentsAsync()).Count(_ => _.Retired is null)).IsEqualTo(1);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000002].[DisclosureReceipt]")).IsEqualTo(1);
+            await Assert.That(check.Intact).IsTrue();
+        }
+    }
+
     // A node's settings are written into the record by the first round it moves that commits: a
     // round that failed after writing them took them back with it.
     [Test]

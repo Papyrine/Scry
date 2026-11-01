@@ -371,6 +371,9 @@ public sealed partial class ScryClient
         };
         call?.Configure(message.Headers);
 
+        // A browser's fetch otherwise reads the whole body before the first row is handed on.
+        message.Options.Set(streamingResponse, true);
+
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
 
         RecordServerHeaders(response);
@@ -727,6 +730,9 @@ public sealed partial class ScryClient
         {
             Content = content
         };
+
+        // As for a stream: in a browser the attachment would otherwise be read whole first.
+        message.Options.Set(streamingResponse, true);
 
         var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
         var disposeResponse = true;

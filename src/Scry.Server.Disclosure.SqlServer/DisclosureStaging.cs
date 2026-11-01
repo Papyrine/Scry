@@ -43,7 +43,7 @@ sealed class DisclosureStaging(DisclosureTables sql)
     DataTable answers = Table(
         ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Start", typeof(int)), ("Manifest", typeof(byte[])));
     DataTable receipts = Table(
-        ("RowHash", typeof(byte[])), ("EventId", typeof(Guid)), ("Ordinal", typeof(int)));
+        ("RowHash", typeof(byte[])), ("EventId", typeof(Guid)), ("Ordinal", typeof(int)), ("Accepted", typeof(DateTimeOffset)));
 
     // The lists and the runs this round has already staged, so that one named by several of its
     // batches is staged once.
@@ -147,7 +147,7 @@ sealed class DisclosureStaging(DisclosureTables sql)
             seen[entity.Source] = true;
             if (receipted.Add((entity.Ordinal, entity.Source, entity.Key)))
             {
-                receipts.Rows.Add(DisclosureSql.RowHash(entity.Source, entity.Key), batch.EventId, entity.Ordinal);
+                receipts.Rows.Add(DisclosureSql.RowHash(entity.Source, entity.Key), batch.EventId, entity.Ordinal, accepted);
             }
         }
 
@@ -340,17 +340,19 @@ sealed class DisclosureStaging(DisclosureTables sql)
         await Listed(connection, transaction, cancel);
 
         // After the events, since a receipt is filed under when its answer was given, which a later
-        // part of a stream does not carry and its first part does.
+        // part of a stream does not carry and its first part does. A later part whose answer began
+        // in a segment since retired, or being retired, is written to the current one without its
+        // event, and is filed under when it was accepted instead: what it sent is still found.
         await Apply(
             connection,
             transaction,
             receipts,
             "#receipt",
-            "[RowHash] binary(32) NOT NULL, [EventId] uniqueidentifier NOT NULL, [Ordinal] int NOT NULL",
+            "[RowHash] binary(32) NOT NULL, [EventId] uniqueidentifier NOT NULL, [Ordinal] int NOT NULL, [Accepted] datetimeoffset(7) NOT NULL",
             $"""
              INSERT INTO {sql.Receipt} ([RowHash], [At], [EventId], [Ordinal])
-             SELECT s.[RowHash], e.[At], s.[EventId], s.[Ordinal] FROM #receipt s JOIN {e} e ON e.[EventId] = s.[EventId]
-             WHERE NOT EXISTS (SELECT 1 FROM {sql.Receipt} x WHERE x.[RowHash] = s.[RowHash] AND x.[At] = e.[At] AND x.[EventId] = s.[EventId] AND x.[Ordinal] = s.[Ordinal]);
+             SELECT s.[RowHash], ISNULL(e.[At], s.[Accepted]), s.[EventId], s.[Ordinal] FROM #receipt s LEFT JOIN {e} e ON e.[EventId] = s.[EventId]
+             WHERE NOT EXISTS (SELECT 1 FROM {sql.Receipt} x WHERE x.[RowHash] = s.[RowHash] AND x.[At] = ISNULL(e.[At], s.[Accepted]) AND x.[EventId] = s.[EventId] AND x.[Ordinal] = s.[Ordinal]);
              """,
             cancel);
 
