@@ -166,6 +166,12 @@ public class RoslynLayerTests
     [Arguments("Query.Employee.FirstAsync()", typeof(FirstOp))]
     [Arguments("Query.Employee.SingleAsync()", typeof(SingleOp))]
     [Arguments("Query.Employee.AnyAsync()", typeof(AnyOp))]
+    [Arguments("Query.Employee.LongCountAsync()", typeof(LongCountOp))]
+    [Arguments("Query.Employee.LongCount()", typeof(LongCountOp))]
+    [Arguments("Query.Employee.LastOrDefaultAsync()", typeof(LastOp))]
+    [Arguments("Query.Employee.CountAsync(_ => _.Active)", typeof(CountOp))]
+    [Arguments("Query.Employee.AllAsync(_ => _.Active)", typeof(AllOp))]
+    [Arguments("Query.Employee.MaxAsync(_ => _.Name)", typeof(AggregateOp))]
     public async Task TranslatesTerminalToWireOp(string query, Type? terminalOp)
     {
         var request = executor.Translate(query);
@@ -178,6 +184,26 @@ public class RoslynLayerTests
         else
         {
             await Assert.That(request.Pipeline[^1].GetType()).IsEqualTo(terminalOp);
+        }
+    }
+
+    // A terminal's lambda is the terminal's: a predicate narrows what it reads and a selector says
+    // what it folds, so each travels on the terminal the client would send rather than being dropped
+    // or left for the compiler to refuse.
+    [Test]
+    public async Task ATerminalsLambdaTravelsWithIt()
+    {
+        var counted = (CountOp) executor.Translate("Query.Employee.CountAsync(_ => _.Active)").Pipeline[^1];
+        var first = (FirstOp) executor.Translate("await Query.Employee.FirstOrDefaultAsync(_ => _.Name == \"Ann\")").Pipeline[^1];
+        var max = (AggregateOp) executor.Translate("Query.Employee.MaxAsync(_ => _.Name)").Pipeline[^1];
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(counted.Predicate).IsNotNull();
+            await Assert.That(first.OrDefault).IsTrue();
+            await Assert.That(first.Predicate).IsNotNull();
+            await Assert.That(max.Function).IsEqualTo(AggregateFn.Max);
+            await Assert.That(max.Selector).IsTypeOf<MemberNode>();
         }
     }
 

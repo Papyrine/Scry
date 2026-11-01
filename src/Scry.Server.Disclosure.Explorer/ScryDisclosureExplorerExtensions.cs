@@ -148,6 +148,13 @@ public static class ScryDisclosureExplorerExtensions
             return Index(context, page);
         }
 
+        // The page by its file name is the page: served from the assets it would go out with its
+        // placeholders unfilled and no content security policy.
+        if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
+        {
+            return Index(context, page);
+        }
+
         if (assets.TryOpen(path, out var stream, out var contentType, out var tag))
         {
             if (Unchanged(context, tag))

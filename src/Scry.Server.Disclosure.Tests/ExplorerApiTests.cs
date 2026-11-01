@@ -285,6 +285,24 @@ public class ExplorerApiTests
         }
     }
 
+    // The page asked for by its file name is the page, with its base written in and its policy, not
+    // the file it is made from.
+    [Test]
+    public async Task ThePageByItsFileNameIsThePage()
+    {
+        await using var host = await ExplorerHost.Run();
+
+        using var page = await host.Client.GetAsync("/scry-disclosures/index.html");
+        var html = await page.Content.ReadAsStringAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(page.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(html).Contains("<base href=\"/scry-disclosures/\" />");
+            await Assert.That(page.Headers.Contains("Content-Security-Policy")).IsTrue();
+        }
+    }
+
     // What the explorer is told is somebody's data, so nothing keeps a copy of it; the page and its
     // assets are the program, so they are revalidated against a tag of their content. And the page
     // runs under a policy that gives what it is shown nowhere else to go.

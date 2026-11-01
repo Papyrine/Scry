@@ -81,13 +81,13 @@ public sealed class SnippetExecutor
             throw new(problem.Message);
         }
 
-        var (expression, terminal) = Rewrite(layout.Expression);
+        var rewritten = Rewrite(layout.Expression);
 
         // Only the snippet is compiled here, against the model compiled once: the runner's method is
         // a few lines, and the models it reads are exactly what they were on the last run.
         var compilation = CSharpCompilation.Create(
             $"ScrySnippet{Interlocked.Increment(ref runs)}",
-            [CSharpSyntaxTree.ParseText(Wrap(layout.Preamble, expression, terminal))],
+            [CSharpSyntaxTree.ParseText(Wrap(layout.Preamble, rewritten))],
             [.. references, model.Value],
             options);
 
@@ -108,7 +108,8 @@ public sealed class SnippetExecutor
         var runner = assembly.GetType("Scry.Runner")!;
         try
         {
-            return (QueryRequest) runner.GetMethod("Run")!.Invoke(null, [query])!;
+            var request = (QueryRequest) runner.GetMethod("Run")!.Invoke(null, [query])!;
+            return Terminated(request, rewritten, runner);
         }
         catch (TargetInvocationException exception)
             when (exception.InnerException is { } inner)
@@ -194,24 +195,44 @@ public sealed class SnippetExecutor
         // terminal throws), so the explorer must not fold it into a valid list request either.
     ];
 
-    // Scalar/element terminals → their wire QueryOp. Only recognised with zero arguments: a predicate
-    // overload (e.g. `.First(_ => _.Active)`) affects the wire and must not be silently dropped, so it
-    // is left intact and translated as part of the pipeline instead.
-    static Dictionary<string, string> scalarTerminals = new(StringComparer.Ordinal)
+    // Scalar and element terminals, and the wire operator each is, from the lambda it was written
+    // with where it takes one: a predicate, or an aggregate's selector. Null where it was written
+    // without one. The lambda is read by the client's own translator, so the operator is the one the
+    // client would send.
+    // Bare is the operator written into the runner where the terminal has no lambda, null where it
+    // must have one; Op makes it from the lambda's translation where it has.
+    static Dictionary<string, (string? Bare, Func<Node, QueryOp> Op)> scalarTerminals = Terminals();
+
+    static Dictionary<string, (string? Bare, Func<Node, QueryOp> Op)> Terminals()
     {
-        ["FirstAsync"] = "new global::Scry.FirstOp(false, null)",
-        ["First"] = "new global::Scry.FirstOp(false, null)",
-        ["FirstOrDefaultAsync"] = "new global::Scry.FirstOp(true, null)",
-        ["FirstOrDefault"] = "new global::Scry.FirstOp(true, null)",
-        ["SingleAsync"] = "new global::Scry.SingleOp(false, null)",
-        ["Single"] = "new global::Scry.SingleOp(false, null)",
-        ["SingleOrDefaultAsync"] = "new global::Scry.SingleOp(true, null)",
-        ["SingleOrDefault"] = "new global::Scry.SingleOp(true, null)",
-        ["CountAsync"] = "new global::Scry.CountOp()",
-        ["Count"] = "new global::Scry.CountOp()",
-        ["AnyAsync"] = "new global::Scry.AnyOp(null)",
-        ["Any"] = "new global::Scry.AnyOp(null)"
-    };
+        var terminals = new Dictionary<string, (string?, Func<Node, QueryOp>)>(StringComparer.Ordinal);
+
+        void Add(string name, string? bare, Func<Node, QueryOp> op)
+        {
+            terminals[name] = (bare, op);
+            terminals[name + "Async"] = (bare, op);
+        }
+
+        Add("First", "new global::Scry.FirstOp(false, null)", _ => new FirstOp(false, _));
+        Add("FirstOrDefault", "new global::Scry.FirstOp(true, null)", _ => new FirstOp(true, _));
+        Add("Single", "new global::Scry.SingleOp(false, null)", _ => new SingleOp(false, _));
+        Add("SingleOrDefault", "new global::Scry.SingleOp(true, null)", _ => new SingleOp(true, _));
+        Add("Last", "new global::Scry.LastOp(false, null)", _ => new LastOp(false, _));
+        Add("LastOrDefault", "new global::Scry.LastOp(true, null)", _ => new LastOp(true, _));
+        Add("Count", "new global::Scry.CountOp()", _ => new CountOp(_));
+        Add("LongCount", "new global::Scry.LongCountOp()", _ => new LongCountOp(_));
+        Add("Any", "new global::Scry.AnyOp(null)", _ => new AnyOp(_));
+        Add("All", null, _ => new AllOp(_));
+        Add("Sum", null, _ => new AggregateOp(AggregateFn.Sum, _));
+        Add("Average", null, _ => new AggregateOp(AggregateFn.Average, _));
+        Add("Min", null, _ => new AggregateOp(AggregateFn.Min, _));
+        Add("Max", null, _ => new AggregateOp(AggregateFn.Max, _));
+        return terminals;
+    }
+
+    // What a trailing terminal leaves for the runner: the queryable before it, the terminal's name,
+    // and the text of the lambda it was written with, where it was.
+    readonly record struct Rewritten(string Expression, string? Terminal, string? Argument);
 
     /// <summary>
     /// Splits a trailing terminal operator off the user's expression: returns the underlying queryable
@@ -220,7 +241,7 @@ public sealed class SnippetExecutor
     /// (e.g. plain <c>.ToList()</c>) would deadlock on the single-threaded WASM runtime. Anything that
     /// is not a recognised terminal is left intact (i.e. translated as a list).
     /// </summary>
-    static (string Expression, string Terminal) Rewrite(string code)
+    static Rewritten Rewrite(string code)
     {
         var cleaned = code.TrimEnd().TrimEnd(';').TrimEnd();
         var expression = SyntaxFactory.ParseExpression(cleaned);
@@ -235,41 +256,93 @@ public sealed class SnippetExecutor
             } invocation)
         {
             var name = member.Name.Identifier.ValueText;
+            var arguments = invocation.ArgumentList.Arguments;
 
             // Collection terminals enumerate to a list; their arguments (selectors/comparers) are
             // client-side shaping and do not change the wire request, so strip whatever the arity.
             if (collectionTerminals.Contains(name))
             {
-                return (member.Expression.ToString(), "");
+                return new(member.Expression.ToString(), null, null);
             }
 
-            // Scalar terminals only when written without a predicate — otherwise the filter would be lost.
-            if (invocation.ArgumentList.Arguments.Count == 0 &&
-                scalarTerminals.TryGetValue(name, out var terminal))
+            // A scalar terminal with no lambda, or with the one lambda it takes: a predicate narrows
+            // what it reads and a selector says what it folds, so the lambda goes with it to the wire.
+            if (scalarTerminals.TryGetValue(name, out var terminal))
             {
-                return (member.Expression.ToString(), terminal);
+                if (arguments.Count == 0 &&
+                    terminal.Bare is not null)
+                {
+                    return new(member.Expression.ToString(), name, null);
+                }
+
+                if (arguments.Count == 1 &&
+                    arguments[0].Expression is LambdaExpressionSyntax lambda)
+                {
+                    return new(member.Expression.ToString(), name, lambda.ToString());
+                }
             }
         }
 
-        return (expression.ToString(), "");
+        return new(expression.ToString(), null, null);
     }
 
-    static string Wrap(string preamble, string expression, string terminal) =>
-        $$"""
-          using System;
-          using System.Linq;
-          using System.Collections.Generic;
-          using Scry;
-          using Scry.Generated;
-          namespace Scry;
-          public static class Runner
-          {
-              public static global::Scry.QueryRequest Run(global::Scry.Generated.ScryQuery Query)
-              {
-                  {{preamble}}
-                  return ({{expression}}).ToScryRequest({{terminal}});
-              }
-          }
+    // A terminal with a lambda is written as a CountOp, and replaced once the runner has run: the
+    // runner cannot reach the translator that reads its lambda, and a CountOp shapes the pipeline before
+    // it as every terminal with a lambda does. The lambda is handed back as an expression tree, typed by
+    // a helper that takes the element type from the queryable and the result from the lambda.
+    static string Wrap(string preamble, Rewritten rewritten)
+    {
+        var terminal = "";
+        var lambda = "";
+        if (rewritten.Argument is { } argument)
+        {
+            terminal = "new global::Scry.CountOp()";
+            lambda = $"Lambda = Typed(scrySource, {argument});";
+        }
+        else if (rewritten.Terminal is { } name)
+        {
+            terminal = scalarTerminals[name].Bare!;
+        }
 
-          """;
+        return $$"""
+                 using System;
+                 using System.Linq;
+                 using System.Collections.Generic;
+                 using Scry;
+                 using Scry.Generated;
+                 namespace Scry;
+                 public static class Runner
+                 {
+                     public static global::System.Linq.Expressions.LambdaExpression? Lambda;
+
+                     public static global::Scry.QueryRequest Run(global::Scry.Generated.ScryQuery Query)
+                     {
+                         {{preamble}}
+                         var scrySource = ({{rewritten.Expression}});
+                         {{lambda}}
+                         return scrySource.ToScryRequest({{terminal}});
+                     }
+
+                     static global::System.Linq.Expressions.LambdaExpression Typed<T, TResult>(global::System.Linq.IQueryable<T> source, global::System.Linq.Expressions.Expression<global::System.Func<T, TResult>> lambda) =>
+                         lambda;
+                 }
+
+                 """;
+    }
+
+    // The request the runner made, with the terminal it stood in for put in its place.
+    static QueryRequest Terminated(QueryRequest request, Rewritten rewritten, Type runner)
+    {
+        if (rewritten is not {Terminal: { } name, Argument: not null} ||
+            runner.GetField("Lambda")!.GetValue(null) is not System.Linq.Expressions.LambdaExpression lambda)
+        {
+            return request;
+        }
+
+        var terminal = scalarTerminals[name].Op(QueryTranslator.TranslateLambda(lambda));
+        return request with
+        {
+            Pipeline = [.. request.Pipeline.Take(request.Pipeline.Count - 1), terminal]
+        };
+    }
 }

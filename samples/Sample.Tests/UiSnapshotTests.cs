@@ -1180,6 +1180,23 @@ public class UiSnapshotTests :
         await Assert.That(editors).IsEqualTo(1);
     }
 
+    // The explorer's page asked for by its file name is the page, with its placeholders written in
+    // and its policy, not the file it is made from.
+    [Test]
+    public async Task ExplorerPageByItsFileNameIsThePage()
+    {
+        var page = await NewPageAsync();
+        var response = await page.APIRequest.GetAsync($"{BaseUrl}/scry/index.html");
+        var html = await response.TextAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(response.Status).IsEqualTo(200);
+            await Assert.That(html).DoesNotContain("__SCRY_");
+            await Assert.That(response.Headers.ContainsKey("content-security-policy")).IsTrue();
+        }
+    }
+
     // A schema that could not be read at boot is read again from the rail, and the explorer is then
     // as one that booted. The references are fetched after the schema at boot, so a refetch is the
     // first to need them.

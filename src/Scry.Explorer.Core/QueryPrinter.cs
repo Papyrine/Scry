@@ -68,6 +68,14 @@ public static class QueryPrinter
             return false;
         }
 
+        // What a line holds is put on one line, which a line comment would swallow the rest of and a
+        // string written over several lines would be rewritten by. Left as written rather than changed.
+        if (Unjoinable(expression))
+        {
+            error = "The query is left as written: it has a line comment or a string over several lines, which formatting would change.";
+            return false;
+        }
+
         var builder = new StringBuilder();
         AppendPreamble(builder, layout.Preamble);
         AppendExpression(builder, expression, 0);
@@ -124,7 +132,34 @@ public static class QueryPrinter
         builder.Append(newLine);
     }
 
+    // A line comment, or a token written over several lines: only a string's tokens can be.
+    static bool Unjoinable(ExpressionSyntax expression)
+    {
+        if (expression
+            .DescendantTrivia(descendIntoTrivia: true)
+            .Any(_ => _.IsKind(SyntaxKind.SingleLineCommentTrivia) || _.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
+        {
+            return true;
+        }
+
+        return expression.DescendantTokens().Any(_ => _.Text.Contains('\n'));
+    }
+
     static void AppendExpression(StringBuilder builder, ExpressionSyntax expression, int indent)
+    {
+        // Awaited, the chain is still the chain: the await goes in front of it rather than flattening it.
+        if (expression is AwaitExpressionSyntax awaited)
+        {
+            builder.Append(' ', indent).Append("await ");
+            AppendExpression(builder, awaited.Expression, 0, indent);
+            return;
+        }
+
+        AppendExpression(builder, expression, indent, indent);
+    }
+
+    // The first line at the indent it is already at, and the steps of the chain below it.
+    static void AppendExpression(StringBuilder builder, ExpressionSyntax expression, int first, int indent)
     {
         var calls = new List<InvocationExpressionSyntax>();
         var root = expression;
@@ -139,7 +174,7 @@ public static class QueryPrinter
 
         calls.Reverse();
 
-        builder.Append(' ', indent).Append(Inline(root));
+        builder.Append(' ', first).Append(Inline(root));
         foreach (var call in calls)
         {
             builder.Append(newLine);

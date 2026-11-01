@@ -12,6 +12,39 @@ public class QueryPrinterTests
                     .ToListAsync()
                 """);
 
+    // The builder writes its queries awaited, and an awaited chain is still a chain.
+    [Test]
+    public async Task BreaksAnAwaitedChainTheSameWay() =>
+        await Assert.That(QueryPrinter.Format("await Query.Employee.Where(_ => _.Active).ToListAsync()")).IsEqualTo(
+                """
+                await Query.Employee
+                    .Where(_ => _.Active)
+                    .ToListAsync()
+                """);
+
+    // Joined onto one line, a line comment would swallow what follows it and a string written over
+    // several lines would be rewritten: such a query is left as written, and said to be.
+    [Test]
+    [Arguments("Query.Employee\n    // the active ones\n    .Where(_ => _.Active\n        // and named\n        && _.Name != null)")]
+    [Arguments("Query.Employee.Where(_ => _.Name == @\"two\nlines\")")]
+    [Arguments("Query.Employee.Where(_ => _.Name == \"\"\"\n    raw\n    \"\"\")")]
+    public async Task LeavesWhatItWouldChangeAsWritten(string snippet)
+    {
+        var formatted = QueryPrinter.TryFormat(snippet, out var result, out var error);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(formatted).IsFalse();
+            await Assert.That(result).IsEqualTo(snippet);
+            await Assert.That(error).Contains("left as written");
+        }
+    }
+
+    // A block comment survives being put on one line, so it does not stop the query being formatted.
+    [Test]
+    public async Task FormatsAroundABlockComment() =>
+        await Assert.That(QueryPrinter.TryFormat("Query.Employee.Where(_ => /* active */ _.Active)", out _, out _)).IsTrue();
+
     [Test]
     public async Task BreaksAFlatProjectionOntoOneLinePerMember() =>
         await Assert.That(QueryPrinter.Format("Query.Employee.Select(_ => new { _.Active, _.Id, _.Name })")).IsEqualTo(
