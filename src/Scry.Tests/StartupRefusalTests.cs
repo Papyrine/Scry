@@ -36,6 +36,10 @@ public class StartupRefusalTests
         "Duplicate queryable source name 'Same'",
         DisplayName = "two sources with one name")]
     [Arguments(
+        "namespace X { public enum Status { A } } namespace Y { public enum Status { B, C } } [Queryable] public class A { public int Id { get; set; } public X.Status First { get; set; } public Y.Status Second { get; set; } }",
+        "share the name 'Status'",
+        DisplayName = "two enums with one name")]
+    [Arguments(
         "[Queryable(Name = \"not valid\")] public class A { public int Id { get; set; } }",
         "not valid",
         DisplayName = "a source name that is not an identifier")]

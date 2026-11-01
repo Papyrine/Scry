@@ -554,6 +554,45 @@
         return VerifyGenerated(model);
     }
 
+    // The generated enums share one namespace, so two of the model's with one name would be emitted
+    // as one, carrying one's values under both. Reported against the model; the server refuses the
+    // same model at startup.
+    [Test]
+    public async Task EnumsSharingANameAreReported()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model
+            {
+                [Queryable]
+                public class Employee
+                {
+                    public int Id { get; set; }
+                    public Hr.Status Employment { get; set; }
+                    public Payroll.Status Pay { get; set; }
+                }
+            }
+
+            namespace Hr
+            {
+                public enum Status { Active, Left }
+            }
+
+            namespace Payroll
+            {
+                public enum Status { Paid = 4, Held = 9 }
+            }
+            """;
+
+        var diagnostic = (await RunGenerator(model)).GetRunResult().Diagnostics.Single();
+        using (Assert.Multiple())
+        {
+            await Assert.That(diagnostic.Id).IsEqualTo("SCRY001");
+            await Assert.That(diagnostic.GetMessage()).Contains("The enums 'Hr.Status' and 'Payroll.Status' are both reachable from the queryable surface and share the name 'Status'.");
+        }
+    }
+
     [Test]
     public Task DuplicateSourceNameIsReported()
     {

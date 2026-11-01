@@ -1082,8 +1082,17 @@ static class MetadataModelReader
     {
         var definition = reader.GetTypeDefinition(handle);
         var name = reader.GetString(definition.Name);
-        if (enums.ContainsKey(name))
+        var fullName = NestedName(reader, definition);
+        if (enums.TryGetValue(name, out var existing))
         {
+            // The generated enums share one namespace, so two of the model's with one simple name
+            // would be emitted as one, and one of them would carry the other's values. The server
+            // refuses the same model at startup.
+            if (existing.FullName != fullName)
+            {
+                throw new InvalidOperationException($"The enums '{existing.FullName}' and '{fullName}' are both reachable from the queryable surface and share the name '{name}'. Rename one.");
+            }
+
             return name;
         }
 
@@ -1108,7 +1117,7 @@ static class MetadataModelReader
         }
 
         var flags = HasAttribute(reader, definition.GetCustomAttributes(), flagsAttribute);
-        enums[name] = new(name, underlying, flags, new(members.ToImmutable()), new(values.ToImmutable()));
+        enums[name] = new(name, underlying, flags, new(members.ToImmutable()), new(values.ToImmutable()), fullName);
         return name;
     }
 
@@ -1366,6 +1375,18 @@ static class MetadataModelReader
             default:
                 return null;
         }
+    }
+
+    // A type's name with every type it is nested in, which a nested type's namespace does not carry.
+    static string NestedName(MetadataReader reader, TypeDefinition type)
+    {
+        var declaring = type.GetDeclaringType();
+        if (declaring.IsNil)
+        {
+            return FullName(reader, type);
+        }
+
+        return $"{NestedName(reader, reader.GetTypeDefinition(declaring))}+{reader.GetString(type.Name)}";
     }
 
     static string FullName(MetadataReader reader, TypeDefinition type) =>

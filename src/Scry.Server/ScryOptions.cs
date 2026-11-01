@@ -623,6 +623,17 @@ public sealed class ScryOptions(Type contextType)
     public int? MaxCachedPolicyRows { get; set; }
 
     /// <summary>
+    /// How long a cached policy waits after first reading a version before its watermark passes it.
+    /// A writer can take a version and commit after another writer's higher one has been read; until
+    /// the watermark passes a version, the rows past the last one it passed are read again on every
+    /// refresh (and decided again only where their version moved), so a row committed late within
+    /// this window is still decided. Set it longer than the longest transaction that writes the
+    /// version column. <see cref="TimeSpan.Zero"/> passes every version as soon as it is read.
+    /// Thirty seconds by default.
+    /// </summary>
+    public TimeSpan CachedPolicySettle { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Attaches a row policy whose decision is too expensive to make in SQL. The policy answers one row
     /// at a time in C#; the server remembers the answers and composes a membership test over the keys
     /// this caller may see, wherever a row policy applies.

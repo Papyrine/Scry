@@ -437,6 +437,40 @@ public class ChangeSignalTests
         }
     }
 
+    // A subscribe the backplane refused is asked again, so a node that started while the backplane
+    // was down hears the other nodes once it is back, without its listeners leaving first.
+    [Test]
+    public async Task ARefusedSubscribeIsAskedAgain()
+    {
+        var backplane = new LoopbackBackplane
+        {
+            RefusedSubscribes = 2
+        };
+        var changes = new ScryChanges
+        {
+            RetryAfter = TimeSpan.FromMilliseconds(10)
+        };
+        changes.Attach(Services(backplane));
+        List<ScryChange> reported = [];
+        using var listening = changes.Listen(reported.Add);
+
+        var waited = Stopwatch.StartNew();
+        while (backplane.Subscriptions == 0 &&
+               waited.Elapsed < TimeSpan.FromSeconds(20))
+        {
+            await Task.Delay(10);
+        }
+
+        await backplane.PublishAsync(new([], Guid.NewGuid()), Cancel.None);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(backplane.Subscriptions).IsEqualTo(1);
+            await Assert.That(changes.BackplaneFailures).IsEqualTo(2);
+            await Assert.That(reported).Count().IsEqualTo(1);
+        }
+    }
+
     // An entity name is EF's, and a shared-type entity's carries commas and brackets.
     [Test]
     public async Task AChangeSurvivesBeingCarriedAsText()
@@ -707,10 +741,19 @@ public class ChangeSignalTests
             }
         }
 
+        /// <summary>How many subscribes are refused before one is taken.</summary>
+        public int RefusedSubscribes { get; set; }
+
         public ValueTask<IAsyncDisposable> SubscribeAsync(Func<ScryChange, Cancel, ValueTask> handler, Cancel cancel)
         {
             lock (handlers)
             {
+                if (RefusedSubscribes > 0)
+                {
+                    RefusedSubscribes--;
+                    throw new("The backplane is down.");
+                }
+
                 handlers.Add(handler);
             }
 

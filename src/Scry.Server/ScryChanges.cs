@@ -27,6 +27,7 @@ public sealed class ScryChanges
     IAsyncDisposable? inbound;
     Task reconciled = Task.CompletedTask;
     long backplaneFailures;
+    TimeSpan retryDelay;
 
     internal ScryChanges()
     {
@@ -78,6 +79,14 @@ public sealed class ScryChanges
 
     /// <summary>How many times publishing to, or subscribing on, the backplane has failed.</summary>
     internal long BackplaneFailures => Interlocked.Read(ref backplaneFailures);
+
+    /// <summary>
+    /// How long a subscribe the backplane refused waits before it is asked again; doubled on each
+    /// refusal in a row, up to <see cref="RetryCeiling"/>.
+    /// </summary>
+    internal TimeSpan RetryAfter { get; set; } = TimeSpan.FromSeconds(1);
+
+    internal static TimeSpan RetryCeiling { get; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Completes once the backplane subscription matches whether anything here is listening.</summary>
     internal Task Reconciled
@@ -221,7 +230,18 @@ public sealed class ScryChanges
                 inbound is null &&
                 backplane is { } plane)
             {
-                inbound = await plane.SubscribeAsync(Apply, Cancel.None);
+                try
+                {
+                    inbound = await plane.SubscribeAsync(Apply, Cancel.None);
+                }
+                catch (Exception exception)
+                {
+                    Failed(exception);
+                    _ = Retry();
+                    return;
+                }
+
+                retryDelay = TimeSpan.Zero;
                 return;
             }
 
@@ -235,6 +255,27 @@ public sealed class ScryChanges
         catch (Exception exception)
         {
             Failed(exception);
+        }
+    }
+
+    // A subscribe the backplane refused is asked again until it holds, or until nothing here wants
+    // to hear: left alone, this node would hear no other node until its listeners all left and came
+    // back, with only the poll floor covering the gap.
+    async Task Retry()
+    {
+        if (retryDelay == TimeSpan.Zero)
+        {
+            retryDelay = RetryAfter;
+        }
+        else
+        {
+            retryDelay = TimeSpan.FromTicks(Math.Min(retryDelay.Ticks * 2, RetryCeiling.Ticks));
+        }
+
+        await Task.Delay(retryDelay);
+        lock (gate)
+        {
+            Reconcile();
         }
     }
 

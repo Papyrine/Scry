@@ -383,7 +383,7 @@ sealed partial class Schema
     /// Projects the commands into the introspection contract. Property displays mirror the generator's
     /// emission exactly, as a query model's do, since the stamp hashes them.
     /// </summary>
-    List<ScryCommandInfo> DescribeCommands(Dictionary<string, ScryEnumInfo> enums) =>
+    List<ScryCommandInfo> DescribeCommands(DescribedEnums enums) =>
         commands.Values
             .OrderBy(_ => _.Name, StringComparer.Ordinal)
             .Select(command => new ScryCommandInfo(
@@ -401,7 +401,7 @@ sealed partial class Schema
 
     // How a payload or result property is spelled in generated code. Mirrors
     // MetadataModelReader.ClassifyValue: a value as a query model would spell it, or a list of one.
-    static ScryMemberInfo DescribeValue(PropertyInfo property, Dictionary<string, ScryEnumInfo> enums)
+    static ScryMemberInfo DescribeValue(PropertyInfo property, DescribedEnums enums)
     {
         var type = property.PropertyType;
         if (IsScalar(type))

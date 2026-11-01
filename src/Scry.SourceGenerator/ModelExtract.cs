@@ -132,14 +132,16 @@ record struct PropertyInfo(
 /// <summary>
 /// A re-emitted enum. <see cref="Values"/> pairs positionally with <see cref="Members"/>, each the
 /// invariant-culture decimal the declaration spells; <see cref="Underlying"/> is the C# keyword of
-/// the integral type behind it.
+/// the integral type behind it. <see cref="FullName"/> is the model's, kept only to tell apart two
+/// enums the generated code would give one name.
 /// </summary>
 record struct EnumInfo(
     string Name,
     string Underlying,
     bool IsFlags,
     EquatableArray<string> Members,
-    EquatableArray<string> Values);
+    EquatableArray<string> Values,
+    string FullName);
 
 enum SourceKind
 {

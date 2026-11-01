@@ -81,6 +81,87 @@ public class CachedPolicyTests
         }
     }
 
+    // A writer can take a revision and commit after another writer's higher one has been read. The
+    // watermark waits before it passes a revision, so the row committed late is still read, and
+    // decided, rather than taken as already answered.
+    [Test]
+    public async Task ARowCommittedBelowARevisionAlreadyReadIsStillDecided()
+    {
+        await using var database = await TestContext.CreateIsolated("CachedPolicyStraggler");
+        var policy = new CountingRegionPolicy();
+        var processor = Cached();
+        await Seed(database);
+
+        await using (var seeded = database.NewDbContext())
+        {
+            var client = ClientFor(seeded, processor, policy);
+            await client.Source<Order>("Order").CountAsync();
+        }
+
+        var before = policy.Decisions;
+        await using (var writing = database.NewDbContext())
+        {
+            writing.Orders.Add(new()
+            {
+                Region = "North",
+                Amount = 500m,
+                Revision = 0,
+                Code = "1",
+                Audited = "true"
+            });
+            await writing.SaveChangesAsync();
+        }
+
+        await using (var reading = database.NewDbContext())
+        {
+            var client = ClientFor(reading, processor, policy);
+            var count = await client.Source<Order>("Order").CountAsync();
+
+            // The rows read before are read again, and not decided again: only the late one is.
+            await Assert.That(policy.Decisions).IsEqualTo(before + 1);
+            await Assert.That(count).IsEqualTo(3);
+        }
+    }
+
+    // Once a version has settled the watermark passes it, and a row committed late below it is then
+    // one the cache never reads: the window is the whole of the guarantee, which is why it is the
+    // host's to set.
+    [Test]
+    public async Task ASettledRevisionIsPassed()
+    {
+        await using var database = await TestContext.CreateIsolated("CachedPolicySettled");
+        var policy = new CountingRegionPolicy();
+        var processor = Build(_ =>
+        {
+            _.CachedPolicySettle = TimeSpan.Zero;
+            _.AddCachedPolicy<Order, long, CountingRegionPolicy>(order => order.Revision);
+        });
+        await Seed(database);
+
+        await using (var seeded = database.NewDbContext())
+        {
+            await ClientFor(seeded, processor, policy).Source<Order>("Order").CountAsync();
+        }
+
+        await using (var writing = database.NewDbContext())
+        {
+            writing.Orders.Add(new()
+            {
+                Region = "North",
+                Amount = 500m,
+                Revision = 0,
+                Code = "1",
+                Audited = "true"
+            });
+            await writing.SaveChangesAsync();
+        }
+
+        await using var reading = database.NewDbContext();
+        var count = await ClientFor(reading, processor, policy).Source<Order>("Order").CountAsync();
+
+        await Assert.That(count).IsEqualTo(2);
+    }
+
     [Test]
     public async Task AChangedRowIsDecidedAgainAndNothingElseIs()
     {

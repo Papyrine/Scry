@@ -211,18 +211,45 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
             return current;
         }
 
-        var watermark = current.Watermark;
+        var settling = registration.Settling<Unsettled>(scopeKey);
+        var known = current.Watermark as TVersion?;
+        if (known is null &&
+            settling.Generation != current.Generation &&
+            current.AllowedKeys.Count == 0 &&
+            current.PendingKeys.Count == 0)
+        {
+            // A scope the host forgot is read whole again, and what was decided of it is gone with it.
+            // Rows it invalidated are pending instead, and are decided again by their keys.
+            settling.Clear();
+        }
+
+        settling.Generation = current.Generation;
+
+        var now = Stopwatch.GetTimestamp();
+        var pending = current.PendingKeys.Count > 0
+            ? new HashSet<object>(current.PendingKeys)
+            : null;
+        var deciding = new List<TEntity>(rows.Count);
         foreach (var row in rows)
         {
-            // The watermark only ever moves forward, so a row decided out of order cannot pull it
-            // back and leave the rows between it as already answered.
             var read = readVersion(row);
-            if (watermark is not TVersion known ||
-                Comparer<TVersion>.Default.Compare(read, known) > 0)
+            var rowKey = readKey(row);
+
+            // Rows above the watermark are read again until it passes them; one already decided at the
+            // version it still has is not decided again, unless the host has asked for it to be.
+            if (settling.Decided.TryGetValue(rowKey, out var decided) &&
+                Comparer<TVersion>.Default.Compare(decided, read) == 0 &&
+                pending?.Contains(rowKey) != true)
             {
-                watermark = read;
+                continue;
             }
+
+            settling.Decided[rowKey] = read;
+            settling.Seen.TryAdd(read, now);
+            deciding.Add(row);
         }
+
+        var watermark = Settled(settling, known, now);
 
         // Every key that was pending has now been decided or found gone, so none of them is still
         // waiting for an answer — unless the host re-pended some meanwhile, which the generation
@@ -230,7 +257,7 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         registration.Store.Apply(
             registration.Name,
             scopeKey,
-            new(Decide(policy, rows, scopeKey, context), watermark, current.PendingKeys)
+            new(Decide(policy, deciding, scopeKey, context), watermark, current.PendingKeys)
             {
                 Generation = current.Generation
             });
@@ -242,6 +269,62 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         }
 
         return null;
+    }
+
+    // The highest version seen at least the settle window ago, which every writer that took a lower
+    // one has had that long to commit. Only ever forward: a row decided out of order cannot pull it
+    // back and leave the rows between as already answered. What it passes is forgotten.
+    TVersion? Settled(Unsettled settling, TVersion? known, long now)
+    {
+        var watermark = known;
+        foreach (var (seen, at) in settling.Seen)
+        {
+            if (Stopwatch.GetElapsedTime(at, now) < registration.Settle)
+            {
+                continue;
+            }
+
+            if (watermark is not { } high ||
+                Comparer<TVersion>.Default.Compare(seen, high) > 0)
+            {
+                watermark = seen;
+            }
+        }
+
+        if (watermark is not { } passed)
+        {
+            return null;
+        }
+
+        foreach (var seen in settling.Seen.Keys.Where(_ => Comparer<TVersion>.Default.Compare(_, passed) <= 0).ToList())
+        {
+            settling.Seen.Remove(seen);
+        }
+
+        foreach (var (rowKey, _) in settling.Decided.Where(_ => Comparer<TVersion>.Default.Compare(_.Value, passed) <= 0).ToList())
+        {
+            settling.Decided.Remove(rowKey);
+        }
+
+        return passed;
+    }
+
+    // What a scope has read above its watermark: when each version was first seen, and the version
+    // each row was last decided at.
+    sealed class Unsettled
+    {
+        public Dictionary<TVersion, long> Seen { get; } = [];
+
+        public Dictionary<TKey, TVersion> Decided { get; } = [];
+
+        // The scope's generation when this was last written, which moves when the host forgets it.
+        public long Generation { get; set; } = -1;
+
+        public void Clear()
+        {
+            Seen.Clear();
+            Decided.Clear();
+        }
     }
 
     /// <inheritdoc/>

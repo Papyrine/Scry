@@ -283,7 +283,7 @@ sealed partial class Schema
 
     (List<ScrySourceInfo> Sources, List<ScryTypeInfo> Types, List<ScryEnumInfo> Enums, List<ScryCommandInfo> Commands) DescribeSurface()
     {
-        var enums = new Dictionary<string, ScryEnumInfo>(StringComparer.Ordinal);
+        var enums = new DescribedEnums();
 
         var typeInfos = types.Values
             .OrderBy(_ => _.ClrType.Name, StringComparer.Ordinal)
@@ -339,7 +339,7 @@ sealed partial class Schema
         return meta.Members.Values.Where(_ => !baseMeta.Members.ContainsKey(_.Name));
     }
 
-    static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums)
+    static ScryMemberInfo DescribeMember(Member member, DescribedEnums enums)
     {
         // A capability is backed by no property, so it has no deprecation or sensitivity of its own to
         // publish — only the command it answers for. Mirrors the generator's capability member.
@@ -359,7 +359,7 @@ sealed partial class Schema
         };
     }
 
-    static ScryMemberInfo DescribeShape(Member member, Dictionary<string, ScryEnumInfo> enums)
+    static ScryMemberInfo DescribeShape(Member member, DescribedEnums enums)
     {
         // Mirrors the generator's emission exactly: the schema stamp hashes this string, so any
         // divergence would read as model drift on every client.
@@ -408,7 +408,7 @@ sealed partial class Schema
     /// collection of values. Any enum it names is collected on the way past, since an enum is only
     /// re-emitted to clients when something exposed reaches it.
     /// </summary>
-    static string ScalarShape(Type type, Dictionary<string, ScryEnumInfo> enums)
+    static string ScalarShape(Type type, DescribedEnums enums)
     {
         var underlying = Nullable.GetUnderlyingType(type);
         var nullable = underlying is not null;
@@ -427,7 +427,7 @@ sealed partial class Schema
 
         if (actual.IsEnum)
         {
-            enums.TryAdd(actual.Name, DescribeEnum(actual));
+            enums.Add(actual, DescribeEnum);
             if (nullable)
             {
                 return $"{actual.Name}?";
@@ -1314,7 +1314,7 @@ sealed partial class Schema
             var parameter = Expression.Parameter(entity, "e");
             var key = Expression.Lambda(Expression.Property(parameter, keys[0].ClrProperty), parameter);
 
-            var registration = new CachedPolicyRegistration(entity, policy, options.CachedPolicyStore, options.MaxCachedPolicyKeys, options.MaxCachedPolicyRows);
+            var registration = new CachedPolicyRegistration(entity, policy, options.CachedPolicyStore, options.MaxCachedPolicyKeys, options.MaxCachedPolicyRows, options.CachedPolicySettle);
             var adapter = typeof(CachedRowPolicyAdapter<,,>).MakeGenericType(entity, keys[0].Type, version.ReturnType);
 
             registration.Adapter = Activator.CreateInstance(adapter, registration, key, version)!;
