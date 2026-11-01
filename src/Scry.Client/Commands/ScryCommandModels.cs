@@ -22,7 +22,10 @@ static class ScryCommandModels
             return [];
         }
 
-        var type = command.GetType();
-        return [.. model.Keys.Select(_ => ValueTag.Of(type.GetProperty(_)?.GetValue(command)).Value)];
+        var properties = keyProperties.GetOrAdd(command.GetType(), _ => [.. model.Keys.Select(key => _.GetProperty(key))]);
+        return [.. properties.Select(_ => ValueTag.Of(_?.GetValue(command)).Value)];
     }
+
+    // A command type's key members, found once: the keys are its attribute's, which is per type.
+    static ConcurrentDictionary<Type, PropertyInfo?[]> keyProperties = new();
 }

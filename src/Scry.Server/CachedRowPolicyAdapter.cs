@@ -130,62 +130,76 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
     /// </remarks>
     CachedPolicyScope Refresh(ICachedRowPolicy<TEntity> policy, string scopeKey, ScryPolicyContext context)
     {
-        var gate = registration.Gate(scopeKey);
-        gate.Wait();
+        var gate = registration.Enter(scopeKey);
         try
         {
-            for (var attempt = 0;; attempt++)
+            gate.Wait();
+            try
             {
-                var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
-                var (changed, invalidated) = Undecided(current, context);
-                if (registration.MaxRows is { } max)
+                for (var attempt = 0;; attempt++)
                 {
-                    Bounded(changed.Count() + (invalidated?.Count() ?? 0), max);
-                }
+                    var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
+                    var (changed, invalidated) = Undecided(current, context);
+                    if (registration.MaxRows is { } max)
+                    {
+                        Bounded(changed.Count() + (invalidated?.Count() ?? 0), max);
+                    }
 
-                var rows = Merge(changed.ToList(), invalidated?.ToList());
-                if (Round(policy, scopeKey, context, current, rows, last: attempt == 2) is { } answer)
-                {
-                    return answer;
+                    var rows = Merge(changed.ToList(), invalidated?.ToList());
+                    if (Round(policy, scopeKey, context, current, rows, last: attempt == 2) is { } answer)
+                    {
+                        return answer;
+                    }
                 }
+            }
+            finally
+            {
+                gate.Release();
             }
         }
         finally
         {
-            gate.Release();
+            registration.Leave(scopeKey, gate);
         }
     }
 
     // The same, with the rows read asynchronously and the gate waited for the same way.
     async ValueTask<CachedPolicyScope> RefreshAsync(ICachedRowPolicy<TEntity> policy, string scopeKey, ScryPolicyContext context, Cancel cancel)
     {
-        var gate = registration.Gate(scopeKey);
-        await gate.WaitAsync(cancel);
+        var gate = registration.Enter(scopeKey);
         try
         {
-            for (var attempt = 0;; attempt++)
+            await gate.WaitAsync(cancel);
+            try
             {
-                var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
-                var (changed, invalidated) = Undecided(current, context);
-                if (registration.MaxRows is { } max)
+                for (var attempt = 0;; attempt++)
                 {
-                    Bounded(
-                        await changed.CountAsync(cancel) + (invalidated is null ? 0 : await invalidated.CountAsync(cancel)),
-                        max);
-                }
+                    var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
+                    var (changed, invalidated) = Undecided(current, context);
+                    if (registration.MaxRows is { } max)
+                    {
+                        Bounded(
+                            await changed.CountAsync(cancel) + (invalidated is null ? 0 : await invalidated.CountAsync(cancel)),
+                            max);
+                    }
 
-                var rows = Merge(
-                    await changed.ToListAsync(cancel),
-                    invalidated is null ? null : await invalidated.ToListAsync(cancel));
-                if (Round(policy, scopeKey, context, current, rows, last: attempt == 2) is { } answer)
-                {
-                    return answer;
+                    var rows = Merge(
+                        await changed.ToListAsync(cancel),
+                        invalidated is null ? null : await invalidated.ToListAsync(cancel));
+                    if (Round(policy, scopeKey, context, current, rows, last: attempt == 2) is { } answer)
+                    {
+                        return answer;
+                    }
                 }
+            }
+            finally
+            {
+                gate.Release();
             }
         }
         finally
         {
-            gate.Release();
+            registration.Leave(scopeKey, gate);
         }
     }
 
@@ -337,25 +351,32 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         }
 
         var policy = Resolve(context);
-        var gate = registration.Gate(scopeKey);
-        gate.Wait();
+        var gate = registration.Enter(scopeKey);
         try
         {
-            // No watermark and nothing resolved: these are rows the caller chose rather than every row
-            // up to a version, so neither claim would be true of anything but them. Applied under the
-            // generation read first, so a scope the host forgets meanwhile is not re-seeded with them.
-            var generation = (registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey)).Generation;
-            registration.Store.Apply(
-                registration.Name,
-                scopeKey,
-                new(Decide(policy, primed, scopeKey, context), Watermark: null, Resolved: [])
-                {
-                    Generation = generation
-                });
+            gate.Wait();
+            try
+            {
+                // No watermark and nothing resolved: these are rows the caller chose rather than every row
+                // up to a version, so neither claim would be true of anything but them. Applied under the
+                // generation read first, so a scope the host forgets meanwhile is not re-seeded with them.
+                var generation = (registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey)).Generation;
+                registration.Store.Apply(
+                    registration.Name,
+                    scopeKey,
+                    new(Decide(policy, primed, scopeKey, context), Watermark: null, Resolved: [])
+                    {
+                        Generation = generation
+                    });
+            }
+            finally
+            {
+                gate.Release();
+            }
         }
         finally
         {
-            gate.Release();
+            registration.Leave(scopeKey, gate);
         }
     }
 

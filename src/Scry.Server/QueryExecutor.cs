@@ -1355,7 +1355,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return Retype(query, source.ClrType);
         }
 
-        var context = new ScryPolicyContext(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders);
+        var context = scope.Policies.Context(scope, db);
         foreach (var use in source.Policies.Skip(from))
         {
             if (include is not null &&
@@ -1364,7 +1364,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 continue;
             }
 
-            var policy = use.Instance ?? scope.Services.GetService(use.Policy) ?? Activator.CreateInstance(use.Policy);
+            var policy = use.Instance ?? scope.Services.GetService(use.Policy) ?? scope.Policies.Created(use.Policy);
             if (policy is null)
             {
                 throw new($"Could not create policy '{use.Policy.Name}'.");

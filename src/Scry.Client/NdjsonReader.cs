@@ -17,6 +17,10 @@ sealed class NdjsonReader(Stream stream) :
     int end;
     bool ended;
 
+    // How much of what is buffered from start is already known to hold no newline: a line longer
+    // than one read is otherwise searched again from its beginning after every fill.
+    int searched;
+
     /// <summary>
     /// Whether the line last handed out was the stream's final one and carried no newline — cut
     /// off, or written by a sender that ends without one. Which of the two is for its content to say.
@@ -29,13 +33,17 @@ sealed class NdjsonReader(Stream stream) :
         while (true)
         {
             var current = buffer ?? throw new ObjectDisposedException(nameof(NdjsonReader));
-            var newline = current.AsSpan(start, end - start).IndexOf((byte) '\n');
-            if (newline >= 0)
+            var found = current.AsSpan(start + searched, end - start - searched).IndexOf((byte) '\n');
+            if (found >= 0)
             {
+                var newline = searched + found;
                 var line = current.AsMemory(start, newline);
                 start += newline + 1;
+                searched = 0;
                 return Trim(line);
             }
+
+            searched = end - start;
 
             if (ended)
             {
@@ -49,6 +57,7 @@ sealed class NdjsonReader(Stream stream) :
 
                 var last = current.AsMemory(start, end - start);
                 start = end;
+                searched = 0;
                 Unterminated = true;
                 return Trim(last);
             }

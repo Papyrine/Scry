@@ -66,26 +66,44 @@ static class QueryChain
 
     // What a local was declared with, and only when it was never assigned again: a reassigned local no
     // longer stands for the chain its declaration gave it, and following one would report against a
-    // query that was never written.
+    // query that was never written. Every local of a body is found in one walk of it, kept for as
+    // long as the body is: a walk per reference made a body of many query locals quadratic.
     static IOperation? Initializer(ILocalReferenceOperation reference)
     {
-        IOperation? initializer = null;
-        foreach (var operation in ExpressionRules.Descendants(Root(reference)))
+        if (initializers.GetValue(Root(reference), Collect).TryGetValue(reference.Local, out var initializer))
         {
-            if (operation is ISimpleAssignmentOperation {Target: ILocalReferenceOperation assigned} &&
-                SymbolEqualityComparer.Default.Equals(assigned.Local, reference.Local))
+            return initializer;
+        }
+
+        return null;
+    }
+
+    static ConditionalWeakTable<IOperation, Dictionary<ILocalSymbol, IOperation?>> initializers = new();
+
+    static Dictionary<ILocalSymbol, IOperation?> Collect(IOperation root)
+    {
+        var declared = new Dictionary<ILocalSymbol, IOperation?>(SymbolEqualityComparer.Default);
+        var reassigned = new HashSet<ILocalSymbol>(SymbolEqualityComparer.Default);
+        foreach (var operation in ExpressionRules.Descendants(root))
+        {
+            if (operation is ISimpleAssignmentOperation {Target: ILocalReferenceOperation assigned})
             {
-                return null;
+                reassigned.Add(assigned.Local);
+                continue;
             }
 
-            if (operation is IVariableDeclaratorOperation declarator &&
-                SymbolEqualityComparer.Default.Equals(declarator.Symbol, reference.Local))
+            if (operation is IVariableDeclaratorOperation declarator)
             {
-                initializer = declarator.Initializer?.Value;
+                declared[declarator.Symbol] = declarator.Initializer?.Value;
             }
         }
 
-        return initializer;
+        foreach (var local in reassigned)
+        {
+            declared.Remove(local);
+        }
+
+        return declared;
     }
 
     static IOperation Root(IOperation operation)

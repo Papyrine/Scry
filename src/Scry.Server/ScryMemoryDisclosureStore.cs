@@ -185,7 +185,7 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
                     }
 
                     found.Add(
-                        new(header, entity.Ordinal, recorded.Units.First(_ => _.Ordinal == entity.Ordinal).Content, entity.Via)
+                        new(header, entity.Ordinal, UnitAt(recorded, entity.Ordinal).Content, entity.Via)
                         {
                             Close = recorded.Close,
                             Version = entity.Version
@@ -193,7 +193,9 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
                     opened.Add(id);
                 }
 
-                // Whoever has since been shown one of those events was shown the row too.
+                // Whoever has since been shown one of those events was shown the row too. Looked up by
+                // event once, rather than the releases searched again for every event of every review.
+                var released = found.ToLookup(_ => _.Event.Id);
                 foreach (var review in reviews.Values)
                 {
                     foreach (var id in review.Events.Distinct())
@@ -203,7 +205,7 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
                             continue;
                         }
 
-                        foreach (var shown in found.Where(_ => _.Review is null && _.Event.Id == id).ToList())
+                        foreach (var shown in released[id])
                         {
                             found.Add(
                                 shown with
@@ -223,6 +225,33 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
             .ThenBy(_ => _.Ordinal)
             .Where(_ => Before(_, after))
             .ToAsyncEnumerable();
+    }
+
+    // An event's unit by its ordinal. Units are kept in the order they were accepted, which is
+    // ordinal order, so it is searched for rather than scanned for.
+    static ScryDisclosureUnit UnitAt(Recorded recorded, int ordinal)
+    {
+        var units = recorded.Units;
+        int low = 0, high = units.Count - 1;
+        while (low <= high)
+        {
+            var middle = low + (high - low) / 2;
+            var at = units[middle].Ordinal;
+            if (at == ordinal)
+            {
+                return units[middle];
+            }
+
+            if (at < ordinal)
+            {
+                low = middle + 1;
+                continue;
+            }
+
+            high = middle - 1;
+        }
+
+        throw new InvalidOperationException($"Unit {ordinal} is not among the event's units.");
     }
 
     // When a row reached somebody: when the answer was made, or when a reviewer was shown it.
@@ -462,7 +491,7 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
             {
                 foreach (var (id, entity) in disclosures)
                 {
-                    var unit = events[id].Units.First(_ => _.Ordinal == entity.Ordinal);
+                    var unit = UnitAt(events[id], entity.Ordinal);
                     // Markers alone hold nothing of the row, and are what every other row of the
                     // answer was recorded as too: there is nothing here to erase.
                     if (!contents.TryGetValue(unit.Content, out var held) ||

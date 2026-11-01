@@ -29,6 +29,9 @@ public sealed partial class ScryClient
     internal static long NextLiveSession() =>
         Interlocked.Increment(ref liveSessions);
 
+    /// <summary>Whether anything listens to <see cref="LiveActivity"/>, so that nothing is made for it otherwise.</summary>
+    internal bool ListensLive => LiveActivity is not null;
+
     internal void ReportLive(ScryLiveActivity activity)
     {
         try

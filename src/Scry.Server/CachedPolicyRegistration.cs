@@ -5,8 +5,10 @@
 sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicyStore store, int? maxKeys, int? maxRows, TimeSpan settle)
 {
     // One gate per scope. Held here rather than on the adapter because the registration is what every
-    // request shares; a per-request gate would let every request past it at once.
-    ConcurrentDictionary<string, SemaphoreSlim> gates = new(StringComparer.Ordinal);
+    // request shares; a per-request gate would let every request past it at once. Counted, and dropped
+    // once nobody holds or waits on it: scopes come and go with callers, and a gate kept for each one
+    // ever seen would grow for the life of the process.
+    Dictionary<string, ScopeGate> gates = new(StringComparer.Ordinal);
 
     public Type Entity { get; } = entity;
 
@@ -44,7 +46,47 @@ sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicySto
         where T : new() =>
         (T) settling.GetOrAdd(scope, _ => new T());
 
-    // A semaphore rather than a monitor so a refresh can wait for the gate without holding a thread.
-    public SemaphoreSlim Gate(string scope) =>
-        gates.GetOrAdd(scope, _ => new(1, 1));
+    /// <summary>
+    /// Takes a place at a scope's gate, to be given back with <see cref="Leave"/> whatever happens —
+    /// waited for, or not. A semaphore rather than a monitor so a refresh can wait for the gate without
+    /// holding a thread.
+    /// </summary>
+    public ScopeGate Enter(string scope)
+    {
+        lock (gates)
+        {
+            if (!gates.TryGetValue(scope, out var gate))
+            {
+                gate = new();
+                gates[scope] = gate;
+            }
+
+            gate.Users++;
+            return gate;
+        }
+    }
+
+    public void Leave(string scope, ScopeGate gate)
+    {
+        lock (gates)
+        {
+            if (--gate.Users == 0)
+            {
+                gates.Remove(scope);
+                gate.Dispose();
+            }
+        }
+    }
+}
+
+sealed class ScopeGate :
+    SemaphoreSlim
+{
+    public ScopeGate() :
+        base(1, 1)
+    {
+    }
+
+    // Read and written under the registration's lock on its gates.
+    public int Users { get; set; }
 }

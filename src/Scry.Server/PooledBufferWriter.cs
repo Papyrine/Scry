@@ -42,6 +42,10 @@ sealed class PooledBufferWriter :
     public void Reset() =>
         written = 0;
 
+    /// <summary>Drops what was written past <paramref name="count"/>: a row written and then refused.</summary>
+    public void Truncate(int count) =>
+        written = Math.Min(written, count);
+
     public Memory<byte> GetMemory(int sizeHint = 0)
     {
         Ensure(sizeHint);

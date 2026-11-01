@@ -364,6 +364,8 @@ sealed class PlanShapeWriter
     // it degrades the service to its previous behavior rather than to a new failure.
     const int limit = 512;
 
+    static int cachedWriters;
+
     /// <summary>The writer for a shape, built once per process and shared by every plan of that shape.</summary>
     public static PlanShapeWriter Get(
         IReadOnlyList<IReadOnlyList<string>> shape,
@@ -376,9 +378,12 @@ sealed class PlanShapeWriter
         }
 
         var writer = Create(shape, binarySlots);
-        if (writers.Count < limit)
+        // Counted on the side: ConcurrentDictionary.Count takes every lock in the dictionary, and a
+        // miss is what a caller sending new shapes makes every request.
+        if (Volatile.Read(ref cachedWriters) < limit &&
+            writers.TryAdd(key, writer))
         {
-            writers[key] = writer;
+            Interlocked.Increment(ref cachedWriters);
         }
 
         return writer;
@@ -653,6 +658,21 @@ sealed class PlanShapeWriter
                 break;
             case Guid guid:
                 json.WriteStringValue(guid);
+                break;
+            case DateTimeOffset moment:
+                json.WriteStringValue(moment);
+                break;
+            case float number:
+                json.WriteNumberValue(number);
+                break;
+            case short number:
+                json.WriteNumberValue(number);
+                break;
+            case byte number:
+                json.WriteNumberValue(number);
+                break;
+            case byte[] bytes:
+                json.WriteBase64StringValue(bytes);
                 break;
             default:
                 JsonSerializer.Serialize(json, value, value.GetType(), ScryJson.Options);

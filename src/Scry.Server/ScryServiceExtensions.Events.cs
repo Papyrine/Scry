@@ -162,8 +162,7 @@ public static partial class ScryServiceExtensions
 
         var cancel = context.RequestAborted;
         var body = context.Response.Body;
-        var head = id is null ? $"event: {name}\ndata: " : $"event: {name}\nid: {id}\ndata: ";
-        await body.WriteAsync(Encoding.UTF8.GetBytes(head), cancel);
+        await body.WriteAsync(Head(name, id), cancel);
         if (!data.IsEmpty)
         {
             await body.WriteAsync(data, cancel);
@@ -174,6 +173,20 @@ public static partial class ScryServiceExtensions
     }
 
     static byte[] eventEnd = "\n\n"u8.ToArray();
+
+    // The head of an event with no id is one of a handful — a result, a ping — and is made once each
+    // rather than per event. One with an id is made each time; the id is the event's own.
+    static ConcurrentDictionary<string, byte[]> heads = new(StringComparer.Ordinal);
+
+    static byte[] Head(string name, string? id)
+    {
+        if (id is null)
+        {
+            return heads.GetOrAdd(name, _ => Encoding.UTF8.GetBytes($"event: {_}\ndata: "));
+        }
+
+        return Encoding.UTF8.GetBytes($"event: {name}\nid: {id}\ndata: ");
+    }
 
     const string retryAfterSeconds = "5";
 

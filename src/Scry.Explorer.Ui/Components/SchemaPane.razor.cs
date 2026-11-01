@@ -15,8 +15,27 @@ public partial class SchemaPane
     string? current;
     string? search;
 
-    IReadOnlyList<SchemaMatch> Matches =>
-        Index.Search(search, current);
+    // Asked twice a render — whether there are any, then each — so kept for the inputs it was made
+    // from, and made again only when one of them moves.
+    (SchemaIndex Index, string? Search, string? Current, IReadOnlyList<SchemaMatch> Found)? matches;
+
+    IReadOnlyList<SchemaMatch> Matches
+    {
+        get
+        {
+            if (matches is { } kept &&
+                ReferenceEquals(kept.Index, Index) &&
+                kept.Search == search &&
+                kept.Current == current)
+            {
+                return kept.Found;
+            }
+
+            var found = Index.Search(search, current);
+            matches = (Index, search, current, found);
+            return found;
+        }
+    }
 
     bool HasMatches => Matches.Count > 0;
 

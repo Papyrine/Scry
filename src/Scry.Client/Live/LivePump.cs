@@ -150,7 +150,14 @@ static class LivePump
             Report(ending, failure: ended);
         }
 
-        void Report(ScrySubscriptionState state, QueryResponse? answer = null, Exception? failure = null) =>
+        // Nothing is made where nothing listens: this is said on every answer of every live query.
+        void Report(ScrySubscriptionState state, QueryResponse? answer = null, Exception? failure = null)
+        {
+            if (!client.ListensLive)
+            {
+                return;
+            }
+
             client.ReportLive(
                 new()
                 {
@@ -161,6 +168,7 @@ static class LivePump
                     Answer = answer,
                     Failure = failure
                 });
+        }
     }
 
     // A transport with no names for its answers re-sends the one already held each time it is asked

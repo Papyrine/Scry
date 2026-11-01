@@ -379,7 +379,6 @@ public sealed partial class ScryProcessor
         // Whether a row's line is its record: a stream of lines whose rows hold no binary value and
         // nothing read from a member left out of the record.
         bool written = lines && !capture.Apart(rows.Plan);
-        PooledBufferWriter line = new();
         PooledBufferWriter chunk = new();
         Utf8JsonWriter? json;
         List<(int Offset, int Length)> slices = [];
@@ -526,37 +525,36 @@ public sealed partial class ScryProcessor
                 return capture.AddRow(plan, row);
             }
 
-            // Written first, to learn its length before it is committed to: a row the size limit
-            // refuses is neither recorded nor sent.
-            line.Reset();
+            // Written straight into the chunk, and taken back out where the size limit refuses it: a
+            // row it refuses is neither recorded nor sent.
+            var start = chunk.WrittenCount;
             if (json is null)
             {
-                json = new(line);
+                json = new(chunk);
             }
             else
             {
-                json.Reset(line);
+                json.Reset(chunk);
             }
 
             plan.Writer.WriteRow(json, row);
             json.Flush();
+            var length = chunk.WrittenCount - start;
             try
             {
                 // With its newline, which is part of what the transport sends for it.
-                budget?.Spend(line.WrittenCount + 1);
+                budget?.Spend(length + 1);
             }
             catch (ScryValidationException exception)
             {
+                chunk.Truncate(start);
                 failure = exception;
                 return 0;
             }
 
-            var bytes = line.WrittenMemory.Span;
-            capture.AddWritten(plan, row, bytes);
-            slices.Add((chunk.WrittenCount, bytes.Length));
-            bytes.CopyTo(chunk.GetSpan(bytes.Length));
-            chunk.Advance(bytes.Length);
-            return bytes.Length;
+            capture.AddWritten(plan, row, chunk.WrittenMemory.Span.Slice(start, length));
+            slices.Add((start, length));
+            return length;
         }
 
         /// <summary>Says the read was ended by something that happened while a row was being handed on.</summary>
@@ -638,7 +636,6 @@ public sealed partial class ScryProcessor
                 await json.DisposeAsync();
             }
 
-            line.Dispose();
             chunk.Dispose();
         }
     }

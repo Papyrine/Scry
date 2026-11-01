@@ -115,7 +115,7 @@ static class DisclosureExporter
         await writer.WriteLineAsync("When,Caller,Agent,Kind,Source,Event,Outcome,Unit,Released,Rows,Content");
         foreach (var exported in wanted)
         {
-            if (await reader.Reconstruct(exported.Event, cancel) is not { } answer)
+            if ((exported.Read ?? await reader.Reconstruct(exported.Event, cancel)) is not { } answer)
             {
                 continue;
             }
@@ -165,7 +165,7 @@ static class DisclosureExporter
         json.WriteStartArray("events");
         foreach (var exported in wanted)
         {
-            if (await reader.Reconstruct(exported.Event, cancel) is not { } answer)
+            if ((exported.Read ?? await reader.Reconstruct(exported.Event, cancel)) is not { } answer)
             {
                 continue;
             }

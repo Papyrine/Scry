@@ -476,9 +476,9 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
         var wanted = new List<ExportedEvent>();
         if (question.Event is { } id)
         {
-            if (await reader.Reconstruct(id, cancel) is not null)
+            if (await reader.Reconstruct(id, cancel) is { } read)
             {
-                wanted.Add(new(id, Units: null));
+                wanted.Add(new(id, Units: null, read));
             }
 
             return (wanted, false);
@@ -777,4 +777,6 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
 }
 
 /// <summary>One event an export writes, and which of its units where it is not all of them.</summary>
-sealed record ExportedEvent(Guid Event, HashSet<int>? Units);
+// Read is the event already reconstructed, where gathering it took that: an export of one event
+// reads it to learn it is there, and the exporter then has no need to read it again.
+sealed record ExportedEvent(Guid Event, HashSet<int>? Units, ScryDisclosedResponse? Read = null);

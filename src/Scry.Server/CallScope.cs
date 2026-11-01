@@ -26,6 +26,9 @@ readonly record struct CallScope(
     /// </summary>
     public CachedDecisions Cached { get; init; } = new();
 
+    /// <summary>The context and the policies this call's policy applications share.</summary>
+    public CallPolicies Policies { get; init; } = new();
+
     /// <summary>
     /// Whether this call may bring a cached policy's answers up to date, which is every call that
     /// actually reads rows. Building a query without running it neither needs nor earns the work.

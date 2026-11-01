@@ -101,15 +101,22 @@ public sealed partial class ScryClient
     // schema stamp; a static one could not reach the client it belongs to.
     ScryClient(HttpClient http, string endpoint)
     {
+        // Made once rather than in each transport, which would make them again on every call.
+        var root = endpoint.TrimEnd('/');
+        var stream = $"{root}/stream";
+        var batch = $"{root}/batch";
+        var attachment = $"{root}/attachment";
+        var live = $"{root}/{ScryLive.Route}";
+        var command = $"{root}/{ScryCommandProtocol.Route}";
+        var capabilities = $"{root}/{ScryCommandProtocol.CapabilitiesRoute}";
         transport = (request, call, cancel) => PostAsync(http, endpoint, request, call, cancel);
-        streamTransport = (request, call, cancel) => StreamAsync(http, $"{endpoint.TrimEnd('/')}/stream", request, call, cancel);
-        batchTransport = (request, cancel) => PostBatchAsync(http, $"{endpoint.TrimEnd('/')}/batch", request, cancel);
-        attachmentTransport = (request, cancel) => PostAttachmentAsync(http, $"{endpoint.TrimEnd('/')}/attachment", request, cancel);
-        liveTransport = (request, call, lastEventId, session, cancel) => LiveAsync(http, $"{endpoint.TrimEnd('/')}/{ScryLive.Route}", request, call, lastEventId, session, cancel);
-        var command = $"{endpoint.TrimEnd('/')}/{ScryCommandProtocol.Route}";
+        streamTransport = (request, call, cancel) => StreamAsync(http, stream, request, call, cancel);
+        batchTransport = (request, cancel) => PostBatchAsync(http, batch, request, cancel);
+        attachmentTransport = (request, cancel) => PostAttachmentAsync(http, attachment, request, cancel);
+        liveTransport = (request, call, lastEventId, session, cancel) => LiveAsync(http, live, request, call, lastEventId, session, cancel);
         commandTransport = (request, cancel) => PostCommandAsync(http, command, request, cancel);
         receiptTransport = (id, cancel) => GetReceiptAsync(http, command, id, cancel);
-        capabilitiesTransport = cancel => GetCapabilitiesAsync(http, $"{endpoint.TrimEnd('/')}/{ScryCommandProtocol.CapabilitiesRoute}", cancel);
+        capabilitiesTransport = cancel => GetCapabilitiesAsync(http, capabilities, cancel);
     }
 
     // Sends the serializer's own UTF-8 rather than a string: StringContent would encode the body to UTF-8
