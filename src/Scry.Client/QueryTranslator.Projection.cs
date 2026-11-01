@@ -82,13 +82,13 @@ sealed partial class QueryTranslator
     // read as a wire fault rather than the missing keys it really is.
     static Projection Built(List<ProjectionMember> members)
     {
-        if (members.Count == 0)
+        if (members.Count != 0)
         {
-            throw new NotSupportedException(
-                "A projection of nothing but attachments has no members left to send. Project the row's key beside the attachment — that is what the fetch is keyed by.");
+            return new(members);
         }
 
-        return new(members);
+        throw new NotSupportedException(
+            "A projection of nothing but attachments has no members left to send. Project the row's key beside the attachment — that is what the fetch is keyed by.");
     }
 
     ProjectionValue ProjectionValue(Expression expression, ParameterExpression parameter, bool grouped, IReadOnlyList<string>? target = null)
