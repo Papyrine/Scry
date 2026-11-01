@@ -174,7 +174,7 @@ static partial class ClosureReader
             _ => throw new($"'{operand.GetType()}' passed CanRead with no '{op}' to read.")
         };
 
-    static object Unary(ExpressionType op, int operand) =>
+    static int Unary(ExpressionType op, int operand) =>
         unchecked(op switch
         {
             ExpressionType.Negate => -operand,
@@ -182,7 +182,7 @@ static partial class ClosureReader
             _ => operand
         });
 
-    static object Unary(ExpressionType op, uint operand) =>
+    static long Unary(ExpressionType op, uint operand) =>
         unchecked(op switch
         {
             // An unsigned integer negates through the signed width above it, as the language states
@@ -192,7 +192,7 @@ static partial class ClosureReader
             _ => operand
         });
 
-    static object Unary(ExpressionType op, long operand) =>
+    static long Unary(ExpressionType op, long operand) =>
         unchecked(op switch
         {
             ExpressionType.Negate => -operand,
@@ -201,7 +201,7 @@ static partial class ClosureReader
         });
 
     // An unsigned long has no negation to emit, so only its complement reaches here.
-    static object Unary(ExpressionType op, ulong operand)
+    static ulong Unary(ExpressionType op, ulong operand)
     {
         if (op is ExpressionType.Not)
         {
@@ -211,7 +211,7 @@ static partial class ClosureReader
         return operand;
     }
 
-    static object Unary(ExpressionType op, float operand)
+    static float Unary(ExpressionType op, float operand)
     {
         if (op is ExpressionType.Negate)
         {
@@ -221,7 +221,7 @@ static partial class ClosureReader
         return operand;
     }
 
-    static object Unary(ExpressionType op, double operand)
+    static double Unary(ExpressionType op, double operand)
     {
         if (op is ExpressionType.Negate)
         {
@@ -267,7 +267,7 @@ static partial class ClosureReader
             _ => throw new($"'{left.GetType()}' passed CanRead with no '{op}' to read.")
         };
 
-    static object Binary(ExpressionType op, bool left, bool right) =>
+    static bool Binary(ExpressionType op, bool left, bool right) =>
         op switch
         {
             ExpressionType.And or ExpressionType.AndAlso => left & right,

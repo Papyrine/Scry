@@ -323,7 +323,7 @@ public partial class BuilderPane
 
     // What a query can be asked to answer with, and the terminal it already ends with when that is
     // another — ToListAsync, say — so the list can show it.
-    static IEnumerable<(string Terminal, string Label)> Terminals(string? current)
+    static (string Terminal, string Label)[] Terminals(string? current)
     {
         if (current is null ||
             terminals.Any(_ => _.Terminal == current))
@@ -382,14 +382,14 @@ public partial class BuilderPane
             _ => null
         };
 
-    static IReadOnlyList<T> Replace<T>(IReadOnlyList<T> items, int at, T item)
+    static List<T> Replace<T>(IReadOnlyList<T> items, int at, T item)
     {
         var list = items.ToList();
         list[at] = item;
         return list;
     }
 
-    static IReadOnlyList<T> Without<T>(IReadOnlyList<T> items, int at)
+    static List<T> Without<T>(IReadOnlyList<T> items, int at)
     {
         var list = items.ToList();
         if (at < list.Count)

@@ -85,7 +85,7 @@ sealed partial class QueryTranslator
     // The navigation a nested projection descends into: the shared leading segments of every member
     // path, stopping before any member's final (scalar) segment so each keeps a non-empty relative
     // path. Empty means the members do not share a single navigation, which is unsupported.
-    static List<string> CommonNavigationPrefix(IReadOnlyList<IReadOnlyList<string>> paths)
+    static List<string> CommonNavigationPrefix(List<IReadOnlyList<string>> paths)
     {
         // Reading nothing from the row shares no navigation either, and the caller says so. Checked
         // here rather than left to the loop, whose All() is vacuously true on an empty list and would

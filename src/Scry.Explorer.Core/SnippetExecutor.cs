@@ -129,7 +129,7 @@ public sealed class SnippetExecutor
 
     // Compiles the models and loads them into the context, once. The image is kept as the reference
     // every snippet compiles against, so a snippet binds to exactly the assembly it will run against.
-    MetadataReference EmitModel()
+    PortableExecutableReference EmitModel()
     {
         var compilation = CSharpCompilation.Create(
             modelAssembly,

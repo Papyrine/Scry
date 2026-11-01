@@ -116,7 +116,7 @@ public class LiveUiTests :
         return decimal.Parse(await page.InnerTextAsync(selector), CultureInfo.InvariantCulture);
     }
 
-    static Task Becomes(IPage page, string selector, decimal expected) =>
+    static Task<IJSHandle> Becomes(IPage page, string selector, decimal expected) =>
         page.WaitForFunctionAsync(
             "([selector, expected]) => parseFloat(document.querySelector(selector)?.innerText) === expected",
             new object[] {selector, (double)expected});

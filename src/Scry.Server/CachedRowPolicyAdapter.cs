@@ -368,7 +368,7 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         return registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty;
     }
 
-    List<(object, bool)> Decide(ICachedRowPolicy<TEntity> policy, IReadOnlyList<TEntity> rows, string scopeKey, ScryPolicyContext context)
+    List<(object, bool)> Decide(ICachedRowPolicy<TEntity> policy, List<TEntity> rows, string scopeKey, ScryPolicyContext context)
     {
         var decisions = new List<(object, bool)>(rows.Count);
         foreach (var row in rows)

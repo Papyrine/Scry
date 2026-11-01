@@ -170,7 +170,7 @@ public abstract class BrowserTests
     protected IReadOnlyList<string> TakePolicyRefusals() =>
         TakePolicyRefusals(Current);
 
-    static IReadOnlyList<string> TakePolicyRefusals(RunningTest test)
+    static List<string> TakePolicyRefusals(RunningTest test)
     {
         var refused = new List<string>();
         var kept = new List<string>();

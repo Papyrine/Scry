@@ -130,7 +130,7 @@ sealed class NavigationPolicy(
     /// keys covers both kinds of navigation with one shape — a reference reaches nought or one — and
     /// asks nothing of the target's own key, which may be one EF holds in shadow.
     /// </summary>
-    Expression Reachable(IQueryable target, Expression owner, Type ownerType, Member navigation, Type element)
+    MethodCallExpression Reachable(IQueryable target, Expression owner, Type ownerType, Member navigation, Type element)
     {
         var row = Expression.Parameter(element, "p");
         return Expression.Call(
@@ -200,7 +200,7 @@ sealed class NavigationPolicy(
     /// Reads a key property off a row. A shadow property has no CLR member to read, so a navigation
     /// keyed on one is refused rather than correlated on something else.
     /// </summary>
-    static Expression Property(Expression row, IProperty property, Type owner)
+    static MemberExpression Property(Expression row, IProperty property, Type owner)
     {
         var info = property.PropertyInfo ??
                    throw new($"'{owner.Name}.{property.Name}' is a shadow property, so a navigation keyed on it cannot be correlated to a policied source. Map the key to a CLR property, or drop the policy.");

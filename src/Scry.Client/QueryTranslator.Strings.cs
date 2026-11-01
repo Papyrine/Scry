@@ -138,7 +138,7 @@ sealed partial class QueryTranslator
             return [.. arguments.Take(arguments.Count - 1), .. array.Expressions];
         }
 
-        return (ReadOnlyCollection<Expression>) [.. call.Arguments];
+        return (System.Collections.ObjectModel.ReadOnlyCollection<Expression>) [.. call.Arguments];
     }
 
     /// <summary>
@@ -198,7 +198,7 @@ sealed partial class QueryTranslator
         return parts;
     }
 
-    static Node ConcatChain(IReadOnlyList<Node> parts)
+    static Node ConcatChain(List<Node> parts)
     {
         if (parts.Count == 0)
         {

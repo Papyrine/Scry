@@ -400,7 +400,7 @@ partial class QueryRenderer
 
     // Mirrors the translator's CommonNavigationPrefix, so the render can predict the rebasing the
     // forward pass will perform.
-    static List<string> DerivedPrefix(IReadOnlyList<IReadOnlyList<string>> paths)
+    static List<string> DerivedPrefix(List<IReadOnlyList<string>> paths)
     {
         if (paths.Count == 0)
         {

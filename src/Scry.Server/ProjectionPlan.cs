@@ -114,7 +114,7 @@ sealed class ProjectionPlan(
         return [.. left.Select((_, slot) => _ || (slot < right.Count && right[slot]))];
     }
 
-    IReadOnlyList<bool>? Reads(ScryDisclosureOptions settings)
+    bool[]? Reads(ScryDisclosureOptions settings)
     {
         var written = Shape.Count;
         var slots = new bool[written];

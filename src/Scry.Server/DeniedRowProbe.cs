@@ -95,7 +95,7 @@ sealed class DeniedRowProbe
     /// has no key made of readable properties. One statement, and the database stops at the first row
     /// it finds.
     /// </summary>
-    static Expression? Correlated(IQueryable hide, IQueryable full, DbContext db)
+    static MethodCallExpression? Correlated(IQueryable hide, IQueryable full, DbContext db)
     {
         var element = hide.ElementType;
         if (db.Model.FindEntityType(element)?.FindPrimaryKey() is not { } key)

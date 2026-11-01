@@ -128,7 +128,7 @@ public class ValidatorLimitTests
         await Assert.That(Rejects("Employee", [new WhereOp(predicate)], _ => _.MaxCorrelatedSubqueries = 1)).Contains("correlated subqueries");
     }
 
-    static Node Balanced(int leaves)
+    static BinaryNode Balanced(int leaves)
     {
         if (leaves == 1)
         {

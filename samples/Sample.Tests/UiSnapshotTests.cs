@@ -716,7 +716,7 @@ public class UiSnapshotTests :
 
     // Replaces the real file-saving interop with a recorder, so an export can be asserted rather than
     // landing in the browser's downloads directory.
-    static Task InterceptDownloadsAsync(IPage page) =>
+    static Task<JsonElement?> InterceptDownloadsAsync(IPage page) =>
         page.EvaluateAsync(
             """
             () => {
@@ -1382,7 +1382,7 @@ public class UiSnapshotTests :
     }
 
     // Past the persist debounce, which is what actually writes the tabs.
-    static Task WaitForStoredTabsAsync(IPage page, string fragment) =>
+    static Task<IJSHandle> WaitForStoredTabsAsync(IPage page, string fragment) =>
         page.WaitForFunctionAsync(
             "fragment => (localStorage.getItem('scry:tabs') ?? '').includes(fragment)",
             fragment,
@@ -1652,7 +1652,7 @@ public class UiSnapshotTests :
         await WaitForEditorAsync(page, grouped);
     }
 
-    static Task WaitForEditorAsync(IPage page, string expected) =>
+    static Task<IJSHandle> WaitForEditorAsync(IPage page, string expected) =>
         page.WaitForFunctionAsync(
             "expected => monaco.editor.getEditors()[0].getValue().replace(/\\r\\n/g, '\\n') === expected",
             expected,

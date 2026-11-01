@@ -65,7 +65,7 @@ sealed partial class QueryTranslator
     /// have been projected as leaves of the same row. A missing one is refused here rather than
     /// producing a handle that would fail at fetch time with nothing to say why.
     /// </summary>
-    IReadOnlyList<AttachmentBinding> ResolveAttachments(IReadOnlyList<QueryOp> ops)
+    List<AttachmentBinding> ResolveAttachments(IReadOnlyList<QueryOp> ops)
     {
         if (pendingAttachments.Count == 0)
         {

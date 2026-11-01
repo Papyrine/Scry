@@ -42,7 +42,7 @@ public static class ScryHeaderExtensions
     /// reused untouched: the translator ignores the root constant, so re-rooting it is unnecessary, and
     /// leaving it alone keeps these operators invisible to translation.
     /// </summary>
-    static IQueryable<T> Rebind<T>(IQueryable<T> source, Func<ScryCall?, ScryCall> add)
+    static CaptureQueryable<T> Rebind<T>(IQueryable<T> source, Func<ScryCall?, ScryCall> add)
     {
         if (source.Provider is QueryProvider provider)
         {

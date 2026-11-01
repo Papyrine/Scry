@@ -435,7 +435,7 @@ public class UiScreenshotTests :
     // the capture is of the settled UI whenever the shutter falls. The suggest widget's scrollbar is
     // also pinned visible: Monaco hides it on a timer after the list opens, so a capture that takes
     // longer than that on a slow runner would otherwise be of a list with no scrollbar at all.
-    static Task SettleScrollbarsAsync(IPage page) =>
+    static Task<IElementHandle> SettleScrollbarsAsync(IPage page) =>
         page.AddStyleTagAsync(
             new()
             {

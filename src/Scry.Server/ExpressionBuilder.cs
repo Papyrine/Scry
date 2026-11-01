@@ -351,7 +351,7 @@ sealed class ExpressionBuilder(
     // Builds one comparison of an ordering key against a cursor value. strictGreater null => equality;
     // otherwise a strict inequality flipped by descending. Strings compare via string.Compare so EF
     // translates them to a SQL relational comparison under the column collation (matching the ORDER BY).
-    Expression CompareKey(Node keyNode, ConstNode value, ParameterExpression parameter, bool? strictGreater, bool descending)
+    BinaryExpression CompareKey(Node keyNode, ConstNode value, ParameterExpression parameter, bool? strictGreater, bool descending)
     {
         var left = Build(keyNode, parameter, null);
         var right = BuildConstant(value, left.Type);
@@ -872,7 +872,7 @@ sealed class ExpressionBuilder(
     }
 
     // Plans without a binary slot — the common case — carry null, the one check the writers branch on.
-    static IReadOnlyList<bool>? Normalize(List<bool> binary)
+    static List<bool>? Normalize(List<bool> binary)
     {
         if (binary.Contains(true))
         {
@@ -1039,7 +1039,7 @@ sealed class ExpressionBuilder(
     /// translates into a correlated subquery. The inner predicate and selector are lambdas over the
     /// collection's element, so they are built against a parameter of that type rather than the row.
     /// </summary>
-    Expression BuildSubquery(SubqueryNode subquery, Expression row)
+    MethodCallExpression BuildSubquery(SubqueryNode subquery, Expression row)
     {
         // The collection is folded to one value, so its own name is read the way that value is: as
         // an aggregate where the value is returned, and as a filter reads where it is not.
@@ -1116,7 +1116,7 @@ sealed class ExpressionBuilder(
     /// that reaches the SQL as text rather than as a parameter — which is exactly why a request names
     /// only the sensitivity it wants.
     /// </summary>
-    Expression BuildCollate(CollateNode collate, Expression row)
+    MethodCallExpression BuildCollate(CollateNode collate, Expression row)
     {
         var target = Build(collate.Target, row, typeof(string));
         var collation = collate.Match switch
@@ -1155,7 +1155,7 @@ sealed class ExpressionBuilder(
     /// query, which EF translates to <c>IN (SELECT …)</c>. The source arrives already policy-filtered,
     /// so the set can only hold rows the caller could have queried directly.
     /// </summary>
-    Expression BuildInSource(InSourceNode inSource, Expression row)
+    MethodCallExpression BuildInSource(InSourceNode inSource, Expression row)
     {
         if (sources is null)
         {
@@ -1245,7 +1245,7 @@ sealed class ExpressionBuilder(
 
     // A member read against a group means the key. With one key that is the whole key; with several it
     // names one of them, matched back to the position it was grouped at.
-    Expression BuildGroupKey(MemberNode member, Expression row)
+    MemberExpression BuildGroupKey(MemberNode member, Expression row)
     {
         if (compositeKeys is null)
         {
@@ -1267,7 +1267,7 @@ sealed class ExpressionBuilder(
 
     // The same read by position rather than by path, which is how a computed key — one with no path to
     // match — names itself.
-    Expression BuildGroupKeyAt(int index, Expression row)
+    MemberExpression BuildGroupKeyAt(int index, Expression row)
     {
         // The members a key was made from were read once, when the rows were grouped. Returned here,
         // they are returned, and this is the only place that is seen.
@@ -1310,7 +1310,7 @@ sealed class ExpressionBuilder(
         return Expression.Lambda(EnsureCondition(body), parameter);
     }
 
-    Expression BuildConditional(ConditionalNode conditional, Expression row)
+    ConditionalExpression BuildConditional(ConditionalNode conditional, Expression row)
     {
         var test = BuildCondition(conditional.Test, row);
 
@@ -1742,7 +1742,7 @@ sealed class ExpressionBuilder(
     /// on nothing but the date, translates in full, and numbers the days exactly as .NET does. The wire
     /// carries only the intent; the server owns the SQL, the same way it owns a collation.
     /// </remarks>
-    static Expression BuildDayOfWeek(Expression target)
+    static BinaryExpression BuildDayOfWeek(Expression target)
     {
         var value = NonNullable(target);
 
@@ -1790,7 +1790,7 @@ sealed class ExpressionBuilder(
             type,
             key => sqlServerFunctions?.GetMethod("DateDiffDay", [typeof(DbFunctions), key, key]));
 
-    static Expression TemporalProperty(Expression target, string name)
+    static MemberExpression TemporalProperty(Expression target, string name)
     {
         var value = NonNullable(target);
 
@@ -1801,7 +1801,7 @@ sealed class ExpressionBuilder(
 
     // A static that reads one temporal type as another — DateOnly.FromDateTime and its siblings. The
     // target is the value being read, so it is the argument here rather than the instance.
-    static Expression TemporalStatic(Type owner, string name, Expression target)
+    static MethodCallExpression TemporalStatic(Type owner, string name, Expression target)
     {
         var value = NonNullable(target);
 
@@ -1811,7 +1811,7 @@ sealed class ExpressionBuilder(
     }
 
     // An argument-less instance method on a temporal — the Unix-time readings.
-    static Expression TemporalCall(Expression target, string name)
+    static MethodCallExpression TemporalCall(Expression target, string name)
     {
         var value = NonNullable(target);
 
@@ -1822,7 +1822,7 @@ sealed class ExpressionBuilder(
 
     // AddDays and friends take an int on DateOnly and a double on DateTime, so the argument is built
     // against whatever the resolved overload actually declares.
-    Expression TemporalAdd(CallNode call, Expression target, string name, Expression row)
+    MethodCallExpression TemporalAdd(CallNode call, Expression target, string name, Expression row)
     {
         var value = NonNullable(target);
 
@@ -1878,7 +1878,7 @@ sealed class ExpressionBuilder(
     /// as itself over an in-memory source. The flag constant is parsed at the member's own enum type,
     /// so a name outside it is a rejected query.
     /// </summary>
-    Expression BuildHasFlag(CallNode call, Expression target, Expression row)
+    MethodCallExpression BuildHasFlag(CallNode call, Expression target, Expression row)
     {
         var value = NonNullable(target);
         if (!value.Type.IsEnum)
@@ -1890,7 +1890,7 @@ sealed class ExpressionBuilder(
         return Expression.Call(value, enumHasFlag, Expression.Convert(flag, typeof(Enum)));
     }
 
-    static Expression BuildSign(Expression target)
+    static ConditionalExpression BuildSign(Expression target)
     {
         var value = NonNullable(target);
         if (Rank(value.Type) is null)
@@ -1929,7 +1929,7 @@ sealed class ExpressionBuilder(
     /// all. A null operand keeps the answer null — GREATEST would skip it and answer with the other
     /// operand, which is the greater of one value rather than of two.
     /// </remarks>
-    Expression BuildMinMax(CallNode call, Expression target, Expression row, bool max)
+    ConditionalExpression BuildMinMax(CallNode call, Expression target, Expression row, bool max)
     {
         var left = target;
         var right = Build(call.Arguments[0], row, Nullable.GetUnderlyingType(target.Type) ?? target.Type);
@@ -2046,7 +2046,7 @@ sealed class ExpressionBuilder(
     // The angle conversions — statics on the floating types rather than on Math, defined over double
     // alone like the trigonometry they accompany. The target is checked before it is widened: a
     // conversion from something that is not a number has no Convert to widen through.
-    static Expression AngleCall(MethodInfo method, Expression target)
+    static MethodCallExpression AngleCall(MethodInfo method, Expression target)
     {
         var value = NonNullable(target);
         if (value.Type.IsEnum ||
@@ -2062,11 +2062,11 @@ sealed class ExpressionBuilder(
     static MethodInfo radiansToDegrees = typeof(double).GetMethod("RadiansToDegrees", [typeof(double)])!;
 
     // A Math method defined over double alone: the target is widened to reach it.
-    static Expression Double1(string name, Expression target) =>
+    static MethodCallExpression Double1(string name, Expression target) =>
         Expression.Call(DoubleMethod(name, 1), ConvertTo(NonNullable(target), typeof(double)));
 
     // The same, for the two-operand forms — the second operand is the call's one argument.
-    Expression Double2(string name, Expression target, CallNode call, Expression row) =>
+    MethodCallExpression Double2(string name, Expression target, CallNode call, Expression row) =>
         Expression.Call(
             DoubleMethod(name, 2),
             ConvertTo(NonNullable(target), typeof(double)),
@@ -2075,7 +2075,7 @@ sealed class ExpressionBuilder(
     static MethodInfo DoubleMethod(string name, int arity) =>
         Method(typeof(Math), name, typeof(double), arity == 2 ? typeof(double) : null)!;
 
-    static Expression MathCall(string name, Expression target)
+    static MethodCallExpression MathCall(string name, Expression target)
     {
         var value = NonNullable(target);
 
@@ -2084,7 +2084,7 @@ sealed class ExpressionBuilder(
         return Expression.Call(method, value);
     }
 
-    Expression BuildRound(CallNode call, Expression target, Expression row)
+    MethodCallExpression BuildRound(CallNode call, Expression target, Expression row)
     {
         if (call.Arguments.Count == 0)
         {
@@ -2099,7 +2099,7 @@ sealed class ExpressionBuilder(
         return Expression.Call(method, value, digits);
     }
 
-    Expression BuildSubstring(CallNode call, Expression target, Expression row)
+    MethodCallExpression BuildSubstring(CallNode call, Expression target, Expression row)
     {
         var start = ConvertTo(Build(call.Arguments[0], row, typeof(int)), typeof(int));
         if (call.Arguments.Count == 1)
@@ -2119,7 +2119,7 @@ sealed class ExpressionBuilder(
     /// collection parameter, not statement text — so one cached plan serves every list a client
     /// sends, whatever its values.
     /// </summary>
-    Expression BuildIn(CallNode call, Expression target)
+    MethodCallExpression BuildIn(CallNode call, Expression target)
     {
         var elementType = target.Type;
         var underlying = Nullable.GetUnderlyingType(elementType);

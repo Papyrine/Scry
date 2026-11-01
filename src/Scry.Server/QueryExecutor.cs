@@ -1276,7 +1276,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     // The row a key names: each key member equal to its value, each value bound as a parameter.
-    static Expression KeyPredicate(ParameterExpression row, IReadOnlyList<Member> members, IReadOnlyList<object> values)
+    static Expression KeyPredicate(ParameterExpression row, List<Member> members, IReadOnlyList<object> values)
     {
         Expression? predicate = null;
         for (var i = 0; i < members.Count; i++)
@@ -1610,7 +1610,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         IQueryable query,
         Type elementType,
         SelectOp? select,
-        IReadOnlyList<(Node Key, bool Descending)> orderings,
+        List<(Node Key, bool Descending)> orderings,
         IReadOnlyList<string> steps,
         bool seekEligible,
         PageOp page,
@@ -1710,7 +1710,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     // total order); anything else — a view/POCO, no ordering, a nav-path or nullable key — falls back to
     // offset paging with no cursor.
     (bool SeekSafe, IReadOnlyList<(Node Key, bool Descending)> Keys) PlanSeek(
-        IReadOnlyList<(Node Key, bool Descending)> orderings,
+        List<(Node Key, bool Descending)> orderings,
         bool seekEligible,
         ScrySource source,
         Type elementType,

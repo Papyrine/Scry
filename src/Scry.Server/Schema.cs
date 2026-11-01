@@ -1268,11 +1268,11 @@ sealed partial class Schema
     /// documents. It does not replace what a base declares — that would let registering a policy
     /// remove one — so both stay in the chain and both narrow.
     /// </remarks>
-    static IReadOnlyList<PolicyUse> ResolvePolicies(
+    static List<PolicyUse> ResolvePolicies(
         Type type,
         string name,
         ScryOptions options,
-        IReadOnlyDictionary<Type, PolicyUse> cached)
+        Dictionary<Type, PolicyUse> cached)
     {
         List<PolicyUse> policies = [];
         for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
@@ -1321,7 +1321,7 @@ sealed partial class Schema
     /// applies, holding the store its answers live in and the accessors for the key they are remembered
     /// by and the version that says a row needs deciding again.
     /// </summary>
-    static IReadOnlyDictionary<Type, PolicyUse> BuildCachedPolicies(Schema schema, ScryOptions options)
+    static Dictionary<Type, PolicyUse> BuildCachedPolicies(Schema schema, ScryOptions options)
     {
         Dictionary<Type, PolicyUse> adapters = [];
         foreach (var (entity, (policy, version, handling)) in options.CachedPolicies)
@@ -1399,7 +1399,7 @@ sealed partial class Schema
     /// agree at all — the generator never runs the model, so fluent configuration is invisible to it —
     /// and <see cref="ValidateAgainstModel"/> verifies the answer against the real key at startup.
     /// </remarks>
-    static IReadOnlyList<Member> DeriveKeys(TypeMeta meta)
+    static List<Member> DeriveKeys(TypeMeta meta)
     {
         // An attachment is not a value and a navigation is not one either, so neither can be a key.
         var candidates = meta.Members.Values
@@ -1435,7 +1435,7 @@ sealed partial class Schema
     /// The same, for an attachment — which is what a key was first derived for, and so what the failure
     /// where none can be says.
     /// </summary>
-    static IReadOnlyList<Member> DeriveAttachmentKeys(TypeMeta meta)
+    static List<Member> DeriveAttachmentKeys(TypeMeta meta)
     {
         if (DeriveKeys(meta) is {Count: > 0} keys)
         {
@@ -1956,7 +1956,7 @@ sealed partial class Schema
     // The set a context holds for an entity type, read through a static so it can be closed over the
     // type once and held as a delegate. Set<T>() itself is a generic virtual method, and the runtime
     // refuses an open-instance delegate over one of those.
-    static IQueryable SetOf<T>(DbContext db)
+    static DbSet<T> SetOf<T>(DbContext db)
         where T : class =>
         db.Set<T>();
 

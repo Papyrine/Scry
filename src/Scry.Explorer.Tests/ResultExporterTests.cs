@@ -174,6 +174,6 @@ public class ResultExporterTests
                 """);
     }
 
-    static IReadOnlyList<JsonElement> Rows(string json) =>
+    static List<JsonElement> Rows(string json) =>
         JsonDocument.Parse(json).RootElement.EnumerateArray().ToList();
 }

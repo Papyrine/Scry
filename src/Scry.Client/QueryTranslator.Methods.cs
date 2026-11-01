@@ -204,7 +204,7 @@ sealed partial class QueryTranslator
             // one mode the wire can honour: written explicitly it is dropped rather than sent — sent,
             // it would read as the digits — and any other mode is refused, since the database would
             // answer by its own.
-            IReadOnlyList<Expression> operands = call.Arguments;
+            var operands = call.Arguments;
             if (call.Method.Name == "Round" &&
                 operands.Count > 1 &&
                 operands[^1].Type == typeof(MidpointRounding))
@@ -215,7 +215,7 @@ sealed partial class QueryTranslator
                         "Math.Round with a rounding mode other than MidpointRounding.AwayFromZero is not supported by Scry: SQL's ROUND rounds away from zero, and no provider translates another mode. Use AwayFromZero, or round after the rows return.");
                 }
 
-                operands = [.. operands.Take(operands.Count - 1)];
+                operands = operands.Take(operands.Count - 1).ToList().AsReadOnly();
             }
 
             // The two-operand forms — Round(value, digits), Pow(value, exponent), Log(value, base),
@@ -274,7 +274,7 @@ sealed partial class QueryTranslator
     /// no such folding (any predicate overload, anything returning a sequence) are left to fail as the
     /// client-side code they are.
     /// </summary>
-    Node? TrySequenceRead(MethodCallExpression call, ParameterExpression root)
+    CallNode? TrySequenceRead(MethodCallExpression call, ParameterExpression root)
     {
         // MemoryExtensions sits alongside Enumerable here because the compiler prefers its span
         // overload for a byte[]'s Contains. The two spell one question, and the server rebinds either

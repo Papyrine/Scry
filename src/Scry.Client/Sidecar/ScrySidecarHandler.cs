@@ -435,7 +435,7 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         return null;
     }
 
-    static IReadOnlyList<KeyValuePair<string, string>> Flatten(HttpHeaders headers, HttpContentHeaders? content)
+    static List<KeyValuePair<string, string>> Flatten(HttpHeaders headers, HttpContentHeaders? content)
     {
         var list = new List<KeyValuePair<string, string>>();
         foreach (var header in headers)

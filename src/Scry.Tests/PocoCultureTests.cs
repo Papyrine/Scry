@@ -65,7 +65,7 @@ public class PocoCultureTests
     }
 
     // The culture request localization would have set, restored on the way out.
-    static IDisposable Under(string culture)
+    static Restore Under(string culture)
     {
         var previous = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = new(culture);

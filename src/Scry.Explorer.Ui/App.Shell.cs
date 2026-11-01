@@ -10,7 +10,7 @@ public partial class App
     /// The output views there is currently something to show in. A tab exists only when it has
     /// content, so a refused run leaves the column empty rather than offering three empty panes.
     /// </summary>
-    IReadOnlyList<OutputTab> OpenTabs
+    List<OutputTab> OpenTabs
     {
         get
         {
