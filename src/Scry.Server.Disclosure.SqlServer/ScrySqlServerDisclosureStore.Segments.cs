@@ -65,6 +65,19 @@ public sealed partial class ScrySqlServerDisclosureStore
     /// </remarks>
     public async Task<int> RetireAsync(Cancel cancel = default)
     {
+        found = null;
+        try
+        {
+            return await Retire(cancel);
+        }
+        finally
+        {
+            retirement = found;
+        }
+    }
+
+    async Task<int> Retire(Cancel cancel)
+    {
         await EnsureAsync(cancel);
         ScryDisclosureRetention retention;
         await using (var connection = await OpenAsync(cancel))
@@ -82,7 +95,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         if (retention is {HandsOn: true} &&
             options.Retire is null)
         {
-            problem = $"The disclosure record's segments are handed on before they are retired, and this node has no {nameof(ScrySqlServerDisclosureOptions)}.{nameof(ScrySqlServerDisclosureOptions.Retire)} to hand them to, so it retires none. A node that has one will.";
+            found = $"The disclosure record's segments are handed on before they are retired, and this node has no {nameof(ScrySqlServerDisclosureOptions)}.{nameof(ScrySqlServerDisclosureOptions.Retire)} to hand them to, so it retires none. A node that has one will.";
             return 0;
         }
 
@@ -262,7 +275,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         // said to be retired: the record would say it was gone while all of it stayed.
         if (oldest.Ledgered)
         {
-            problem = $"Segment {oldest.Number} of the disclosure record is kept in ledger tables, which no retirement can drop, so it is kept.";
+            found = $"Segment {oldest.Number} of the disclosure record is kept in ledger tables, which no retirement can drop, so it is kept.";
             return false;
         }
 
@@ -303,6 +316,21 @@ public sealed partial class ScrySqlServerDisclosureStore
     // Whether this node has written its settings into the record yet. Once: after that, another
     // node's are the record's until that node is gone and this one starts again.
     bool settled;
+
+    // Set where a transaction has written them, or found the record needs nothing from this node; it
+    // stands only once that transaction commits. Set where it did, a round that failed later would
+    // roll the line back and this node never write it.
+    bool settling;
+
+    void Committed()
+    {
+        if (settling)
+        {
+            settled = true;
+        }
+
+        settling = false;
+    }
 
     // The record's settings, or this node's where the record has none and this node moves it on.
     async Task<ScryDisclosureRetention> Retention(SqlConnection connection, SqlTransaction? transaction, Cancel cancel)
@@ -385,7 +413,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             return recorded;
         }
 
-        settled = true;
+        settling = true;
         var own = Own;
         if (recorded == own &&
             await Recorded(connection, transaction, cancel))
@@ -398,7 +426,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         if (recorded.HandsOn &&
             !own.HandsOn)
         {
-            problem = $"The disclosure record's segments are handed on before they are retired, and this node has no {nameof(ScrySqlServerDisclosureOptions)}.{nameof(ScrySqlServerDisclosureOptions.Retire)}, so it goes by the record's settings rather than its own.";
+            notice = $"The disclosure record's segments are handed on before they are retired, and this node has no {nameof(ScrySqlServerDisclosureOptions)}.{nameof(ScrySqlServerDisclosureOptions.Retire)}, so it goes by the record's settings rather than its own.";
             return recorded;
         }
 

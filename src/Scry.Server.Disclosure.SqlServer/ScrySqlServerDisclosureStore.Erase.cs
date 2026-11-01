@@ -33,6 +33,7 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         // Under that lock, so that nothing accepted before this is moved on after it: an answer
         // sitting in the outbox would otherwise bring back what is about to be removed.
+        settling = false;
         while (await Move(connection, transaction, cancel) == options.DrainBatches)
         {
         }
@@ -100,6 +101,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         }
 
         await transaction.CommitAsync(cancel);
+        Committed();
         return new(at, by, source, text, units);
     }
 
@@ -190,7 +192,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             return $"{unreadable} accepted batch(es) could not be read back and are held in {sql.Outbox} with [Unreadable] set. They were accepted, so what they record was sent.";
         }
 
-        return problem;
+        return failure ?? retirement ?? notice;
     }
 
     /// <summary>

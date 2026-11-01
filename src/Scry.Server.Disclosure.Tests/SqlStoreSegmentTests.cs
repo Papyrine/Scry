@@ -468,6 +468,75 @@ public class SqlStoreSegmentTests
         }
     }
 
+    // A node's settings are written into the record by the first round it moves that commits: a
+    // round that failed after writing them took them back with it.
+    [Test]
+    public async Task SettingsTakenBackByAFailedRoundAreWrittenAgain()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var blobs = new Blobs
+        {
+            Refusing = true
+        };
+        await using var keeping = Store(
+            database,
+            _ =>
+            {
+                _.Keep = 3;
+                _.Content = blobs;
+            });
+        await using var other = Store(database);
+
+        await keeping.AppendAsync(Clinic.Batch(1), Cancel.None);
+        await Assert.That(() => keeping.DrainAsync()).Throws<Exception>();
+        blobs.Refusing = false;
+        await keeping.DrainAsync();
+
+        await Assert.That((await other.RetentionAsync()).Keep).IsEqualTo(3);
+    }
+
+    // What a node finds wrong with the record's retention while it moves the record on its own is
+    // what its status says after the round, not something the round's end clears.
+    [Test]
+    public async Task ARetentionProblemOutlastsTheRoundThatFoundIt()
+    {
+        await using var database = await Clinic.Instance.Build();
+        await using var archiving = Store(
+            database,
+            _ =>
+            {
+                _.Keep = 1;
+                _.Retire = (_, _) => Task.CompletedTask;
+            });
+        var processor = Processor(archiving, new());
+        processor.Execute(Clinic.Names(), database.Context);
+        await archiving.DrainAsync();
+
+        await using var bare = Store(
+            database,
+            _ =>
+            {
+                _.Keep = 1;
+                _.DrainInterval = TimeSpan.FromMilliseconds(100);
+            });
+
+        // What starts its own mover moving.
+        await bare.AppendAsync(Clinic.Batch(2), Cancel.None);
+        await SqlStores.Until(
+            async () => (await bare.Status()).Problem?.Contains("no ScrySqlServerDisclosureOptions.Retire") == true,
+            "The store did not say it could not retire what the record hands on.");
+
+        // Read across several rounds: said only while a round runs, it would be gone between them.
+        List<string?> said = [];
+        for (var read = 0; read < 10; read++)
+        {
+            await Task.Delay(50);
+            said.Add((await bare.Status()).Problem);
+        }
+
+        await Assert.That(said.All(_ => _?.Contains("no ScrySqlServerDisclosureOptions.Retire") == true)).IsTrue();
+    }
+
     // A node with nothing to hand a segment to neither turns handing on off for the others nor
     // drops a segment itself: what is retired is retired with a copy, or not at all.
     [Test]

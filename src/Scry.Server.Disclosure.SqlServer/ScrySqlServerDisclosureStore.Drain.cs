@@ -8,7 +8,13 @@ public sealed partial class ScrySqlServerDisclosureStore
     Task? loop;
     int waiting;
     bool stopped;
-    volatile string? problem;
+    // What is wrong, kept apart by what says it and so what clears it: a move that failed, until a
+    // move succeeds; what the last retirement found in the way, until the next one; and what this
+    // node's own settings mean for the record, which it says once and which stands.
+    volatile string? failure;
+    volatile string? retirement;
+    volatile string? found;
+    volatile string? notice;
 
     // An answer was accepted on this node, so it is moved on now rather than at the next interval.
     // Several accepted together prompt one move, which takes them all.
@@ -72,7 +78,7 @@ public sealed partial class ScrySqlServerDisclosureStore
 
                 started = true;
                 await DrainAsync(stop);
-                problem = null;
+                failure = null;
             }
             catch (OperationCanceledException)
                 when (stop.IsCancellationRequested)
@@ -83,7 +89,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             {
                 // Nothing is lost: what could not be moved is still in the outbox, and is tried again
                 // at the next interval. What went wrong is what the store's status says.
-                problem = exception.Message;
+                failure = exception.Message;
             }
         }
     }
@@ -192,8 +198,10 @@ public sealed partial class ScrySqlServerDisclosureStore
             return 0;
         }
 
+        settling = false;
         var moved = await Move(connection, transaction, cancel);
         await transaction.CommitAsync(cancel);
+        Committed();
         return moved;
     }
 

@@ -35,6 +35,21 @@ public class StringConcatTests
         await Assert.That(rows.Select(_ => _.Label).Order()).IsEquivalentTo(["North:2", "South:1"], CollectionOrdering.Matching);
     }
 
+    // A lone hole is still a string: projected as the member it reads, the number would reach a
+    // client expecting a string and fail to read.
+    [Test]
+    public async Task ALoneNumberIsAString()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .Select(_ => new {Label = $"{_.Quantity}"})
+            .ToListAsync();
+
+        await Assert.That(rows.Select(_ => _.Label).Order()).IsEquivalentTo(["1", "3", "7"], CollectionOrdering.Matching);
+    }
+
     [Test]
     public async Task StartsWithALiteral()
     {

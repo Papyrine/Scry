@@ -205,6 +205,13 @@ sealed partial class QueryTranslator
             throw new NotSupportedException("A concatenation must have at least one part.");
         }
 
+        // One part is still a string: a lone non-string hole or argument is converted, as C# converts
+        // it, rather than projected as the member it reads.
+        if (parts.Count == 1)
+        {
+            return new CallNode(KnownFunction.StringConcat, ConstantOf(""), [parts[0]]);
+        }
+
         var chain = parts[0];
         foreach (var part in parts.Skip(1))
         {
