@@ -302,7 +302,8 @@ sealed partial class Schema
                 IsSensitive = meta.Sensitive,
                 // Carried only where something fetches by it, which keeps every other type's
                 // description — and so its stamp — exactly what it was.
-                Keys = meta.AttachmentKeys?.Select(_ => _.Name).ToList()
+                Keys = meta.AttachmentKeys?.Select(_ => _.Name).ToList(),
+                Declared = [.. DeclarationOrder(Declared(meta)).Select(_ => _.Name)]
             })
             .ToList();
 
@@ -337,6 +338,34 @@ sealed partial class Schema
         }
 
         return meta.Members.Values.Where(_ => !baseMeta.Members.ContainsKey(_.Name));
+    }
+
+    // Members in the order a generated client declares them: what a base that is not itself a model
+    // contributes first, as the generator flattens it, then each type's own in the order it declares
+    // them. Reflection lists a type's own properties before its base's, so the depth of the type that
+    // declares each one decides; within one type, the order reflection gives is the declaration order.
+    // A member with no property, a capability, keeps its place at the end.
+    static IEnumerable<Member> DeclarationOrder(IEnumerable<Member> members) =>
+        members
+            .Select((member, index) => (member, index))
+            .OrderBy(_ => Depth(_.member.Property?.DeclaringType))
+            .ThenBy(_ => _.index)
+            .Select(_ => _.member);
+
+    static int Depth(Type? type)
+    {
+        if (type is null)
+        {
+            return int.MaxValue;
+        }
+
+        var depth = 0;
+        for (var at = type.BaseType; at is not null; at = at.BaseType)
+        {
+            depth++;
+        }
+
+        return depth;
     }
 
     static ScryMemberInfo DescribeMember(Member member, DescribedEnums enums)

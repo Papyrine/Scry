@@ -252,6 +252,7 @@ public sealed partial class ScryProcessor
                 throw new ScryValidationException($"Command '{meta.Name}' is not available on this server.");
             }
 
+            tracker.EnsureRoom(caller);
             var command = binder.Bind(meta, request.Payload);
             var context = new ScryPolicyContext(services, data, requestHeaders, new HeaderDictionary());
             if (meta.Policy is { } policy &&

@@ -270,6 +270,27 @@ public class CommandPipelineTests
         await Assert.That(exception!.PerCaller).IsFalse();
     }
 
+    // A caller with no room left is refused before anything is spent on the command: its payload is
+    // not bound and its target not looked for, so a missing target is not what it is told.
+    [Test]
+    public async Task ALimitIsCheckedBeforeTheTargetIsLookedFor()
+    {
+        await using var host = await CommandHost.Start(
+            "CommandLimitFirst",
+            _ =>
+            {
+                _.MaxPendingCommandsPerCaller = 1;
+                _.CommandSyncWindow = TimeSpan.Zero;
+            });
+        host.Script.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        await FirstReceipt(host, "SealContract", new {contractId = 1}, "alice");
+
+        var refused = await Assert.ThrowsExactlyAsync<ScryCommandLimitException>(() => FirstReceipt(host, "SealContract", new {contractId = 999}, "alice"));
+
+        host.Script.Gate.SetResult();
+        await Assert.That(refused!.PerCaller).IsTrue();
+    }
+
     [Test]
     public async Task ACallersLimitIsTheirsAlone()
     {

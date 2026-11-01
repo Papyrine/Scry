@@ -136,11 +136,31 @@ public static class ModelSynthesizer
 
         // Attachments are excluded with navigations and collections, matching the generator: no query
         // reads one, so it is not a member a projection can default to.
-        members.AddRange(
-            type.Members
-                .Where(_ => _ is {IsNavigation: false, IsCollection: false, IsAttachment: false})
-                .Select(_ => _.Name));
+        var scalars = type.Members
+            .Where(_ => _ is {IsNavigation: false, IsCollection: false, IsAttachment: false})
+            .Select(_ => _.Name);
+
+        // In the order the model declares them, as the generator walks them, where the server says
+        // what that is: the description itself lists them by name.
+        if (type.Declared is { } declared)
+        {
+            scalars = scalars.OrderBy(_ => Position(declared, _));
+        }
+
+        members.AddRange(scalars);
         return members;
+    }
+
+    // Where a member stands in the declared order; one the order does not name goes last.
+    static int Position(IReadOnlyList<string> declared, string member)
+    {
+        var index = Array.IndexOf([.. declared], member);
+        if (index < 0)
+        {
+            return int.MaxValue;
+        }
+
+        return index;
     }
 
     // Mirrors ScryGenerator.Arguments: the source and its scalar members, plus the key and attachment

@@ -176,6 +176,13 @@ sealed partial class QueryTranslator
 
     Node TranslateKey(MethodCallExpression call)
     {
+        // A comparer orders by rules of its own, which the database never sees: dropped, the rows
+        // would come back in the key's own order and be taken for the order asked for.
+        if (call.Arguments.Count > 2)
+        {
+            throw new NotSupportedException($"'{call.Method.Name}' with a comparer is not supported by Scry.");
+        }
+
         var lambda = Lambda(call.Arguments[1]);
         return TranslateExpr(lambda.Body, lambda.Parameters[0]);
     }

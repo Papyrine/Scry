@@ -836,6 +836,31 @@ public class ExpandedOperatorTests
         await Assert.That(rows.Single().Name).IsEqualTo("Alice (London)");
     }
 
+    // A comparer orders by rules the database never sees, so it is refused rather than dropped: the
+    // rows would otherwise come back in the key's own order, taken for the order asked for.
+    [Test]
+    public async Task AnOrderingWithAComparerIsRejected()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var ordered = await Assert.ThrowsExactlyAsync<NotSupportedException>(() => client.Source<Order>("Order")
+            .OrderBy(_ => _.Region, StringComparer.OrdinalIgnoreCase)
+            .Select(_ => new NameRow(_.Region))
+            .ToListAsync());
+        var then = await Assert.ThrowsExactlyAsync<NotSupportedException>(() => client.Source<Order>("Order")
+            .OrderBy(_ => _.Id)
+            .ThenByDescending(_ => _.Region, StringComparer.Ordinal)
+            .Select(_ => new NameRow(_.Region))
+            .ToListAsync());
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(ordered!.Message).Contains("'OrderBy' with a comparer");
+            await Assert.That(then!.Message).Contains("'ThenByDescending' with a comparer");
+        }
+    }
+
     [Test]
     public async Task AFormattedInterpolationHoleIsRejected()
     {

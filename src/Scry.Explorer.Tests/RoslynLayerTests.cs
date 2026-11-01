@@ -207,6 +207,35 @@ public class RoslynLayerTests
         }
     }
 
+    // A query with no Select projects its members as the generated client does, in the order the model
+    // declares them. The description lists members by name, so the order comes from what the server
+    // says it is; without it, the request would differ from the client's for the same query.
+    [Test]
+    public async Task ADefaultProjectionFollowsTheDeclaredOrder()
+    {
+        var declared = introspection with
+        {
+            Types =
+            [
+                introspection.Types[0] with
+                {
+                    Declared = ["Status", "Name", "Manager", "Active", "Address"]
+                },
+                introspection.Types[1]
+            ]
+        };
+        var ordered = SnippetExecutor.Create(declared, scryReferences);
+
+        var unsaid = (SelectOp) executor.Translate("Query.Employee").Pipeline.Single();
+        var said = (SelectOp) ordered.Translate("Query.Employee").Pipeline.Single();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(said.Projection.Members.Select(_ => _.Name)).IsEquivalentTo(["Status", "Name", "Active"], CollectionOrdering.Matching);
+            await Assert.That(unsaid.Projection.Members.Select(_ => _.Name)).IsEquivalentTo(["Name", "Active", "Status"], CollectionOrdering.Matching);
+        }
+    }
+
     // A deprecated member stays fully queryable — the server validates and executes it either way — so
     // the snippet must compile and warn rather than fail. The message is the model's own.
     [Test]

@@ -510,6 +510,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        City,
+        Country
+      ],
       IsSensitive: true
     },
     {
@@ -527,6 +531,9 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: PostQueryModel,
+      Declared: [
+        Pinned
+      ],
       IsSensitive: false
     },
     {
@@ -553,6 +560,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name
+      ],
       IsSensitive: false
     },
     {
@@ -570,6 +581,9 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: AssetQueryModel,
+      Declared: [
+        Floors
+      ],
       IsSensitive: false
     },
     {
@@ -615,6 +629,12 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Id,
+        Url,
+        Status,
+        Retry
       ],
       IsSensitive: false
     },
@@ -667,6 +687,12 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Keys: [
         Id
       ],
+      Declared: [
+        Id,
+        Name,
+        Document,
+        CanSealContract
+      ],
       IsSensitive: false
     },
     {
@@ -692,6 +718,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Id,
+        Name
       ],
       IsSensitive: false
     },
@@ -719,6 +749,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Department,
+        Headcount
       ],
       IsSensitive: false
     },
@@ -856,6 +890,21 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        Status,
+        Perks,
+        Active,
+        ManagerId,
+        Manager,
+        DepartmentId,
+        Department,
+        Avatar,
+        Address,
+        PreviousAddresses,
+        Workstation
+      ],
       IsSensitive: false
     },
     {
@@ -892,6 +941,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        Machines
+      ],
       IsSensitive: false
     },
     {
@@ -909,6 +963,9 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: PressQueryModel,
+      Declared: [
+        Certified
+      ],
       IsSensitive: false
     },
     {
@@ -934,6 +991,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Name,
+        Date
       ],
       IsSensitive: false
     },
@@ -1011,6 +1072,15 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        CreatedBy,
+        Id,
+        Number,
+        Notes,
+        Reviewer,
+        Tags,
+        Weights
+      ],
       IsSensitive: false
     },
     {
@@ -1046,6 +1116,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Id,
+        Name,
+        FleetId
       ],
       IsSensitive: false
     },
@@ -1193,6 +1268,22 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Region,
+        Amount,
+        Quantity,
+        Sku,
+        Placed,
+        Discount,
+        Grade,
+        Code,
+        Audited,
+        Lines,
+        Tags,
+        Scores,
+        Priorities
+      ],
       IsSensitive: false
     },
     {
@@ -1269,6 +1360,15 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Sku,
+        Quantity,
+        Price,
+        Units,
+        OrderId,
+        Order
+      ],
       IsSensitive: false
     },
     {
@@ -1305,6 +1405,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        Published
+      ],
       IsSensitive: false
     },
     {
@@ -1322,6 +1427,9 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: MachineQueryModel,
+      Declared: [
+        Tonnage
+      ],
       IsSensitive: false
     },
     {
@@ -1339,6 +1447,9 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: HolidayQueryModel,
+      Declared: [
+        Region
+      ],
       IsSensitive: false
     },
     {
@@ -1366,6 +1477,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Obsolete: ,
+      Declared: [
+        Region,
+        Total
+      ],
       IsSensitive: false
     },
     {
@@ -1391,6 +1506,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Id,
+        Name
       ],
       IsSensitive: false
     },
@@ -1479,6 +1598,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        Duration,
+        Day,
+        Start,
+        Stamped,
+        Signature,
+        CanRenameShift
+      ],
       IsSensitive: false
     },
     {
@@ -1498,6 +1627,9 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Base: ContractQueryModel,
       Keys: [
         Id
+      ],
+      Declared: [
+        Signer
       ],
       IsSensitive: false
     },
@@ -1565,6 +1697,14 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        DayOfWeek,
+        Recess,
+        Clock,
+        Alternates
+      ],
       IsSensitive: false
     },
     {
@@ -1611,6 +1751,12 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        IsOpen,
+        Token
+      ],
       IsSensitive: false
     },
     {
@@ -1628,6 +1774,9 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: AssetQueryModel,
+      Declared: [
+        Wheels
+      ],
       IsSensitive: false
     },
     {
@@ -1664,6 +1813,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCapability: false
         }
       ],
+      Declared: [
+        Room,
+        Extension,
+        Badge
+      ],
       IsSensitive: false
     },
     {
@@ -1681,6 +1835,9 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: FleetQueryModel,
+      Declared: [
+        Site
+      ],
       IsSensitive: false
     }
   ],
@@ -1838,7 +1995,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   SchemaStamp: 9oaNXxdznoihumz8
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1488' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1645' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

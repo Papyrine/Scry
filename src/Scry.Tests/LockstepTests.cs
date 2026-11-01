@@ -30,6 +30,19 @@ public class LockstepTests
             MetadataModelReader.Read(typeof(TestContext).Assembly.Location),
             SharedProcessor.Instance.Describe());
 
+    // The order a type declares its members in is the order a generated client projects them in by
+    // default, and the explorer builds the same request from the server's word for it.
+    [Test]
+    public async Task GeneratorAndServerAgreeOnTheDeclaredOrder()
+    {
+        var extract = MetadataModelReader.Read(typeof(TestContext).Assembly.Location);
+        foreach (var type in SharedProcessor.Instance.Describe().Types)
+        {
+            var generated = extract.Sources.Single(_ => _.ModelName == type.Model);
+            await Assert.That(type.Declared!).IsEquivalentTo(generated.Properties.Select(_ => _.Name), CollectionOrdering.Matching).Because(type.Model);
+        }
+    }
+
     // Member by member, not only the stamp: a mismatch then names the member rather than a hash.
     // The generator's spelling is the one it emits (an attachment is a handle, not its bytes),
     // which is what the server's introspection reproduces. The deprecation is compared too: it is out

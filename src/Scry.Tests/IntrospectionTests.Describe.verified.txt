@@ -159,6 +159,10 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        City,
+        Country
+      ],
       IsSensitive: true
     },
     {
@@ -176,6 +180,9 @@
         }
       ],
       Base: PostQueryModel,
+      Declared: [
+        Pinned
+      ],
       IsSensitive: false
     },
     {
@@ -202,6 +209,10 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name
+      ],
       IsSensitive: false
     },
     {
@@ -219,6 +230,9 @@
         }
       ],
       Base: AssetQueryModel,
+      Declared: [
+        Floors
+      ],
       IsSensitive: false
     },
     {
@@ -264,6 +278,12 @@
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Id,
+        Url,
+        Status,
+        Retry
       ],
       IsSensitive: false
     },
@@ -316,6 +336,12 @@
       Keys: [
         Id
       ],
+      Declared: [
+        Id,
+        Name,
+        Document,
+        CanSealContract
+      ],
       IsSensitive: false
     },
     {
@@ -341,6 +367,10 @@
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Id,
+        Name
       ],
       IsSensitive: false
     },
@@ -368,6 +398,10 @@
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Department,
+        Headcount
       ],
       IsSensitive: false
     },
@@ -505,6 +539,21 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        Status,
+        Perks,
+        Active,
+        ManagerId,
+        Manager,
+        DepartmentId,
+        Department,
+        Avatar,
+        Address,
+        PreviousAddresses,
+        Workstation
+      ],
       IsSensitive: false
     },
     {
@@ -541,6 +590,11 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        Machines
+      ],
       IsSensitive: false
     },
     {
@@ -558,6 +612,9 @@
         }
       ],
       Base: PressQueryModel,
+      Declared: [
+        Certified
+      ],
       IsSensitive: false
     },
     {
@@ -583,6 +640,10 @@
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Name,
+        Date
       ],
       IsSensitive: false
     },
@@ -660,6 +721,15 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        CreatedBy,
+        Id,
+        Number,
+        Notes,
+        Reviewer,
+        Tags,
+        Weights
+      ],
       IsSensitive: false
     },
     {
@@ -695,6 +765,11 @@
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Id,
+        Name,
+        FleetId
       ],
       IsSensitive: false
     },
@@ -842,6 +917,22 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Region,
+        Amount,
+        Quantity,
+        Sku,
+        Placed,
+        Discount,
+        Grade,
+        Code,
+        Audited,
+        Lines,
+        Tags,
+        Scores,
+        Priorities
+      ],
       IsSensitive: false
     },
     {
@@ -918,6 +1009,15 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Sku,
+        Quantity,
+        Price,
+        Units,
+        OrderId,
+        Order
+      ],
       IsSensitive: false
     },
     {
@@ -954,6 +1054,11 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        Published
+      ],
       IsSensitive: false
     },
     {
@@ -971,6 +1076,9 @@
         }
       ],
       Base: MachineQueryModel,
+      Declared: [
+        Tonnage
+      ],
       IsSensitive: false
     },
     {
@@ -988,6 +1096,9 @@
         }
       ],
       Base: HolidayQueryModel,
+      Declared: [
+        Region
+      ],
       IsSensitive: false
     },
     {
@@ -1015,6 +1126,10 @@
         }
       ],
       Obsolete: ,
+      Declared: [
+        Region,
+        Total
+      ],
       IsSensitive: false
     },
     {
@@ -1040,6 +1155,10 @@
           IsSensitive: false,
           IsCapability: false
         }
+      ],
+      Declared: [
+        Id,
+        Name
       ],
       IsSensitive: false
     },
@@ -1128,6 +1247,16 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        Duration,
+        Day,
+        Start,
+        Stamped,
+        Signature,
+        CanRenameShift
+      ],
       IsSensitive: false
     },
     {
@@ -1147,6 +1276,9 @@
       Base: ContractQueryModel,
       Keys: [
         Id
+      ],
+      Declared: [
+        Signer
       ],
       IsSensitive: false
     },
@@ -1214,6 +1346,14 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        DayOfWeek,
+        Recess,
+        Clock,
+        Alternates
+      ],
       IsSensitive: false
     },
     {
@@ -1260,6 +1400,12 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Id,
+        Name,
+        IsOpen,
+        Token
+      ],
       IsSensitive: false
     },
     {
@@ -1277,6 +1423,9 @@
         }
       ],
       Base: AssetQueryModel,
+      Declared: [
+        Wheels
+      ],
       IsSensitive: false
     },
     {
@@ -1313,6 +1462,11 @@
           IsCapability: false
         }
       ],
+      Declared: [
+        Room,
+        Extension,
+        Badge
+      ],
       IsSensitive: false
     },
     {
@@ -1330,6 +1484,9 @@
         }
       ],
       Base: FleetQueryModel,
+      Declared: [
+        Site
+      ],
       IsSensitive: false
     }
   ],

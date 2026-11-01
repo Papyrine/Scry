@@ -38,24 +38,10 @@ sealed class CommandTracker(ScryOptions options, string stamp, Action<CommandRec
                 throw new ScryValidationException($"A command with id '{request.Id:D}' has already been sent. Every command needs an id of its own.");
             }
 
-            if (pending >= options.MaxPendingCommands)
-            {
-                throw new ScryCommandLimitException(
-                    "This server has as many commands in flight as it allows. Send the command again shortly.",
-                    perCaller: false);
-            }
-
+            EnsureRoomLocked(caller);
             if (caller is not null)
             {
-                var held = callers.GetValueOrDefault(caller);
-                if (held >= options.MaxPendingCommandsPerCaller)
-                {
-                    throw new ScryCommandLimitException(
-                        "This caller has as many commands in flight as it is allowed. Send the command again once one has finished.",
-                        perCaller: true);
-                }
-
-                callers[caller] = held + 1;
+                callers[caller] = callers.GetValueOrDefault(caller) + 1;
             }
 
             record = new(request, meta, caller, DateTimeOffset.UtcNow, stamp);
@@ -66,6 +52,37 @@ sealed class CommandTracker(ScryOptions options, string stamp, Action<CommandRec
 
         CommandRecorder.Accepted();
         return record;
+    }
+
+    /// <summary>
+    /// Refuses a command there is no room for, before anything is spent on it: binding, its policy, and
+    /// the query that finds its target. <see cref="Accept"/> asks again, since another command may take
+    /// the last place in between.
+    /// </summary>
+    public void EnsureRoom(string? caller)
+    {
+        lock (gate)
+        {
+            EnsureRoomLocked(caller);
+        }
+    }
+
+    void EnsureRoomLocked(string? caller)
+    {
+        if (pending >= options.MaxPendingCommands)
+        {
+            throw new ScryCommandLimitException(
+                "This server has as many commands in flight as it allows. Send the command again shortly.",
+                perCaller: false);
+        }
+
+        if (caller is not null &&
+            callers.GetValueOrDefault(caller) >= options.MaxPendingCommandsPerCaller)
+        {
+            throw new ScryCommandLimitException(
+                "This caller has as many commands in flight as it is allowed. Send the command again once one has finished.",
+                perCaller: true);
+        }
     }
 
     /// <summary>

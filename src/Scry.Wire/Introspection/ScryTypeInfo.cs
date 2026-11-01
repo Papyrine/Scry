@@ -29,6 +29,15 @@ public sealed record ScryTypeInfo(string Model, IReadOnlyList<ScryMemberInfo> Me
     public IReadOnlyList<string>? Keys { get; init; }
 
     /// <summary>
+    /// The names of <see cref="Members"/> in the order the model declares them, which is the order a
+    /// generated client projects them in when a query writes no <c>Select</c>. <see cref="Members"/> is
+    /// sorted by name, so without this a client built from the description would project the same
+    /// members in another order and send a different request. Not part of the schema stamp. Null from
+    /// a server that does not say, and so absent from the JSON.
+    /// </summary>
+    public IReadOnlyList<string>? Declared { get; init; }
+
+    /// <summary>
     /// True where the model marks the CLR type itself <c>[Sensitive]</c>, which makes every member read
     /// off it sensitive. Written only when true.
     /// </summary>
