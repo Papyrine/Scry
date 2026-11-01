@@ -9,6 +9,7 @@ global using Rebus.Messages;
 global using Rebus.Pipeline;
 global using Rebus.Pipeline.Receive;
 global using Rebus.Retry;
+global using Rebus.Retry.Simple;
 global using Rebus.Serialization;
 global using Rebus.Transport;
 global using Scry;

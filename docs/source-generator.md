@@ -297,7 +297,7 @@ services.AddScoped<ScryQuery>();
 
 `SCRY002` guards the source-name clash that would otherwise emit duplicate properties on `ScryQuery` and surface as a `CS0102` on generated code the user cannot see. Give one of the types a distinct [`Name`](annotations.md#naming-a-source). The server rejects the same clash at startup.
 
-`SCRY003` guards the same axis for names that are not identifiers at all: the entry point exposing the source is a property, and a name it cannot be written as would emit a `ScryQuery` that does not parse. The server refuses the same set at startup, so which side is built first does not change where the mistake surfaces.
+`SCRY003` guards the same axis for names that are not identifiers at all: the entry point exposing the source is a property, and a name it cannot be written as would emit a `ScryQuery` that does not parse. The server refuses the same set at startup, so which side is built first does not change where the mistake surfaces. It also covers the names `ScryQuery` already uses for members of its own (`SchemaStamp`, `client`, `Commands` where the model declares commands, and `ScryQuery` itself), which only the generator refuses, since they clash with nothing on the server.
 
 The `SCRY1xx` family is reported by the **LINQ analyzer**, which is packed in this same assembly and needs no separate reference. It reports queries the closed operator set cannot carry, at the call site rather than at translation time — see [LINQ coverage](linq-coverage.md#reported-at-compile-time).
 

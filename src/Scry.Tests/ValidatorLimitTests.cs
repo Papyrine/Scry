@@ -51,6 +51,33 @@ public class ValidatorLimitTests
         await Assert.That(Rejects("Employee", [new SelectOp(projection)])).Contains("Projection nesting is too deep");
     }
 
+    // Counted in hops, not levels: each level's path is bounded alone, so three levels of four hops
+    // would otherwise reach twelve deep under a limit of four.
+    [Test]
+    public async Task ProjectionNestingIsBoundedInHops()
+    {
+        var projection = new Projection([new("Name", new NodeValue(new MemberNode(["Name"])))]);
+        for (var i = 0; i < 3; i++)
+        {
+            projection = new([new("Up", new NestedValue(["Manager", "Manager"], projection))]);
+        }
+
+        await Assert.That(Rejects("Employee", [new SelectOp(projection)])).Contains("Projection nesting is too deep");
+    }
+
+    // A grouped Select's member goes through the same aggregate check as a HAVING and a subquery.
+    [Test]
+    public async Task AGroupedAggregateWithoutASelectorIsRejected()
+    {
+        QueryOp[] ops =
+        [
+            new GroupByOp([new MemberNode(["Region"])]),
+            new SelectOp(new([new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum)))]))
+        ];
+
+        await Assert.That(Rejects("Order", ops)).Contains("requires a selector");
+    }
+
     [Test]
     public async Task AMemberPathIsBounded()
     {

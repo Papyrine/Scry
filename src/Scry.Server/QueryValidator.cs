@@ -523,7 +523,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     }
 
                     var target = ResolveNavigation(nested.Path, rootType);
-                    ValidateProjection(nested.Projection, target, grouped: false, groupKeys: null, depth + 1, ref members);
+                    // Counted in hops rather than levels: each level's path is bounded on its own, so
+                    // counting levels would let the hops multiply with the nesting.
+                    ValidateProjection(nested.Projection, target, grouped: false, groupKeys: null, depth + nested.Path.Count, ref members);
                     break;
 
                 default:
@@ -1365,6 +1367,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     static void ValidateAggregateShape(AggregateNode aggregate)
     {
         EnsureDefined(aggregate.Function, "Aggregate function");
+        // Here rather than at each caller: a grouped Select's member is one caller, and it was the one
+        // that went without, leaving a selectorless Sum to fail in EF instead.
+        if (aggregate.Selector is null &&
+            aggregate.Function != AggregateFn.Count)
+        {
+            throw Reject($"Aggregate '{aggregate.Function}' requires a selector.");
+        }
+
         if (aggregate.Function == AggregateFn.Join)
         {
             if (aggregate.Selector is null)

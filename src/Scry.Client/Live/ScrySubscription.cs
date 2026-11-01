@@ -32,6 +32,10 @@ public sealed class ScrySubscription :
     Task delivering = Task.CompletedTask;
     Lock ordering = new();
 
+    // The subscription whose callback this flow is in, so DisposeAsync called from inside one knows
+    // that waiting for the pump would be waiting for itself: the pump is waiting on that callback.
+    static AsyncLocal<ScrySubscription?> insideCallback = new();
+
     ScrySubscription(SynchronizationContext? context) =>
         this.context = context;
 
@@ -225,7 +229,18 @@ public sealed class ScrySubscription :
 
             // Started under the gate, so a Dispose racing it waits for the synchronous part — all of
             // an ordinary callback. What an asynchronous one does after its first await is its own.
-            return callback();
+            // A synchronous method's change to an AsyncLocal outlives it, so it is put back here; an
+            // asynchronous callback has already captured it by its first await.
+            var was = insideCallback.Value;
+            insideCallback.Value = this;
+            try
+            {
+                return callback();
+            }
+            finally
+            {
+                insideCallback.Value = was;
+            }
         }
     }
 
@@ -240,10 +255,18 @@ public sealed class ScrySubscription :
         ending.Cancel();
     }
 
-    /// <summary>Stops the subscription and waits for its connection to be given up.</summary>
+    /// <summary>
+    /// Stops the subscription and waits for its connection to be given up — except from inside one of
+    /// its own callbacks, which the pump is waiting on, where it stops it and returns.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         Dispose();
+        if (insideCallback.Value == this)
+        {
+            return;
+        }
+
         await Completion.ConfigureAwait(false);
     }
 }

@@ -725,13 +725,13 @@ sealed class ExpressionBuilder(
 
     /// <summary>
     /// Reads a <see cref="DistinctRow"/>'s values back out, in projection order. This runs per row,
-    /// so the property reads are compiled once per closed row type — bounded by the
-    /// <see cref="DistinctRow"/> arities the schema can produce — rather than reflected per value.
+    /// so the property reads are compiled once per closed row type — kept for a bounded number of
+    /// them, since a request chooses the closing — rather than reflected per value.
     /// </summary>
     public static object?[] ReadDistinctRow(object row) =>
         distinctReaders.GetOrAdd(row.GetType(), DistinctReader)(row);
 
-    static ConcurrentDictionary<Type, Func<object, object?[]>> distinctReaders = new();
+    static BoundedTypeCache<Func<object, object?[]>> distinctReaders = new(1024);
 
     static Func<object, object?[]> DistinctReader(Type type)
     {

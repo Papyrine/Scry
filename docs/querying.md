@@ -125,7 +125,7 @@ public ScryBatch Batch()
         """);
 }
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L156-L209' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L163-L216' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

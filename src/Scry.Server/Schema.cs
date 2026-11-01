@@ -1530,6 +1530,25 @@ sealed partial class Schema
             ?.GetGenericArguments()[0];
     }
 
+    // A type's public properties, less any a derived class hides with 'new': reflection returns both,
+    // and the hidden one, coming later, would otherwise win — where the generator, and C#, take the
+    // derived one.
+    static IEnumerable<PropertyInfo> Visible(Type type)
+    {
+        var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        foreach (var property in properties)
+        {
+            if (properties.Any(_ => _.Name == property.Name &&
+                                    _.DeclaringType != property.DeclaringType &&
+                                    _.DeclaringType!.IsSubclassOf(property.DeclaringType!)))
+            {
+                continue;
+            }
+
+            yield return property;
+        }
+    }
+
     internal static TypeMeta BuildTypeMeta(Type type, HashSet<Type> queryableTypes)
     {
         // Declared-only, like every other opt-in read here: a subclass of a sensitive type is not
@@ -1539,7 +1558,7 @@ sealed partial class Schema
             Sensitive = type.HasAttribute<SensitiveAttribute>(inherit: false)
         };
 
-        foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        foreach (var property in Visible(type))
         {
             if (property.GetMethod is not {IsPublic: true} ||
                 property.GetIndexParameters().Length > 0 ||

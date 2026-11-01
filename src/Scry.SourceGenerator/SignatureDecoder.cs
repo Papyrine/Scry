@@ -60,11 +60,8 @@ sealed class SignatureDecoder :
 
     public DecodedType GetPrimitiveType(PrimitiveTypeCode typeCode) => new PrimitiveDecoded(typeCode);
 
-    public DecodedType GetTypeFromDefinition(MetadataReader r, TypeDefinitionHandle handle, byte rawTypeKind)
-    {
-        var definition = r.GetTypeDefinition(handle);
-        return new NamedDecoded(Combine(r.GetString(definition.Namespace), r.GetString(definition.Name)), handle, true);
-    }
+    public DecodedType GetTypeFromDefinition(MetadataReader r, TypeDefinitionHandle handle, byte rawTypeKind) =>
+        new NamedDecoded(MetadataModelReader.FullName(r, r.GetTypeDefinition(handle)), handle, true);
 
     public DecodedType GetTypeFromReference(MetadataReader r, TypeReferenceHandle handle, byte rawTypeKind)
     {

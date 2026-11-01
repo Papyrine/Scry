@@ -29,6 +29,21 @@ sealed class BinaryPartCollector(ResponseBudget? budget = null)
     /// Removes and returns the accumulated parts — the streaming endpoint's per-row drain, which is
     /// what resets placeholder indices after every row line.
     /// </summary>
+    /// <summary>
+    /// Drops every part added since there were <paramref name="count"/>, and gives back what they were
+    /// charged: a batch entry that failed is answered with an error, so the parts it added are parts
+    /// nothing in the response points at.
+    /// </summary>
+    public void Rewind(int count)
+    {
+        for (var index = count; index < parts.Count; index++)
+        {
+            budget?.Refund(parts[index].Length);
+        }
+
+        parts.RemoveRange(count, parts.Count - count);
+    }
+
     public byte[][] Drain()
     {
         var drained = parts.ToArray();

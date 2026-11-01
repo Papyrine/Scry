@@ -340,13 +340,13 @@ public sealed partial class ScryProcessor
             }
         }
 
-        if (completion.IsCompleted ||
-            !tracker.AnswerPending(record, services.GetService<IServiceScopeFactory>()))
+        if (!completion.IsCompleted &&
+            tracker.AnswerPending(record, services.GetService<IServiceScopeFactory>()) is { } pending)
         {
-            return await completion;
+            return pending;
         }
 
-        return record.Current;
+        return await completion;
     }
 
     async Task Dispatch(CommandMeta meta, CommandEnvelope envelope, IServiceProvider services)
@@ -444,15 +444,25 @@ public sealed partial class ScryProcessor
 
         if (record.AuditScopes is { } scopes)
         {
-            using var scope = scopes.CreateScope();
-            Audit(
-                scope.ServiceProvider,
-                record.Request,
-                status == CommandStatus.Completed ? ScryQueryOutcome.Success : ScryQueryOutcome.Failed,
-                status,
-                Stopwatch.GetElapsedTime(record.AcceptedTimestamp),
-                Error(record, record.Current),
-                staleClient: false);
+            // The command has finished, and nobody is waiting on this entry: an auditor that throws
+            // here can fail nothing, and thrown on, it would surface in whoever reported the outcome —
+            // a handler, which would then report a failure over a command that already finished.
+            try
+            {
+                using var scope = scopes.CreateScope();
+                Audit(
+                    scope.ServiceProvider,
+                    record.Request,
+                    status == CommandStatus.Completed ? ScryQueryOutcome.Success : ScryQueryOutcome.Failed,
+                    status,
+                    Stopwatch.GetElapsedTime(record.AcceptedTimestamp),
+                    Error(record, record.Current),
+                    staleClient: false);
+            }
+            catch (Exception exception)
+            {
+                CommandRecorder.AuditFailed(record.Meta.Name, exception);
+            }
         }
     }
 

@@ -1377,20 +1377,22 @@ static class MetadataModelReader
         }
     }
 
-    // A type's name with every type it is nested in, which a nested type's namespace does not carry.
-    static string NestedName(MetadataReader reader, TypeDefinition type)
+    static string NestedName(MetadataReader reader, TypeDefinition type) =>
+        FullName(reader, type);
+
+    // A type's name with every type it is nested in, which a nested type's namespace does not carry:
+    // by its bare name, two nested types of one name would be one key, and a nested one would be
+    // taken for a top-level type of its name. The decoder names a type it meets the same way.
+    internal static string FullName(MetadataReader reader, TypeDefinition type)
     {
         var declaring = type.GetDeclaringType();
         if (declaring.IsNil)
         {
-            return FullName(reader, type);
+            return Combine(reader.GetString(type.Namespace), reader.GetString(type.Name));
         }
 
-        return $"{NestedName(reader, reader.GetTypeDefinition(declaring))}+{reader.GetString(type.Name)}";
+        return $"{FullName(reader, reader.GetTypeDefinition(declaring))}+{reader.GetString(type.Name)}";
     }
-
-    static string FullName(MetadataReader reader, TypeDefinition type) =>
-        Combine(reader.GetString(type.Namespace), reader.GetString(type.Name));
 
     // A generic type's metadata name carries its arity ("Entity`1"); its name as written does not.
     static string WithoutArity(string name)

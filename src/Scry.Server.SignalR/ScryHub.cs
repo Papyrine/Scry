@@ -307,9 +307,27 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
         }
     }
 
-    /// <summary>The commands this caller may send, as the capabilities endpoint answers.</summary>
-    public string Capabilities() =>
-        ScryJson.Serialize(processor.Capabilities(Data, services, RequestHeaders, Caller));
+    /// <summary>
+    /// The commands this caller may send, as the capabilities endpoint answers. A refusal — commands
+    /// off, or a policy that threw — is a coded marker, as every other method answers one, rather than
+    /// a hub error the client could not tell from a dropped connection.
+    /// </summary>
+    public string Capabilities()
+    {
+        if (CommandsOff() is { } off)
+        {
+            return off;
+        }
+
+        try
+        {
+            return ScryJson.Serialize(processor.Capabilities(Data, services, RequestHeaders, Caller));
+        }
+        catch (Exception exception)
+        {
+            return CommandFailure(exception, drifted: false);
+        }
+    }
 
     // Receipts as the strings the client reads, and a refusal as the one item there is.
     static async IAsyncEnumerable<string> Receipts(IAsyncEnumerable<CommandReceipt> receipts, bool drifted, [EnumeratorCancellation] Cancel cancel)

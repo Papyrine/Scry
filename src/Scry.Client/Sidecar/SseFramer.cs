@@ -219,6 +219,8 @@ sealed class SseFramer :
         if (dataFound &&
             dataLength < maxDataBytes)
         {
+            // Grown first: the buffer can be exactly full while still short of the limit.
+            Room(dataLength + 1);
             data[dataLength++] = (byte) '\n';
         }
 
@@ -235,16 +237,23 @@ sealed class SseFramer :
             return;
         }
 
-        if (dataLength + value.Length > data.Length)
-        {
-            var grown = ArrayPool<byte>.Shared.Rent(Math.Min(Math.Max(dataLength + value.Length, data.Length * 2), maxDataBytes));
-            data.AsSpan(0, dataLength).CopyTo(grown);
-            ArrayPool<byte>.Shared.Return(data);
-            data = grown;
-        }
-
+        Room(dataLength + value.Length);
         value.CopyTo(data.AsSpan(dataLength));
         dataLength += value.Length;
+    }
+
+    // Never asked for past maxDataBytes: both callers cap what they add at it.
+    void Room(int needed)
+    {
+        if (needed <= data.Length)
+        {
+            return;
+        }
+
+        var grown = ArrayPool<byte>.Shared.Rent(Math.Min(Math.Max(needed, data.Length * 2), maxDataBytes));
+        data.AsSpan(0, dataLength).CopyTo(grown);
+        ArrayPool<byte>.Shared.Return(data);
+        data = grown;
     }
 
     void Dispatch(Action<SseFrame> onFrame)

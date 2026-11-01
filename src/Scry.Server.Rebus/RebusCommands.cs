@@ -81,7 +81,11 @@ sealed class CompletionStep(CompletionSender sender) :
     public async Task Process(IncomingStepContext context, Func<Task> next)
     {
         var message = context.Load<Message>();
-        if (CompletionSender.TryRead(message.Headers, out var id, out var replyTo))
+        // A second-level delivery dispatches the message as IFailed<T> because the command's own
+        // handlers threw: one returning is handling that failure — most often deferring the message
+        // for a later attempt — not the command succeeding. That attempt, or the error queue, answers.
+        if (!context.Load<bool>(DefaultRetryStep.DispatchAsFailedMessageKey) &&
+            CompletionSender.TryRead(message.Headers, out var id, out var replyTo))
         {
             await sender.Send(
                 replyTo,

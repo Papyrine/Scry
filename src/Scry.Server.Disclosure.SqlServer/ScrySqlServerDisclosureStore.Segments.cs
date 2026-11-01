@@ -130,9 +130,17 @@ public sealed partial class ScrySqlServerDisclosureStore
         }
         finally
         {
-            await using var release = Command(guard, "EXEC sp_releaseapplock @Resource = @resource, @LockOwner = N'Session';");
-            release.Parameters.AddWithValue("@resource", resource);
-            await release.ExecuteNonQueryAsync(Cancel.None);
+            // A release that fails would replace whatever failure is already on its way out. The lock
+            // is the session's, and goes with the connection, which is disposed after this regardless.
+            try
+            {
+                await using var release = Command(guard, "EXEC sp_releaseapplock @Resource = @resource, @LockOwner = N'Session';");
+                release.Parameters.AddWithValue("@resource", resource);
+                await release.ExecuteNonQueryAsync(Cancel.None);
+            }
+            catch (SqlException)
+            {
+            }
         }
     }
 
@@ -541,8 +549,11 @@ public sealed partial class ScrySqlServerDisclosureStore
     // The segments that have been rolled away from and are still kept, with the span of time each
     // covers, as they stood when last asked. Asked again once a minute at most: a segment's span is
     // said once and never changes, so all a stale answer costs is a segment looked in that need not
-    // have been.
-    (long Asked, int Newest, List<ScryDisclosureSegment> Sealed)? spans;
+    // have been. A reference, swapped whole: questions read it while a roll clears it, and a tuple
+    // struct this wide can be read half old and half new.
+    volatile Spans? spans;
+
+    sealed record Spans(long Asked, int Newest, List<ScryDisclosureSegment> Sealed);
 
     /// <summary>
     /// What narrows a question to the segments its span of time can reach, as a condition on the
@@ -564,7 +575,7 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         var known = spans;
         if (known is null ||
-            Environment.TickCount64 - known.Value.Asked > 60_000)
+            Environment.TickCount64 - known.Asked > 60_000)
         {
             await using var connection = await OpenAsync(cancel);
             var closed = (await Registry(connection, null, cancel)).Where(_ => _ is {Sealed: not null, Retired: null}).ToList();
@@ -574,10 +585,10 @@ public sealed partial class ScrySqlServerDisclosureStore
                 newest = closed[^1].Number;
             }
 
-            spans = known = (Environment.TickCount64, newest, closed);
+            spans = known = new(Environment.TickCount64, newest, closed);
         }
 
-        var (_, last, rolled) = known.Value;
+        var (_, last, rolled) = known;
         var reached = rolled
             .Where(_ => _ is
             {

@@ -46,10 +46,18 @@ sealed class ProjectionMembersConverter :
         }
 
         var members = new List<ProjectionMember>();
+        var names = new HashSet<string>(StringComparer.Ordinal);
         while (reader.Read() &&
                reader.TokenType != JsonTokenType.EndArray)
         {
-            members.Add(ReadMember(ref reader, options));
+            var member = ReadMember(ref reader, options);
+            // Two members of one name would be read last-wins, a second spelling of a shorter request.
+            if (!names.Add(member.Name))
+            {
+                throw new JsonException($"A projection has two members named '{member.Name}'.");
+            }
+
+            members.Add(member);
         }
 
         return members;
@@ -87,6 +95,11 @@ sealed class ProjectionMembersConverter :
             reader.Read();
             if (string.Equals(property, "name", StringComparison.OrdinalIgnoreCase))
             {
+                if (name is not null)
+                {
+                    throw new JsonException("A projection member carries its name twice.");
+                }
+
                 if (reader.TokenType != JsonTokenType.String)
                 {
                     throw new JsonException("Expected a projection member's name as a string.");
@@ -98,6 +111,11 @@ sealed class ProjectionMembersConverter :
 
             if (string.Equals(property, "value", StringComparison.OrdinalIgnoreCase))
             {
+                if (value is not null)
+                {
+                    throw new JsonException("A projection member carries its value twice.");
+                }
+
                 value = JsonSerializer.Deserialize<ProjectionValue>(ref reader, options);
                 continue;
             }

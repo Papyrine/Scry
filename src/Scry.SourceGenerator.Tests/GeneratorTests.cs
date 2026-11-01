@@ -660,6 +660,25 @@
         return VerifyGenerated(model);
     }
 
+    // A source named for a member ScryQuery declares itself would emit a ScryQuery that does not compile.
+    [Test]
+    public Task SourceNameTakenByScryQueryIsReported()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable(Name = "SchemaStamp")]
+            public class Stamp
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
     // A source name that is a contextual keyword needs no escaping, so it is emitted as written.
     [Test]
     public async Task ContextualKeywordSourceNameIsEmitted()

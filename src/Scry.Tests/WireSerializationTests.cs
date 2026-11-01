@@ -262,6 +262,25 @@ public class WireSerializationTests
     public void AnUnknownMemberFailsClosed(string json) =>
         Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
 
+    // A name is a declared name exactly: a number in a string, padding and a join are each another
+    // spelling of one operator, which the bytes everything keys off cannot have.
+    [Test]
+    [Arguments("\"0\"")]
+    [Arguments("\" Equal\"")]
+    [Arguments("\"Equal,Equal\"")]
+    public void AnEnumNameSpelledAnotherWayFailsClosed(string op) =>
+        Assert.ThrowsExactly<ScryWireException>(
+            () => ScryJson.DeserializeRequest("""{"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":""" + op + ""","left":{"$type":"member","path":"Id"},"right":{"$type":"const","value":"1","tag":"Int32"}}}]}"""));
+
+    // Two members of one name, or one member carrying its name or value twice, would be read
+    // last-wins: a second spelling of a shorter request.
+    [Test]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":["Name","Name"]}}]}""")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":[{"name":"N","name":"M","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}]}""")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":[{"name":"N","value":{"$type":"node","node":{"$type":"member","path":"Name"}},"value":{"$type":"node","node":{"$type":"member","path":"Id"}}}]}}]}""")]
+    public void ADuplicatedProjectionMemberFailsClosed(string json) =>
+        Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+
     // A name is part of the wire contract, and one spelling: read case-insensitively, "equal" and
     // "Equal" would be two byte-strings for one query, and the ETag, the URL, and the audit
     // fingerprint are all over the bytes.

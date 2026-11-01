@@ -465,6 +465,82 @@ public class CommandPipelineTests
         }
     }
 
+    // The second entry of a command answered pending is written when it finishes, with nobody waiting
+    // on it. An auditor that throws there fails nothing, and is counted rather than surfacing in the
+    // handler, which would otherwise report a failure over a command that had already finished.
+    [Test]
+    public async Task AnAuditorThatThrowsAsACommandFinishesIsCounted()
+    {
+        List<string> failures = [];
+        using var listener = new System.Diagnostics.Metrics.MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Name == "scry.server.command.audit.failures")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "error.type")
+                {
+                    lock (failures)
+                    {
+                        failures.Add((string) tag.Value!);
+                    }
+                }
+            }
+        });
+        listener.Start();
+
+        await using var host = await CommandHost.Start(
+            "CommandAuditorThrows",
+            _ => _.CommandSyncWindow = TimeSpan.Zero,
+            _ => _.AddSingleton<IScryAuditor, ThrowingOnFinish>());
+        host.Script.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var id = Guid.NewGuid();
+        var sending = host.Send("RenameShift", new {id = 1, name = "Night"}, id: id);
+        await WaitFor(() => !host.Script.Seen.IsEmpty);
+
+        host.Script.Gate.SetResult();
+        await sending.WaitAsync(patience);
+        var receipt = (await Receipts(host.Processor.Receipt(id)).WaitAsync(patience)).Last();
+        await WaitFor(() =>
+        {
+            lock (failures)
+            {
+                return failures.Contains(typeof(AuditStoreDown).FullName!);
+            }
+        });
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Completed);
+            // Contains rather than equivalent: the listener hears every test in the process.
+            await Assert.That(failures).Contains(typeof(AuditStoreDown).FullName!);
+        }
+    }
+
+    // Lets the first entry through and throws on the one written as the command finishes.
+    sealed class ThrowingOnFinish :
+        IScryAuditor
+    {
+        public void Record(ScryAuditEntry entry)
+        {
+            if (entry.CommandStatus == CommandStatus.Completed)
+            {
+                throw new AuditStoreDown();
+            }
+        }
+    }
+
+    sealed class AuditStoreDown() :
+        Exception("The audit store is down.");
+
     [Test]
     public async Task ARefusalIsAudited()
     {

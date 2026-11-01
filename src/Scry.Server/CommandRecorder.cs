@@ -77,6 +77,20 @@ static class CommandRecorder
                 { "scry.outcome", status == CommandStatus.Completed ? "completed" : "failed" }
             });
 
+    static Counter<long> auditFailures = meter.CreateCounter<long>(
+        "scry.server.command.audit.failures",
+        unit: "{failure}",
+        description: "Auditors that threw recording a command answered pending as it finished, which nothing is left to fail.");
+
+    public static void AuditFailed(string command, Exception exception) =>
+        auditFailures.Add(
+            1,
+            new TagList
+            {
+                { "scry.command", command },
+                { "error.type", exception.GetType().FullName }
+            });
+
     public static void Accepted() =>
         pending.Add(1);
 

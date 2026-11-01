@@ -442,6 +442,13 @@ public sealed partial class ScryProcessor
             recorder.Rejected(exception);
             throw;
         }
+        catch (OperationCanceledException)
+        {
+            // A caller that left is not a query that failed, as on the buffered path.
+            capture?.Abandoned();
+            recorder.Canceled();
+            throw;
+        }
         catch (Exception exception)
         {
             recorder.Failed(exception);
@@ -755,11 +762,15 @@ public sealed partial class ScryProcessor
                 RequiresBody = exception.RequiresBody,
                 StaleClient = true
             };
+            capture?.Cut();
             recorder.Rejected(stale);
             throw stale;
         }
         catch (ScryValidationException exception)
         {
+            // Owes nothing unless part of a spilled answer had already gone, which is then the
+            // answer cut short by its budget.
+            capture?.Cut();
             recorder.Rejected(exception);
             throw;
         }
@@ -1072,6 +1083,8 @@ public sealed partial class ScryProcessor
     {
         entry.Reset();
 
+        // Where the parts stood before this entry, so a failure takes back the ones it added.
+        var parts = binary?.Count ?? 0;
         try
         {
             // No spill: an entry is inserted into the envelope only once it is whole, which is the
@@ -1102,6 +1115,7 @@ public sealed partial class ScryProcessor
         }
         catch (ScryValidationException exception)
         {
+            binary?.Rewind(parts);
             ResponseWriter.WriteEntry(json, exception.Message, HttpStatusCode.BadRequest, ErrorCodes.Classify(exception));
             return;
         }
@@ -1109,6 +1123,7 @@ public sealed partial class ScryProcessor
         {
             // Per entry, like a rejection: one entry's rows being denied says nothing about the
             // others', and a batch that failed whole would make a denial impossible to attribute.
+            binary?.Rewind(parts);
             ResponseWriter.WriteEntry(json, exception.Message, HttpStatusCode.Forbidden, ScryErrorCode.Forbidden);
             return;
         }
@@ -1123,6 +1138,7 @@ public sealed partial class ScryProcessor
         {
             // A drifted client faulting the server is far more likely stale than the server broken,
             // the same attribution the single-query endpoint makes for an execution failure.
+            binary?.Rewind(parts);
             ResponseWriter.WriteEntry(
                 json,
                 "Query execution failed.",
@@ -1148,6 +1164,8 @@ public sealed partial class ScryProcessor
         string? caller,
         string? correlation)
     {
+        // Where the parts stood before this entry, so a failure takes back the ones it added.
+        var parts = binary?.Count ?? 0;
         try
         {
             return new()
@@ -1157,6 +1175,7 @@ public sealed partial class ScryProcessor
         }
         catch (ScryValidationException exception)
         {
+            binary?.Rewind(parts);
             return new()
             {
                 Error = exception.Message,
@@ -1166,6 +1185,7 @@ public sealed partial class ScryProcessor
         }
         catch (ScryPermissionException exception)
         {
+            binary?.Rewind(parts);
             return new()
             {
                 Error = exception.Message,
@@ -1175,6 +1195,7 @@ public sealed partial class ScryProcessor
         }
         catch (Exception)
         {
+            binary?.Rewind(parts);
             return new()
             {
                 Error = "Query execution failed.",
@@ -1313,6 +1334,13 @@ public sealed partial class ScryProcessor
         catch (ScryPermissionException exception)
         {
             await DeniedAsync(capture, recorder, exception, cancel);
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            // A caller that left is not a query that failed, as on the buffered path.
+            capture?.Abandoned();
+            recorder.Canceled();
             throw;
         }
         catch (Exception exception)

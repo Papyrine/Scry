@@ -39,7 +39,7 @@ sealed class TolerantEnumConverterFactory :
             }
 
             var name = reader.GetString()!;
-            if (Enum.TryParse<T>(name, ignoreCase: false, out var exact))
+            if (TryName(name, out var exact))
             {
                 return exact;
             }
@@ -59,7 +59,7 @@ sealed class TolerantEnumConverterFactory :
 
                 foreach (var previous in alias.PreviousNames)
                 {
-                    if (Enum.TryParse<T>(previous, ignoreCase: false, out var value))
+                    if (TryName(previous, out var value))
                     {
                         return value;
                     }
@@ -68,6 +68,34 @@ sealed class TolerantEnumConverterFactory :
 
             throw new ScryStaleClientException(
                 $"'{name}' is not a value of enum '{typeToConvert.Name}' in this client's generated model. The server's model has changed — regenerate the client, or reload the deployed app.");
+        }
+
+        // A declared name, exactly; for a flags enum, declared names joined as the writer joins them.
+        // Enum.TryParse alone would also take a number in a string, padding, and any join — each a
+        // second spelling of one value, which the bytes everything keys off cannot have.
+        static bool TryName(string name, out T value)
+        {
+            if (Enum.IsDefined(typeof(T), name))
+            {
+                value = Enum.Parse<T>(name);
+                return true;
+            }
+
+            value = default;
+            if (!typeof(T).IsDefined(typeof(FlagsAttribute), false))
+            {
+                return false;
+            }
+
+            foreach (var part in name.Split(", "))
+            {
+                if (!Enum.IsDefined(typeof(T), part))
+                {
+                    return false;
+                }
+            }
+
+            return Enum.TryParse(name, ignoreCase: false, out value);
         }
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>

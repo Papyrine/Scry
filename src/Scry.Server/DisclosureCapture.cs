@@ -683,6 +683,13 @@ sealed class DisclosureCapture(
     public void Abandoned() =>
         abandoned = ScryDisclosureOutcome.Canceled;
 
+    /// <summary>
+    /// Says the call was refused part way — its answer outgrew the byte budget after some of it had
+    /// been handed on — for the close a disposal may yet owe: truncated, as a stream cut short is.
+    /// </summary>
+    public void Cut() =>
+        abandoned = ScryDisclosureOutcome.Truncated;
+
     // The close of an answer that was written to its end: every unit, and the address they add up to.
     ScryDisclosureClose Whole()
     {

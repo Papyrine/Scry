@@ -154,8 +154,9 @@ sealed class DependencyWalker(IModel model) :
         type.FindAnnotation(functionName)?.Value is not null;
 
     // Asked of every node of every run, and answered by reflecting over the type's interfaces, so
-    // the answer is kept: a query's node types are a small, closed set.
-    static ConcurrentDictionary<Type, Type?> elements = new();
+    // the answer is kept, for a bounded number of types: a node can be closed over a row type the
+    // request chose.
+    static BoundedTypeCache<Type?> elements = new(1024);
 
     static Type? ElementOfQueryable(Type type) =>
         elements.GetOrAdd(type, FindElement);

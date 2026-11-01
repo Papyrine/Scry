@@ -87,20 +87,21 @@ sealed class CommandTracker(ScryOptions options, string stamp, Action<CommandRec
 
     /// <summary>
     /// Marks a command as answered pending — its end is then audited as an entry of its own, from a
-    /// scope made by <paramref name="scopes"/> — or answers false where it has already finished, and so
-    /// is to be answered with its outcome instead.
+    /// scope made by <paramref name="scopes"/> — and answers the pending receipt, taken under the same
+    /// lock so a command finishing an instant later is not answered as finished too; or answers null
+    /// where it has already finished, and so is to be answered with its outcome instead.
     /// </summary>
-    public bool AnswerPending(CommandRecord record, IServiceScopeFactory? scopes)
+    public CommandReceipt? AnswerPending(CommandRecord record, IServiceScopeFactory? scopes)
     {
         lock (gate)
         {
             if (record.Finished is not null)
             {
-                return false;
+                return null;
             }
 
             record.AuditScopes = scopes;
-            return true;
+            return record.Current;
         }
     }
 

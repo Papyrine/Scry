@@ -87,8 +87,9 @@ A [command](commands.md) is an activity of its own, `scry.command {name}`, tagge
 | `scry.server.command.duration` | histogram | `s` | `scry.command`, `scry.outcome` — from arrival to the first answer, refusals included |
 | `scry.server.command.handling.duration` | histogram | `s` | `scry.command`, `scry.outcome` — from acceptance to the outcome, however the command was carried |
 | `scry.server.commands.pending` | up-down counter | `{command}` | |
+| `scry.server.command.audit.failures` | counter | `{failure}` | `scry.command`, `error.type` — an auditor that threw recording a command answered pending as it finished |
 
-The last is what to read against `MaxPendingCommands`. A gap between the two durations is time a command spent past its first answer — queued on a bus, or a handler that is slow.
+The pending count is what to read against `MaxPendingCommands`. A command answered pending is audited again when it finishes, with nobody waiting on it; an auditor that throws then cannot fail it, so it is counted instead. A gap between the two durations is time a command spent past its first answer — queued on a bus, or a handler that is slow.
 
 
 ### The disclosure audit

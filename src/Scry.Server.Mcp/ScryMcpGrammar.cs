@@ -41,7 +41,7 @@ static class ScryMcpGrammar
           Operators ($type: payload):
             where: predicate  |  orderBy / thenBy: key, descending  |  skip / take: count
             select: projection  |  distinct  |  reverse  |  groupBy: keys (one key)
-            count / longCount / any / all: predicate?  |  first / single / last: orDefault, predicate?
+            count / longCount / any: predicate?  |  all: predicate  |  first / single / last: orDefault, predicate?
             page: size?, cursor?
             All operators: {{Discriminators<QueryOp>()}}
 

@@ -38,6 +38,10 @@ sealed class ResponseBudget(int limit)
         spent += count;
     }
 
+    /// <summary>Gives back bytes spent on something the response will not carry after all.</summary>
+    public void Refund(long count) =>
+        spent -= count;
+
     public ScryValidationException Exceeded() =>
         new($"The response is larger than this server allows ({limit} bytes). Ask for fewer rows or fewer members, or page it.");
 

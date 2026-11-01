@@ -321,23 +321,31 @@ public sealed partial class ScrySqlServerDisclosureStore
         }
 
         var tables = sql.Segment(segment);
-        var rows = string.Join(", ", expected.Select(_ => _.Row).Distinct().Select(_ => $"0x{_}"));
-        var ordinals = string.Join(", ", expected.Select(_ => _.Ordinal).Distinct().Select(_ => _.ToString(CultureInfo.InvariantCulture)));
-        await using var command = Command(
-            connection,
-            $"""
-             SELECT t.[RowHash], t.[Ordinal] FROM {tables.Receipt} t LEFT JOIN {tables.Event} e ON e.[EventId] = @event
-             WHERE t.[RowHash] IN ({rows}) AND (e.[At] IS NULL OR t.[At] = e.[At]) AND t.[EventId] = @event AND t.[Ordinal] IN ({ordinals});
-             """);
-        command.Parameters.AddWithValue("@event", batch.EventId);
         var found = new HashSet<(string Row, int Ordinal)>();
-        await using var reader = await command.ExecuteReaderAsync(cancel);
-        while (await reader.ReadAsync(cancel))
+        // A chunk of rows at a time: the receipts are sought by row hash, and one IN list of every row
+        // a large batch read is a statement SQL Server can refuse to compile, and a plan per size.
+        foreach (var chunk in expected.Select(_ => _.Row).Distinct().Chunk(500))
         {
-            var row = (Convert.ToHexString((byte[]) reader[0]), reader.GetInt32(1));
-            if (expected.Contains(row))
+            var rows = string.Join(", ", chunk.Select(_ => $"0x{_}"));
+            await using var command = Command(
+                connection,
+                $"""
+                 SELECT t.[RowHash], t.[Ordinal] FROM {tables.Receipt} t LEFT JOIN {tables.Event} e ON e.[EventId] = @event
+                 WHERE t.[RowHash] IN ({rows}) AND (e.[At] IS NULL OR t.[At] = e.[At]) AND t.[EventId] = @event AND t.[Ordinal] BETWEEN @first AND @last;
+                 """);
+            command.Parameters.AddWithValue("@event", batch.EventId);
+            // A range rather than a list, which would grow with the batch as the rows do; the pairs
+            // are matched exactly below.
+            command.Parameters.AddWithValue("@first", expected.Min(_ => _.Ordinal));
+            command.Parameters.AddWithValue("@last", expected.Max(_ => _.Ordinal));
+            await using var reader = await command.ExecuteReaderAsync(cancel);
+            while (await reader.ReadAsync(cancel))
             {
-                found.Add(row);
+                var row = (Convert.ToHexString((byte[]) reader[0]), reader.GetInt32(1));
+                if (expected.Contains(row))
+                {
+                    found.Add(row);
+                }
             }
         }
 

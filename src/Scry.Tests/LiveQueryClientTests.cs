@@ -512,6 +512,31 @@ public class LiveQueryClientTests
         }
     }
 
+    // The pump waits on the callback, so DisposeAsync waiting on the pump from inside it would wait for
+    // itself.
+    [Test]
+    public async Task DisposingAsynchronouslyFromInsideACallbackReturns()
+    {
+        await using var body = new LiveBody();
+        var script = new Script(body.Response());
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScrySubscription? subscription = null;
+
+        subscription = Names(script.Client())
+            .Live()
+            .Subscribe(
+                async _ =>
+                {
+                    await subscription!.DisposeAsync();
+                    disposed.TrySetResult();
+                });
+        await body.Send(Result("a", "Alice"));
+        await disposed.Task.WaitAsync(patience);
+        await subscription.Completion.WaitAsync(patience);
+
+        await Assert.That(subscription.State).IsEqualTo(ScrySubscriptionState.Closed);
+    }
+
     [Test]
     public async Task TheStatesOfASubscriptionAreReported()
     {

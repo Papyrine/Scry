@@ -27,13 +27,13 @@ static class DistinctRow
     /// <summary>
     /// A closed row type's constructor and its values in projection order, found once per closing:
     /// three builders read them per deduplicated projection, and each reflected over the constructor's
-    /// parameters and looked every value up by name. Bounded as the readers of these rows are, by the
-    /// closings the schema's member types can produce.
+    /// parameters and looked every value up by name. Bounded in count: a request chooses the member
+    /// types it closes a row over, so the closings are as many as a client cares to send.
     /// </summary>
     public static (ConstructorInfo Constructor, PropertyInfo[] Values) Describe(Type row) =>
         described.GetOrAdd(row, Reflect);
 
-    static ConcurrentDictionary<Type, (ConstructorInfo Constructor, PropertyInfo[] Values)> described = new();
+    static BoundedTypeCache<(ConstructorInfo Constructor, PropertyInfo[] Values)> described = new(1024);
 
     static (ConstructorInfo Constructor, PropertyInfo[] Values) Reflect(Type row)
     {

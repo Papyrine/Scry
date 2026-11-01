@@ -85,6 +85,38 @@ public class AsyncExecutionTests
         }
     }
 
+    // A caller that leaves while its attachment is read is a caller that left, as on the buffered path,
+    // and not an attachment that failed.
+    [Test]
+    public async Task AnAttachmentWhoseCallerLeftIsRecordedAsCanceled()
+    {
+        await using var data = TestContext.CreateSeeded();
+        var auditor = new Auditor();
+        await using var services = new ServiceCollection().AddSingleton<IScryAuditor>(auditor).BuildServiceProvider();
+        using var left = new CancelSource();
+        await left.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await SharedProcessor.Instance.FetchAttachmentAsync(
+                AttachmentRequest.Create("Contract", "Document", [new("1", ClrTypeTag.Int32)]),
+                data,
+                services,
+                new HeaderDictionary(),
+                new HeaderDictionary(),
+                left.Token));
+
+        await Assert.That(auditor.Entries.Single().Outcome).IsEqualTo(ScryQueryOutcome.Canceled);
+    }
+
+    sealed class Auditor :
+        IScryAuditor
+    {
+        public List<ScryAuditEntry> Entries { get; } = [];
+
+        public void Record(ScryAuditEntry entry) =>
+            Entries.Add(entry);
+    }
+
     // What comes before a stream's first row — here the probe, which passes since the filter
     // excludes the denied row — is awaited as the rows themselves already were.
     [Test]

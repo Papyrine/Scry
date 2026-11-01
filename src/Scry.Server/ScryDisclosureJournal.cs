@@ -116,6 +116,9 @@ public sealed class ScryDisclosureJournal :
         }
         catch
         {
+            // Recovery opens the last segment before it has finished checking the checkpoint against
+            // it, so a damaged one leaves that open too.
+            active?.Dispose();
             lockFile.Dispose();
             throw;
         }
@@ -592,9 +595,12 @@ public sealed class ScryDisclosureJournal :
 
         var payload = BinaryPrimitives.ReadInt32LittleEndian(header[4..]);
         var records = BinaryPrimitives.ReadInt32LittleEndian(header[8..]);
+        // Summed as a long: a length near int.MaxValue in a segment larger than that would otherwise
+        // wrap, and fail the rent below rather than read as the damage it is.
         if (payload < 0 ||
             records < 0 ||
-            payload > size - offset - groupHeader - checksumLength)
+            payload > size - offset - groupHeader - checksumLength ||
+            (long) groupHeader + payload + checksumLength > Array.MaxLength)
         {
             return null;
         }

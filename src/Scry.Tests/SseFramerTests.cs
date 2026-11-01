@@ -131,6 +131,23 @@ public class SseFramerTests
 
     // The framer hands out its own buffer, so what a frame carries is copied out before the next one
     // overwrites it.
+    // The first buffer is 4096 bytes: a data line filling it exactly leaves no room for the newline
+    // joining the next, though the event is still well short of its limit.
+    [Test]
+    public async Task ADataLineFillingTheFirstBufferIsJoinedToTheNext()
+    {
+        var full = new string('x', 4096);
+
+        var frames = Frame(10_000, $"data: {full}\ndata: y\n\n");
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(frames).Count().IsEqualTo(1);
+            await Assert.That(frames[0].Data).IsEqualTo($"{full}\ny");
+            await Assert.That(frames[0].Truncated).IsFalse();
+        }
+    }
+
     static List<Framed> Frame(int maxDataBytes, params string[] chunks)
     {
         using var framer = new SseFramer(maxDataBytes);

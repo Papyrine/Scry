@@ -59,7 +59,7 @@ public class ScryGenerator :
     static DiagnosticDescriptor invalidSourceName = new(
         "SCRY003",
         "Scry source name cannot be a C# property name",
-        "The source name '{0}' cannot be written as a C# property name, so the entry point exposing it cannot be generated. Set [Queryable(Name = \"...\")] to a plain identifier that is not a reserved keyword.",
+        "The source name '{0}' cannot be written as a C# property name, or is one ScryQuery already uses for a member of its own, so the entry point exposing it cannot be generated. Set [Queryable(Name = \"...\")] to a plain identifier that is not a reserved keyword.",
         "Scry",
         DiagnosticSeverity.Error,
         true);
@@ -191,6 +191,14 @@ public class ScryGenerator :
         // derived from the CLR type name and a complex type has no entry point to name.
         var seenModels = new HashSet<string>(StringComparer.Ordinal);
         var seenSources = new HashSet<string>(StringComparer.Ordinal);
+        // The members ScryQuery declares beside the entry points, and its own name, which a member
+        // cannot share: a source named for any of them would emit a ScryQuery that does not compile.
+        var taken = new HashSet<string>(StringComparer.Ordinal) {"ScryQuery", "SchemaStamp", "client"};
+        if (extract.Commands.Length > 0)
+        {
+            taken.Add("Commands");
+        }
+
         var invalid = false;
         foreach (var source in extract.Sources)
         {
@@ -213,7 +221,8 @@ public class ScryGenerator :
                 invalid = true;
             }
 
-            if (!CSharpIdentifier.IsValid(source.SourceName))
+            if (!CSharpIdentifier.IsValid(source.SourceName) ||
+                taken.Contains(source.SourceName))
             {
                 context.ReportDiagnostic(Diagnostic.Create(invalidSourceName, Location.None, source.SourceName));
                 invalid = true;
