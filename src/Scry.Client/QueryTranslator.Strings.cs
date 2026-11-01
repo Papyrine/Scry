@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-
 // The text functions, the case sensitivity a comparison may ask for, and the concatenation an
 // interpolated string is rewritten into.
 sealed partial class QueryTranslator
@@ -138,7 +136,7 @@ sealed partial class QueryTranslator
             return [.. arguments.Take(arguments.Count - 1), .. array.Expressions];
         }
 
-        return (System.Collections.ObjectModel.ReadOnlyCollection<Expression>) [.. call.Arguments];
+        return (ReadOnlyCollection<Expression>) [.. call.Arguments];
     }
 
     /// <summary>

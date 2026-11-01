@@ -1275,12 +1275,12 @@ sealed class ExpressionBuilder(
         var key = Expression.Property(row, GroupingKey(row.Type));
         if (compositeKeys is null)
         {
-            if (index != 0)
+            if (index == 0)
             {
-                throw new ScryValidationException($"Group key {index} was read, but the query grouped by one.");
+                return key;
             }
 
-            return key;
+            throw new ScryValidationException($"Group key {index} was read, but the query grouped by one.");
         }
 
         if (index < 0 ||

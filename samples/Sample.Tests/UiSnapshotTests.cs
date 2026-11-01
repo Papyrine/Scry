@@ -544,6 +544,32 @@ public class UiSnapshotTests :
         await Assert.That(restored).IsEqualTo(query);
     }
 
+    // A shared link is followed once. Left on the address, every reload would follow it again, over
+    // whatever was written in the tab since.
+    [Test]
+    public async Task ExplorerFollowsASharedLinkOnce()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+        await page.SetEditorValueAsync("Query.Holiday");
+        await page.Locator("[data-testid='share']").ClickAsync();
+
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync("main[data-ready]", 90);
+        var followed = await page.EvaluateAsync<string>("() => location.hash");
+        await page.SetEditorValueAsync("Query.Employee");
+        await Assertions.Expect(page.Locator("[role='tab'][aria-selected='true'] [data-testid='tab']")).ToHaveTextAsync("Employee");
+
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync("main[data-ready]", 90);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(followed).IsEmpty();
+            await Assert.That(await EditorValueAsync(page)).IsEqualTo("Query.Employee");
+        }
+    }
+
     // Following a shared link loads the query and nothing more; the opener decides whether to run it.
     // A link is untrusted input — anyone can write one — and a query that ran on open would run as
     // whoever opened it, with that browser's credentials. Pinned on the wire, the panes, and the

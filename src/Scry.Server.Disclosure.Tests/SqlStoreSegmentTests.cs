@@ -572,7 +572,7 @@ public class SqlStoreSegmentTests
 
         // What starts its own mover moving.
         await bare.AppendAsync(Clinic.Batch(2), Cancel.None);
-        await SqlStores.Until(
+        await Until(
             async () => (await bare.Status()).Problem?.Contains("no ScrySqlServerDisclosureOptions.Retire") == true,
             "The store did not say it could not retire what the record hands on.");
 

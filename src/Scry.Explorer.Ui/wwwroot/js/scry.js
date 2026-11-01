@@ -69,6 +69,11 @@ window.scry = {
         history.replaceState(null, '', value);
         return window.location.href;
     },
+    // Takes the fragment off the address once a shared query has been read from it, again without a
+    // history entry, so that reloading the page does not follow the link a second time.
+    clearHash: function () {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+    },
     // Save text as a file. The BOM is per-format rather than always on: CSV wants it, because it is
     // what makes Excel read the UTF-8 as UTF-8 rather than as the local codepage (which otherwise
     // mangles any non-ASCII value in an exported column), while a leading U+FEFF is not valid JSON.

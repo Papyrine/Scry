@@ -311,8 +311,7 @@ public class RenderRoundTripTests
     public Task TerminalSingleOrDefault() =>
         RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(true)));
 
-    static BinaryNode NamePredicate() =>
-        new BinaryNode(BinaryOp.Equal, new MemberNode(["Name"]), new ConstNode("x", ClrTypeTag.String));
+    static BinaryNode NamePredicate() => new(BinaryOp.Equal, new MemberNode(["Name"]), new ConstNode("x", ClrTypeTag.String));
 
     [Test]
     public Task RefusesPredicateFirst() =>

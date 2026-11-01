@@ -1,6 +1,7 @@
 namespace Scry;
 
-public partial class EventList
+public partial class EventList :
+    IDisposable
 {
     /// <summary>The fragment the page is at: the caller view or the member view, and what it was asked.</summary>
     [Parameter]
@@ -27,6 +28,26 @@ public partial class EventList
     // As in RowView: an answer to a question the page has since left is dropped.
     int turn;
 
+    protected override void OnInitialized() =>
+        Session.AskedAgain += Again;
+
+    public void Dispose() =>
+        Session.AskedAgain -= Again;
+
+    // The same question asked again from its form: answered afresh, as it would be by going to it.
+    void Again() =>
+        _ = InvokeAsync(
+            async () =>
+            {
+                Reset();
+                if (Asked)
+                {
+                    await Load(after: null);
+                }
+
+                StateHasChanged();
+            });
+
     protected override async Task OnParametersSetAsync()
     {
         if (Address == shown)
@@ -35,16 +56,21 @@ public partial class EventList
         }
 
         shown = Address;
+        Reset();
+        if (Asked)
+        {
+            await Load(after: null);
+        }
+    }
+
+    void Reset()
+    {
         link = DisclosureLink.Parse(Address);
         events = [];
         next = null;
         failure = null;
         note = null;
         answered = false;
-        if (Asked)
-        {
-            await Load(after: null);
-        }
     }
 
     async Task Load(PageMark? after)

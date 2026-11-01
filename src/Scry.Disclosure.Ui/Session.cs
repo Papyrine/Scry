@@ -27,9 +27,24 @@ sealed class Session(NavigationManager navigation, IJSRuntime js)
     public string Href(DisclosureLink link) =>
         $"{navigation.BaseUri}#{link}";
 
+    /// <summary>
+    /// Raised when a question is asked again at the address the page is already at. Going there
+    /// changes nothing the browser reports, so whatever answers the question asks it again on this.
+    /// </summary>
+    public event Action? AskedAgain;
+
     /// <summary>Asks a question by going to its address, which is what makes every question one that can be linked to.</summary>
-    public void Go(DisclosureLink link) =>
-        browser.InvokeVoid("disclosure.go", link.ToString());
+    public void Go(DisclosureLink link)
+    {
+        var address = link.ToString();
+        if (address == Address)
+        {
+            AskedAgain?.Invoke();
+            return;
+        }
+
+        browser.InvokeVoid("disclosure.go", address);
+    }
 
     /// <summary>The fragment the page is at, without its <c>#</c>.</summary>
     public string Address => browser.Invoke<string>("disclosure.address").TrimStart('#');

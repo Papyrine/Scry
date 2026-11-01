@@ -155,6 +155,31 @@ public class DisclosureUiTests :
         await Assertions.Expect(page.Locator("[data-testid='events-none']")).ToContainTextAsync("no answer sent to nobody.at.all");
     }
 
+    // The same question asked again from its form is asked again: its address does not change, so
+    // nothing but the form's asking can say the answer may have.
+    [Test]
+    public async Task AskingTheSameCallerAgainIsAnsweredAgain()
+    {
+        var caller = await SignedIn("fay.caller");
+        await Ask(caller, Names);
+
+        var page = await SignedIn("fay.reviewer");
+        await Become(page, Reviewer);
+        await Explore(page, "caller");
+        await page.Locator("[data-testid='caller-name']").FillAsync("fay.caller");
+        var ask = page.Locator("[data-testid='caller-ask']");
+        await ask.ClickAsync();
+        await Answered(page, "events");
+        var answers = page.Locator("[data-testid='events-table'] tbody tr");
+        await Assertions.Expect(answers).ToHaveCountAsync(1);
+
+        await Ask(caller, Count);
+        await Host.Settled();
+        await ask.ClickAsync();
+
+        await Assertions.Expect(answers).ToHaveCountAsync(2);
+    }
+
     // Whether a caller was ever sent a member: a yes or a no before it is a list. One caller asked
     // for the sensitive member and the other did not.
     [Test]

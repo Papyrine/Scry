@@ -614,10 +614,12 @@ public static partial class ScryServiceExtensions
                     return;
                 }
             }
-            // The one thing that can fail here that is the server's: the disclosure audit would not
-            // take the record of telling the caller its copy is still current. So it is not told.
-            catch (ScryDisclosureException)
-                when (!context.RequestAborted.IsCancellationRequested)
+            // What can fail here is the server's: the host's freshness source, or the disclosure audit
+            // not taking the record of telling the caller its copy is still current. Either is
+            // answered as any other failure is, without saying what it was.
+            catch (Exception)
+                when (!context.Response.HasStarted &&
+                      !context.RequestAborted.IsCancellationRequested)
             {
                 await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ScryErrorCode.ExecutionFailed);
                 return;

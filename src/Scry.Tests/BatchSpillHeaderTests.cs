@@ -32,10 +32,15 @@ public class BatchSpillHeaderTests
             """);
         var contextType = assembly.GetType("SpillContext")!;
         var noteType = assembly.GetType("Note")!;
-        var rows = (System.Collections.IEnumerable) noteType.GetMethod("Rows")!.Invoke(null, null)!;
+        var rows = (IEnumerable) noteType.GetMethod("Rows")!.Invoke(null, null)!;
 
-        var options = new ScryOptions(contextType);
-        options.PocoSources[noteType] = _ => Queryable.AsQueryable(rows);
+        var options = new ScryOptions(contextType)
+        {
+            PocoSources =
+            {
+                [noteType] = _ => rows.AsQueryable()
+            }
+        };
         var processor = new ScryProcessor(Schema.Build(options), options);
 
         // Never opened: every query here reads the poco source.

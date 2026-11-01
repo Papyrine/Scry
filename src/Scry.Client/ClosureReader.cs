@@ -306,7 +306,7 @@ static partial class ClosureReader
     static object Instance(object? value) =>
         value ?? throw new NullReferenceException();
 
-    static object?[] ReadAll(System.Collections.ObjectModel.ReadOnlyCollection<Expression> expressions)
+    static object?[] ReadAll(ReadOnlyCollection<Expression> expressions)
     {
         var values = new object?[expressions.Count];
         for (var i = 0; i < expressions.Count; i++)

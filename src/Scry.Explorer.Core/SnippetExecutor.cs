@@ -275,8 +275,7 @@ public sealed class SnippetExecutor
                     return new(member.Expression.ToString(), name, null);
                 }
 
-                if (arguments.Count == 1 &&
-                    arguments[0].Expression is LambdaExpressionSyntax lambda)
+                if (arguments is [{Expression: LambdaExpressionSyntax lambda}])
                 {
                     return new(member.Expression.ToString(), name, lambda.ToString());
                 }

@@ -113,13 +113,22 @@ public partial class App
             LoadHistory();
             RestoreShell();
             persist = new();
+
+            // Read once and then taken off the address: left there, every reload would follow the
+            // link again, over whatever was written since.
+            if (initialCode is not null)
+            {
+                js.InvokeVoid("scry.clearHash");
+            }
         }
 
-        // A shared link wins over the restored tabs: following one is a request to see that query,
-        // not to resume where this browser left off.
-        if (initialCode is not null)
+        // A shared link is shown in front of the restored tabs: following one is a request to see
+        // that query. It opens in a tab of its own, so the tab it would otherwise land in keeps
+        // what was written there, unless that tab already holds it.
+        if (initialCode is not null &&
+            tabs.Active.Query != initialCode)
         {
-            tabs.Active.Query = initialCode;
+            tabs.Add(initialCode);
         }
     }
 

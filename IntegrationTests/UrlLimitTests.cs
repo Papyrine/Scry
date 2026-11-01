@@ -149,6 +149,42 @@ public class UrlLimitTests
         }
     }
 
+    // The freshness source is the host's code, and when it throws the query is answered as any other
+    // failure is: a 500 in the error shape a client reads, saying nothing of what went wrong.
+    [Test]
+    public async Task AFreshnessSourceThatThrowsIsAnsweredAsAFailure()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddDbContext<Sample.Model.SampleContext>(_ => _.UseSqlServer(unusable));
+        builder.Services.AddScry<Sample.Model.SampleContext>(
+            options =>
+            {
+                options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
+                options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+                options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
+                options.QueryFreshness = (_, _) => throw new InvalidOperationException("the freshness store is down");
+                options.CacheScope = _ => "tenant";
+            });
+
+        await using var app = builder.Build();
+        app.MapScry("/api/query");
+        await app.StartAsync();
+        using var http = app.GetTestClient();
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={QueryUrl.Encode(QueryRequest.Create("Holiday", [new CountOp()]))}");
+        var body = await response.Content.ReadAsStringAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.InternalServerError);
+            await Assert.That(body).Contains("Query execution failed.");
+            await Assert.That(body).DoesNotContain("freshness store");
+        }
+
+        await app.StopAsync();
+    }
+
     [Test]
     public async Task CachingAPoliciedSourceWithAScopeStarts()
     {
