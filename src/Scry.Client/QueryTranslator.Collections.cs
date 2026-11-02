@@ -154,6 +154,8 @@ sealed partial class QueryTranslator
     /// </summary>
     InSourceNode InSource(IQueryable queryable, QueryProvider provider, Expression value, ParameterExpression root)
     {
+        Beside(provider, "The set of 'Contains'");
+
         // Walked directly rather than run through the operator translator: the Select here names a
         // bare value to compare against, where an ordinary projection must construct an object.
         Node? predicate = null;

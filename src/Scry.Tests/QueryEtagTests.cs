@@ -53,6 +53,25 @@ public class QueryEtagTests
         }
     }
 
+    // Everything an ETag is made of but the key is the caller's to know or to compute, so a tag made
+    // under any other key — the shape an unkeyed hash had — is not one this server answers 304 to.
+    [Test]
+    public async Task ATagMadeWithoutTheServerKeyIsNotAMatch()
+    {
+        var context = Request();
+        var options = Options("fresh", "tenant-1");
+        context.Request.Headers.IfNoneMatch = QueryEtag.Etag(
+            new byte[32],
+            SharedProcessor.Instance.SchemaStamp,
+            "fresh",
+            QueryEtag.Query(context.Request)!,
+            "tenant-1");
+
+        var notModified = await QueryEtag.NotModified(context, SharedProcessor.Instance, options);
+
+        await Assert.That(notModified).IsFalse();
+    }
+
     static DefaultHttpContext Request() =>
         new()
         {
@@ -71,5 +90,5 @@ public class QueryEtagTests
         };
 
     static string TagFor(HttpContext context, string freshness, string scope) =>
-        QueryEtag.Etag(SharedProcessor.Instance.SchemaStamp, freshness, QueryEtag.Query(context.Request)!, scope);
+        QueryEtag.Etag(ServerKey.For(Options(freshness, scope)), SharedProcessor.Instance.SchemaStamp, freshness, QueryEtag.Query(context.Request)!, scope);
 }

@@ -395,7 +395,7 @@ public class DisclosureAuditTests
 
         await using var context = TestContext.CreateSeeded();
         var output = new ArrayBufferWriter<byte>();
-        var fallback = await processor.TryExecuteBufferedAsync(
+        await processor.TryExecuteBufferedAsync(
             stale,
             context,
             EmptyServiceProvider.Instance,
@@ -403,14 +403,12 @@ public class DisclosureAuditTests
             new HeaderDictionary(),
             output);
 
-        // With the audit off this envelope is handed back for the caller to write. On, it is written
-        // here: a transport's size limit refuses a response as it is written, and that has to happen
-        // before the record of the answer is accepted.
+        // Written here, as every answer is: a transport's size limit refuses a response as it is
+        // written, and that has to happen before the record of the answer is accepted.
         var answer = Encoding.UTF8.GetString(output.WrittenSpan);
         var recorded = await Disclosures.Events(store);
         using (Assert.Multiple())
         {
-            await Assert.That(fallback).IsNull();
             await Assert.That(answer).Contains("enumAliases");
             await Assert.That(answer).Contains("Aaron");
             await Assert.That(recorded.Single().Close!.Units).IsEqualTo(3);

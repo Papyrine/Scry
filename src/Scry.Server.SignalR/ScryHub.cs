@@ -45,7 +45,7 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
         {
             using var output = new PooledBufferWriter();
             var limited = ResponseBudget.For(options)?.Charging(output) ?? output;
-            var fallback = await processor.TryExecuteBufferedAsync(
+            await processor.TryExecuteBufferedAsync(
                 parsed,
                 Data,
                 services,
@@ -54,13 +54,6 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 limited,
                 cancel: Context.ConnectionAborted,
                 caller: Recorded);
-
-            // Written through the same budget, so the envelope a drifted client is answered with is
-            // bounded as any other.
-            if (fallback is not null)
-            {
-                ResponseWriter.Write(limited, fallback);
-            }
 
             return Encoding.UTF8.GetString(output.WrittenMemory.Span);
         }
@@ -308,15 +301,16 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
     }
 
     /// <summary>
-    /// The commands this caller may send, as the capabilities endpoint answers. A refusal — commands
-    /// off, or a policy that threw — is a coded marker, as every other method answers one, rather than
-    /// a hub error the client could not tell from a dropped connection.
+    /// The commands this caller may send, as the capabilities endpoint answers. With commands off that
+    /// is none, as an HTTP host's unmapped route says: a client is told, rather than left with nothing
+    /// known. A policy that threw is a coded marker, as every other method answers one, rather than a
+    /// hub error the client could not tell from a dropped connection.
     /// </summary>
     public string Capabilities()
     {
-        if (CommandsOff() is { } off)
+        if (options.MaxPendingCommands <= 0)
         {
-            return off;
+            return ScryJson.Serialize(CommandCapabilities.Create([], processor.SchemaStamp));
         }
 
         try

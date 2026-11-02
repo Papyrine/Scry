@@ -2,7 +2,7 @@
 /// One cached row policy as the schema resolved it: what it is called in the store, the host type that
 /// makes the decisions, and where the answers live. Built once at startup and shared by every request.
 /// </summary>
-sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicyStore store, int? maxKeys, int? maxRows, TimeSpan settle)
+sealed class CachedPolicyRegistration(Type entity, Type policy, Type key, ICachedPolicyStore store, int? maxKeys, int? maxRows, TimeSpan settle)
 {
     // One gate per scope. Held here rather than on the adapter because the registration is what every
     // request shares; a per-request gate would let every request past it at once. Counted, and dropped
@@ -13,6 +13,9 @@ sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicySto
     public Type Entity { get; } = entity;
 
     public Type Policy { get; } = policy;
+
+    /// <summary>The type of the entity's key, which every key handed in about its rows has to be.</summary>
+    public Type Key { get; } = Nullable.GetUnderlyingType(key) ?? key;
 
     public ICachedPolicyStore Store { get; } = store;
 

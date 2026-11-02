@@ -10,8 +10,8 @@ public sealed partial class ScrySqlServerDisclosureStore
     // Where a listing of a row's receivers has got to, as the record orders it: the time, the id of
     // the event or the review, the unit — and, for a reviewer's showing, which event it was of, since
     // one review may have shown the row at the same unit of several events, and the three before it
-    // then tell those showings apart no further. Null where the place is a caller's cursor, which
-    // names no event: everything of that time, id and unit is then taken as read.
+    // then tell those showings apart no further. Null where the place is a cursor that names no
+    // event: everything of that time, id and unit is then taken as read.
     readonly record struct Place(DateTimeOffset At, Guid Id, int Ordinal, Guid? Event);
 
     // The order the record lists a row's receivers in, which is SQL Server's: newest first, then by
@@ -60,12 +60,11 @@ public sealed partial class ScrySqlServerDisclosureStore
         var text = ScryDisclosureEntity.KeyOf(key);
         var row = DisclosureSql.RowHash(source, text);
 
-        // A caller's cursor names no event, so everything of the time, id and unit it names is taken
-        // as read; the places this listing makes for itself name one.
+        // A cursor that names no event takes everything of the time, id and unit it names as read.
         Place? place = null;
         if (after is { } given)
         {
-            place = new(given.At, given.Id, given.Ordinal, null);
+            place = new(given.At, given.Id, given.Ordinal, given.Event);
         }
 
         // Where the question names a span or a page goes on from the last, said as conditions on the
@@ -98,8 +97,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             if (of is not null)
             {
                 // Of one review at one unit, the showings of events after the one the place names —
-                // and none where the place is a caller's, which names no event and compares as no
-                // row does.
+                // and none where the place names no event, which compares as no row does.
                 within = $"({within} OR ({ordinal} = @afterOrdinal AND {of} < @afterEvent))";
             }
 
@@ -165,6 +163,11 @@ public sealed partial class ScrySqlServerDisclosureStore
 
                 // A showing from the reviews, newest first, kept where it showed an answer the row is
                 // a receipt of. Reviews are few beside answers, so this is asked of the views whole.
+                // The receipt is not held to its event's segment, nor to its event's time: a later part
+                // of an answer whose segment was being retired went to another segment, and its receipt
+                // with it under when the part was accepted, which is never before the answer began.
+                // Holding it to the segment would spare nothing, since a condition on a column rather
+                // than a literal segment number probes every segment's branch of the view all the same.
                 await using (var command = Command(
                                  connection,
                                  $"""
@@ -174,7 +177,7 @@ public sealed partial class ScrySqlServerDisclosureStore
                                   JOIN {sql.ReviewEvent} v ON v.[ReviewId] = r.[ReviewId] AND v.[Segment] = r.[Segment]
                                   JOIN {sql.Event} e ON e.[EventId] = v.[EventId]
                                   {sql.Ended}
-                                  JOIN {sql.Receipt} t ON t.[RowHash] = @row AND t.[At] = e.[At] AND t.[EventId] = e.[EventId] AND t.[Segment] = e.[Segment]
+                                  JOIN {sql.Receipt} t ON t.[RowHash] = @row AND t.[At] >= e.[At] AND t.[EventId] = e.[EventId]
                                   {Unit("t.[EventId]", "t.[Ordinal]", "t.[RowHash]", sql.Entity, sql.Unit, sql.Answer, sql.ManifestRun, sql.RunEntity, sql.RunUnit, "t.[Segment]")}
                                   WHERE (c.[Units] IS NULL OR t.[Ordinal] < c.[Units]){showings}{Span("r")}{Seek("r.[At]", "r.[ReviewId]", "t.[Ordinal]", "e.[EventId]")}
                                   ORDER BY r.[At] DESC, r.[ReviewId] DESC, t.[Ordinal], e.[EventId] DESC;
@@ -506,15 +509,17 @@ public sealed partial class ScrySqlServerDisclosureStore
             null,
             null,
             // The event's shape says the member was returned, and something of that source left: a
-            // row named by key, or — for a source with no key to name one by — any unit at all. Each
-            // looked for in the segment the event is in, where its shape and its units are.
+            // row named by key, or — for a source with no key to name one by — any unit at all. The
+            // shape is looked for in the segment the event is in, where its begin put it; the units
+            // and their rows in any, since a later part of an answer whose segment was being retired
+            // went to another. A condition on the segment column would probe every segment anyway.
             $"""
              AND EXISTS (SELECT 1 FROM {sql.Field} f WHERE f.[Shape] = e.[Shape] AND f.[Segment] = e.[Segment] AND f.[FieldHash] = @field AND f.[FieldUse] = @returned AND f.[Source] = @source AND f.[Member] = @member)
              AND (
-                 EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Segment] = e.[Segment] AND n.[Source] = @source AND n.[Ordinal] < ISNULL(c.[Units], 2147483647))
+                 EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Source] = @source AND n.[Ordinal] < ISNULL(c.[Units], 2147483647))
                  OR (
-                     NOT EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Segment] = e.[Segment] AND n.[Source] = @source)
-                     AND EXISTS (SELECT 1 FROM {sql.Units} u WHERE u.[EventId] = e.[EventId] AND u.[Segment] = e.[Segment] AND u.[Ordinal] < ISNULL(c.[Units], 2147483647))
+                     NOT EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Source] = @source)
+                     AND EXISTS (SELECT 1 FROM {sql.Units} u WHERE u.[EventId] = e.[EventId] AND u.[Ordinal] < ISNULL(c.[Units], 2147483647))
                  )
              )
              """,

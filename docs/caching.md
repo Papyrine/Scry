@@ -64,11 +64,13 @@ The ETag has to change whenever the bytes it stands for would change. Three thin
 
 The fingerprint costs nothing to obtain: the encoded request in the URL *is* the query, so hashing it identifies the query exactly. It is hashed only for size — `q` runs to thousands of characters where an ETag wants a handful. Being a hash of the encoded **bytes** means two spellings of the same query miss rather than collide, which is the safe direction for a cache key: a miss costs a round trip, a collision would cost correctness.
 
+The four are not written into the tag side by side: the tag is the schema stamp and an HMAC of the other three under the server's [`CursorKey`](paging.md), or a key of the process's own where none is set. A tag stands for a response the server sent, so it is not one a caller can make — and every part but the key is a caller's to know or to compute: the stamp is a response header, the query is its own URL, and any genuine tag carries the rest. Unsigned, holding one tag would let a caller make the tag of any other query, and be answered `304` for a query never decoded, validated or checked against a policy. A farm whose nodes share a `CursorKey` shares its tags; one whose nodes do not answers a tag from another node in full.
+
 Nothing about it comes from the client's own account of what it sent. There is no header asserting a query hash and nothing that reads one — a client cannot describe its request as something other than what its URL says, because the URL is what the server hashed.
 
 Delta's own ETag opens with the entry assembly's last write time, so any redeployment invalidates every entry. The schema stamp is the narrower version of that idea — narrower because a redeployed binary that left the queryable surface alone keeps its caches warm. It also means a client whose model has drifted can never be answered 304: the stamp in its ETag is the old one, so the comparison fails and it gets a full response carrying the server's current stamp, which is what [drift detection](schema-versioning.md) reads.
 
-`If-None-Match` is compared as HTTP defines it rather than as a string: a list matches if any member does, `*` matches anything current, and the comparison is the weak one RFC 9110 asks for — so a tag some proxy weakened on the way through still matches, instead of turning every hit into a permanent miss.
+`If-None-Match` is compared as HTTP defines it rather than as a string: a list matches if any member does, `*` matches nothing (the RFC reads it as any current representation, which for a query would answer `304` to one never decoded), and the comparison is the weak one RFC 9110 asks for — so a tag some proxy weakened on the way through still matches, instead of turning every hit into a permanent miss.
 
 
 ## The server half

@@ -1497,7 +1497,7 @@ sealed partial class Schema
             var parameter = Expression.Parameter(entity, "e");
             var key = Expression.Lambda(Expression.Property(parameter, keys[0].ClrProperty), parameter);
 
-            var registration = new CachedPolicyRegistration(entity, policy, options.CachedPolicyStore, options.MaxCachedPolicyKeys, options.MaxCachedPolicyRows, options.CachedPolicySettle);
+            var registration = new CachedPolicyRegistration(entity, policy, keys[0].Type, options.CachedPolicyStore, options.MaxCachedPolicyKeys, options.MaxCachedPolicyRows, options.CachedPolicySettle);
             var adapter = typeof(CachedRowPolicyAdapter<,,>).MakeGenericType(entity, keys[0].Type, version.ReturnType);
 
             registration.Adapter = Activator.CreateInstance(adapter, registration, key, version)!;

@@ -169,11 +169,15 @@ public class CommandHubTests
         }
     }
 
-    // A hub's methods are its type's, so a server with commands off has a method that says so.
+    // A hub's methods are its type's, so a server with commands off has a method that says so. Asked
+    // what may be sent, it says nothing, as an HTTP host's unmapped route does — and so the client is
+    // told once that its capabilities are known, rather than left never knowing them.
     [Test]
     public async Task AServerNotServingCommandsSaysSo()
     {
         await using var server = await Server.Start(database, _ => _.MaxPendingCommands = 0);
+        var changed = 0;
+        server.Client.CapabilitiesChanged += () => Interlocked.Increment(ref changed);
 
         var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new OpenLedgerRequest {Name = "x"})))!;
         await server.Client.Ready;
@@ -182,6 +186,7 @@ public class CommandHubTests
         {
             await Assert.That(exception.Body).Contains(nameof(ScryOptions.MaxPendingCommands));
             await Assert.That(server.Client.Can("OpenLedger")).IsFalse();
+            await Assert.That(Volatile.Read(ref changed)).IsEqualTo(1);
         }
     }
 

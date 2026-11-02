@@ -671,6 +671,60 @@ public class SqlStoreTests
         }
     }
 
+    // The same tie group paged by a caller, one receiver at a time with the public cursor: the cursor
+    // names the event it ended on, so the showings of the others are not taken as read with it.
+    [Test]
+    public async Task ACallerPagingShowingsOfOneReviewAtOneUnitListsEach()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var sink = new Both(memory, kept);
+        var start = new DateTimeOffset(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
+        var answers = Enumerable.Range(0, 3).Select(_ => Sent(start.AddMinutes(_), _)).ToList();
+        foreach (var answer in answers)
+        {
+            await sink.AppendAsync(answer, Cancel.None);
+        }
+
+        var review = new ScryDisclosureReview(Guid.CreateVersion7(), start.AddHours(1), ScryDisclosureQuestion.Row)
+        {
+            Reviewer = "records.officer",
+            Results = 3,
+            Events = [.. answers.Select(_ => _.EventId)]
+        };
+        await sink.AppendAsync(
+            new()
+            {
+                EventId = review.Id,
+                Review = review
+            },
+            Cancel.None);
+        await kept.DrainAsync();
+
+        var listed = await OneAtATime(kept);
+        var told = await OneAtATime(memory);
+        using (Assert.Multiple())
+        {
+            await Assert.That(listed).Count().IsEqualTo(6);
+            await Assert.That(told).Count().IsEqualTo(6);
+            await Assert.That(listed.Select(Shown).Order()).IsEquivalentTo(told.Select(Shown).Order(), CollectionOrdering.Matching);
+        }
+    }
+
+    static async Task<List<ScryRowDisclosure>> OneAtATime(IScryDisclosureReader reader)
+    {
+        var listed = new List<ScryRowDisclosure>();
+        ScryDisclosureCursor? after = null;
+        while (await reader.ReceiversOf("Patient", [1], after: after).FirstOrDefaultAsync() is { } next)
+        {
+            listed.Add(next);
+            after = ScryDisclosureCursor.After(next);
+        }
+
+        return listed;
+    }
+
     // One listed receiver, by what tells it from the rest: the event, and the review where a reviewer
     // was shown it.
     static string Shown(ScryRowDisclosure row) =>

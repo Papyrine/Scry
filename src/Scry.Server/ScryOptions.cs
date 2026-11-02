@@ -509,7 +509,9 @@ public sealed class ScryOptions(Type contextType)
     /// restart or work across multiple instances — set a stable key for a scaled-out or
     /// restart-tolerant deployment. Sealing enforces the opaque-cursor contract and keeps the ordering
     /// keys it carries out of URLs and logs; it is not an authorization control (a decoded cursor is
-    /// always re-validated and policy-filtered).
+    /// always re-validated and policy-filtered). The <c>ETag</c>s of
+    /// <see cref="QueryFreshness"/> are signed with it too, so instances share their tags only where
+    /// they share this key.
     /// </summary>
     public byte[]? CursorKey { get; set; }
 

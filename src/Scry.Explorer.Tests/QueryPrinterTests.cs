@@ -230,6 +230,15 @@ public class QueryPrinterTests
         await Assert.That(error).Contains("Only a variable declaration");
     }
 
+    // Something left over after a complete query is a snippet that does not parse, and is reported as
+    // that — not as a preamble that is not a declaration, which is what the parser makes of it.
+    [Test]
+    public async Task ReportsTrailingTextAfterAQueryAsNotParsing()
+    {
+        await Assert.That(QueryPrinter.TryFormat("Query.Employee.Where(_ => _.Active)) .CountAsync()", out _, out var error)).IsFalse();
+        await Assert.That(error).IsNotNull().And.DoesNotContain("Only a variable declaration");
+    }
+
     // Format leaves what it cannot read alone, for the callers that compose a query they know parses.
     [Test]
     public async Task FormatReturnsUnreadableTextUnchanged() =>

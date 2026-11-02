@@ -78,7 +78,7 @@ static class ScryMcpTools
         {
             using var output = new PooledBufferWriter();
             var limited = ResponseBudget.For(request.Options)?.Charging(output) ?? output;
-            var fallback = await request.Processor.TryExecuteBufferedAsync(
+            await request.Processor.TryExecuteBufferedAsync(
                 parsed,
                 request.Data,
                 request.Services,
@@ -87,13 +87,6 @@ static class ScryMcpTools
                 limited,
                 cancel: cancel,
                 caller: request.Recorded);
-
-            // Written through the same budget, so the envelope a drifted client is answered with is
-            // bounded as any other.
-            if (fallback is not null)
-            {
-                ResponseWriter.Write(limited, fallback);
-            }
 
             return Answer(Encoding.UTF8.GetString(output.WrittenMemory.Span));
         }

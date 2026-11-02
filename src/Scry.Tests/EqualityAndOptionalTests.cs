@@ -57,6 +57,22 @@ public class EqualityAndOptionalTests
         await Assert.That(rows.Single().Amount).IsEqualTo(100m);
     }
 
+    // Through the object overload a number is compared with text, which C# answers false for every
+    // row. Sent as ==, the server would read the text as a number and match; so it is refused.
+    [Test]
+    public async Task EqualsAcrossTypesIsRefused()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(
+            () => client.Source<Employee>("Employee")
+                .Where(_ => _.Id.Equals("1"))
+                .CountAsync());
+
+        await Assert.That(exception!.Message).Contains("false for every row");
+    }
+
     // The enum spelling compiles to Object.Equals against a boxed operand, so it arrives with a Convert
     // around its argument rather than as the enum's own overload.
     [Test]

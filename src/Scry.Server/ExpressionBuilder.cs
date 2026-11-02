@@ -1157,8 +1157,8 @@ sealed class ExpressionBuilder(
         {
             SubqueryFn.Sum => Expression.Call(SumOrAverage("Sum", element, body.Type), source, selector),
             SubqueryFn.Average => Expression.Call(SumOrAverage("Average", element, body.Type), source, selector),
-            SubqueryFn.Min => Expression.Call(MinOrMax("Min", element, body.Type), source, selector),
-            SubqueryFn.Max => Expression.Call(MinOrMax("Max", element, body.Type), source, selector),
+            SubqueryFn.Min => MinOrMax("Min", element, source, selector, InMemory(row)),
+            SubqueryFn.Max => MinOrMax("Max", element, source, selector, InMemory(row)),
             _ => throw new ScryValidationException($"Unsupported subquery function '{subquery.Function}'.")
         };
     }
@@ -2640,8 +2640,8 @@ sealed class ExpressionBuilder(
                 AggregateFn.Count => Expression.Call(QueryComposition.Close(enumerableCount, valueBody.Type), distinct),
                 AggregateFn.Sum => Expression.Call(BareFold("Sum", valueBody.Type), distinct),
                 AggregateFn.Average => Expression.Call(BareFold("Average", valueBody.Type), distinct),
-                AggregateFn.Min => Expression.Call(bareMinMax.GetOrAdd(("Min", valueBody.Type), BareMinOrMax), distinct),
-                AggregateFn.Max => Expression.Call(bareMinMax.GetOrAdd(("Max", valueBody.Type), BareMinOrMax), distinct),
+                AggregateFn.Min => BareMinOrMax("Min", distinct, valueBody.Type, InMemory(group)),
+                AggregateFn.Max => BareMinOrMax("Max", distinct, valueBody.Type, InMemory(group)),
                 _ => throw new ScryValidationException($"Unsupported aggregate '{aggregate.Function}'.")
             };
         }
@@ -2695,6 +2695,14 @@ sealed class ExpressionBuilder(
                 QueryComposition.Close(enumerableOrderBy, typeof(string), typeof(string)),
                 values,
                 Expression.Lambda(value, value));
+            if (InMemory(group))
+            {
+                ordered = Expression.Call(
+                    QueryComposition.Close(enumerableOrderByComparing, typeof(string), typeof(string)),
+                    values,
+                    Expression.Lambda(value, value),
+                    ordinalText);
+            }
 
             // The separator is the client's, and travels as every other client value does: bound, so
             // one plan serves every separator a client sends rather than one per distinct string.
@@ -2705,8 +2713,8 @@ sealed class ExpressionBuilder(
         {
             AggregateFn.Sum => Expression.Call(SumOrAverage("Sum", element, returnType), source, selector),
             AggregateFn.Average => Expression.Call(SumOrAverage("Average", element, returnType), source, selector),
-            AggregateFn.Min => Expression.Call(MinOrMax("Min", element, returnType), source, selector),
-            AggregateFn.Max => Expression.Call(MinOrMax("Max", element, returnType), source, selector),
+            AggregateFn.Min => MinOrMax("Min", element, source, selector, InMemory(group)),
+            AggregateFn.Max => MinOrMax("Max", element, source, selector, InMemory(group)),
             _ => throw new ScryValidationException($"Unsupported aggregate '{aggregate.Function}'.")
         };
     }
@@ -2722,6 +2730,31 @@ sealed class ExpressionBuilder(
                     !_.IsGenericMethodDefinition &&
                     _.GetParameters().Length == 1 &&
                     _.GetParameters()[0].ParameterType == QueryComposition.Close(typeof(IEnumerable<>), key.Item2)));
+
+    // Min and Max of text over an in-memory source compare ordinally, as its ordering does: the
+    // default comparer is the current culture's, which answers per request.
+    static MethodCallExpression BareMinOrMax(string name, Expression values, Type value, bool inMemory)
+    {
+        if (inMemory &&
+            value == typeof(string))
+        {
+            return Expression.Call(name == "Min" ? enumerableMinComparing : enumerableMaxComparing, values, ordinalText);
+        }
+
+        return Expression.Call(bareMinMax.GetOrAdd((name, value), BareMinOrMax), values);
+    }
+
+    static MethodCallExpression MinOrMax(string name, Type element, Expression source, LambdaExpression selector, bool inMemory)
+    {
+        if (inMemory &&
+            selector.ReturnType == typeof(string))
+        {
+            var values = Expression.Call(QueryComposition.Close(enumerableSelect, element, typeof(string)), source, selector);
+            return BareMinOrMax(name, values, typeof(string), inMemory);
+        }
+
+        return Expression.Call(MinOrMax(name, element, selector.ReturnType), source, selector);
+    }
 
     static MethodInfo BareMinOrMax((string Name, Type Value) key) =>
         typeof(Enumerable).GetMethods()
@@ -3007,6 +3040,26 @@ sealed class ExpressionBuilder(
     static MethodInfo stringToUpperInvariant = StringMethod("ToUpperInvariant");
     static MethodInfo stringCompareOrdinal = StringMethod("CompareOrdinal", typeof(string), typeof(string));
     static MethodInfo mathSign = typeof(Math).GetMethod(nameof(Math.Sign), [typeof(int)])!;
+
+    /// <summary>How text is ordered over an in-memory source: ordinally, as it is compared there.</summary>
+    internal static Expression ordinalText = Expression.Constant(StringComparer.Ordinal, typeof(IComparer<string>));
+
+    static MethodInfo enumerableMinComparing = ComparingFold(typeof(Enumerable), "Min");
+    static MethodInfo enumerableMaxComparing = ComparingFold(typeof(Enumerable), "Max");
+
+    internal static MethodInfo ComparingFold(Type over, string name) =>
+        over.GetMethods()
+            .Single(_ =>
+                _.Name == name &&
+                _.IsGenericMethodDefinition &&
+                _.GetGenericArguments().Length == 1 &&
+                _.GetParameters().Length == 2 &&
+                _.GetParameters()[1].ParameterType.IsGenericType &&
+                _.GetParameters()[1].ParameterType.GetGenericTypeDefinition() == typeof(IComparer<>))
+            .MakeGenericMethod(typeof(string));
+
+    static MethodInfo enumerableOrderByComparing = typeof(Enumerable).GetMethods()
+        .Single(_ => _.Name == "OrderBy" && _.GetParameters().Length == 3);
 
     static MethodInfo StringMethod(string name, params Type[] parameters) =>
         typeof(string).GetMethod(name, parameters) ??

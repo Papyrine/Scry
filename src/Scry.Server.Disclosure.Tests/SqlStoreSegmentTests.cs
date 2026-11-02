@@ -689,6 +689,65 @@ public class SqlStoreSegmentTests
         }
     }
 
+    // The same stray part, as the listings that start from the event see it: a reviewer shown the
+    // answer was shown the row only the stray part carried, and the answer is among those that
+    // returned the member of its source.
+    [Test]
+    public async Task APartOfAnAnswerWhoseSegmentIsBeingRetiredIsAmongShowingsAndMembers()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(
+            database,
+            _ =>
+            {
+                _.Keep = 1;
+                _.Retire = (_, _) => throw new IOException("The archive is not there.");
+            });
+        var both = new Both(memory, kept);
+        var brook = Clinic.Content(ScryDisclosureContentKind.Row, "{\"name\":\"Brook\"}");
+        var names = Clinic.Shape(new ScryDisclosureField("Patient", "Name", ScryDisclosureFieldUse.Returned, false));
+        var id = Guid.CreateVersion7();
+        var begin = new ScryDisclosureEvent(id, DateTimeOffset.UtcNow, ScryDisclosureKind.Stream, "Patient")
+        {
+            Caller = "dr.osei",
+            Shape = names.Address,
+            Node = "ward-1"
+        };
+
+        await both.AppendAsync(Clinic.Part(id, 0, begin, names), Cancel.None);
+        await kept.DrainAsync();
+        await Assert.ThrowsAsync<IOException>(() => kept.RollAsync());
+        await both.AppendAsync(Clinic.Part(id, 1, rows: [(0, brook, "Patient", "[2]")]), Cancel.None);
+        await both.AppendAsync(Clinic.Part(id, 2, close: new(ScryDisclosureOutcome.Released, 1)), Cancel.None);
+        var review = new ScryDisclosureReview(Guid.CreateVersion7(), DateTimeOffset.UtcNow, ScryDisclosureQuestion.Event)
+        {
+            Reviewer = "records.officer",
+            Results = 1,
+            Events = [id]
+        };
+        await both.AppendAsync(
+            new()
+            {
+                EventId = review.Id,
+                Review = review
+            },
+            Cancel.None);
+        await Assert.ThrowsAsync<IOException>(() => kept.DrainAsync());
+
+        var received = await kept.ReceiversOf("Patient", [2]).ToListAsync();
+        var told = await memory.ReceiversOf("Patient", [2]).ToListAsync();
+        var members = await kept.MemberReceivedBy("dr.osei", "Patient", "Name").ToListAsync();
+        using (Assert.Multiple())
+        {
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000002].[DisclosureReceipt]")).IsEqualTo(1);
+            await Assert.That(received.Select(_ => (_.Event.Id, _.Review?.Id))).IsEquivalentTo(told.Select(_ => (_.Event.Id, _.Review?.Id)));
+            await Assert.That(received.Count(_ => _.Review is not null)).IsEqualTo(1);
+            await Assert.That(members.Select(_ => _.Event.Id)).IsEquivalentTo([id]);
+            await Assert.That(members.Select(_ => _.Event.Id)).IsEquivalentTo((await memory.MemberReceivedBy("dr.osei", "Patient", "Name").ToListAsync()).Select(_ => _.Event.Id));
+        }
+    }
+
     // A node's settings are written into the record by the first round it moves that commits: a
     // round that failed after writing them took them back with it.
     [Test]

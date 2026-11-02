@@ -1,10 +1,12 @@
+using System.Text.Json.Serialization.Metadata;
+
 /// <summary>
 /// Writes a list result straight from projected <c>object[]</c> rows to UTF-8 — no per-row
 /// dictionaries, no <see cref="JsonElement"/> round trip, no reflection walk over the envelope — and
 /// the batch envelope that carries several of them. Byte-for-byte identical to serializing the
-/// equivalent <see cref="QueryResponse"/> or <see cref="QueryBatchResponse"/>: that identity is pinned
-/// by the integration golden tests, and any case this writer cannot reproduce exactly stays on the
-/// general path instead.
+/// equivalent <see cref="QueryResponse"/> or <see cref="QueryBatchResponse"/>, the enum aliases a
+/// drifted client is answered with included: that identity is pinned by the integration golden tests,
+/// and any case this writer cannot reproduce exactly stays on the general path instead.
 /// </summary>
 static class ResponseWriter
 {
@@ -12,6 +14,9 @@ static class ResponseWriter
     static JsonEncodedText kind = JsonEncodedText.Encode("kind");
     static JsonEncodedText payload = JsonEncodedText.Encode("payload");
     static JsonEncodedText stamp = JsonEncodedText.Encode("stamp");
+    static JsonEncodedText enumAliases = JsonEncodedText.Encode("enumAliases");
+    static JsonTypeInfo<IReadOnlyList<EnumAlias>> aliasesInfo =
+        (JsonTypeInfo<IReadOnlyList<EnumAlias>>) ScryJson.Options.GetTypeInfo(typeof(IReadOnlyList<EnumAlias>));
     static JsonEncodedText list = JsonEncodedText.Encode(nameof(ResultKind.List));
     static JsonEncodedText page = JsonEncodedText.Encode(nameof(ResultKind.Page));
     static JsonEncodedText scalar = JsonEncodedText.Encode(nameof(ResultKind.Scalar));
@@ -49,6 +54,7 @@ static class ResponseWriter
         ResponseSpill? spill,
         QueryExecutor.RowSet set,
         string schemaStamp,
+        IReadOnlyList<EnumAlias>? aliases,
         DisclosureCapture? capture,
         Cancel cancel)
     {
@@ -81,6 +87,7 @@ static class ResponseWriter
 
         json.WriteEndArray();
         json.WriteString(stamp, schemaStamp);
+        WriteAliases(json, aliases);
         json.WriteEndObject();
         await json.FlushAsync(cancel);
         return rows;
@@ -102,6 +109,7 @@ static class ResponseWriter
         ResponseSpill? spill,
         QueryExecutor.PageSet set,
         string schemaStamp,
+        IReadOnlyList<EnumAlias>? aliases,
         DisclosureCapture? capture,
         Cancel cancel)
     {
@@ -139,6 +147,7 @@ static class ResponseWriter
 
         json.WriteEndObject();
         json.WriteString(stamp, schemaStamp);
+        WriteAliases(json, aliases);
         json.WriteEndObject();
         await json.FlushAsync(cancel);
         return set.Rows.Count;
@@ -154,6 +163,7 @@ static class ResponseWriter
         IBufferWriter<byte> output,
         QueryExecutor.Terminal terminal,
         string schemaStamp,
+        IReadOnlyList<EnumAlias>? aliases,
         DisclosureCapture? capture)
     {
         using var json = new Utf8JsonWriter(output);
@@ -196,9 +206,23 @@ static class ResponseWriter
         }
 
         json.WriteString(stamp, schemaStamp);
+        WriteAliases(json, aliases);
         json.WriteEndObject();
         json.Flush();
         return rows;
+    }
+
+    // The renamed enum values a drifted client is told of, after the stamp as QueryResponse orders
+    // them, and nothing where there are none: the member is omitted when it is null.
+    static void WriteAliases(Utf8JsonWriter json, IReadOnlyList<EnumAlias>? aliases)
+    {
+        if (aliases is null)
+        {
+            return;
+        }
+
+        json.WritePropertyName(enumAliases);
+        JsonSerializer.Serialize(json, aliases, aliasesInfo);
     }
 
     // One row, through the disclosure audit's capture where there is one: it writes the row itself,
@@ -251,9 +275,8 @@ static class ResponseWriter
     }
 
     /// <summary>
-    /// An entry already written — by <see cref="WriteListAsync"/>, <see cref="WritePageAsync"/>,
-    /// <see cref="WriteTerminal"/>, or <see cref="Write"/> for the alias-carrying envelope a drifted
-    /// client is answered with. Each produces a complete response envelope, which is exactly what the
+    /// An entry already written — by <see cref="WriteListAsync"/>, <see cref="WritePageAsync"/> or
+    /// <see cref="WriteTerminal"/>. Each produces a complete response envelope, which is exactly what the
     /// entry's <c>response</c> is — so it is inserted as it stands rather than parsed back into a
     /// document to be written out again.
     /// </summary>
@@ -264,17 +287,6 @@ static class ResponseWriter
         // Written by this file a moment ago, so there is nothing for validation to find.
         json.WriteRawValue(written, skipInputValidation: true);
         json.WriteEndObject();
-    }
-
-    /// <summary>
-    /// A whole response the row writer could not produce — the alias-carrying envelope a drifted client
-    /// is answered with — serialized into the buffer a written result uses, rather than into an array of
-    /// its own that exists for the single write that follows it.
-    /// </summary>
-    public static void Write(IBufferWriter<byte> output, QueryResponse fallback)
-    {
-        using var json = new Utf8JsonWriter(output);
-        ScryJson.Write(json, fallback);
     }
 
     /// <summary>

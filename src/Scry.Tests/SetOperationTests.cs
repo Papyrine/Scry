@@ -27,6 +27,24 @@ public class SetOperationTests
         await Assert.That(rows).Count().IsEqualTo(6);
     }
 
+    // The other side is named by its root name alone, so one from another client would be read from
+    // this client's server. Refused, as a join's inner side and a Contains set are.
+    [Test]
+    public async Task ASideFromAnotherClientIsRefused()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        var other = ClientFor(context);
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(
+            () => client.Source<Order>("Order")
+                .Select(_ => new Label(_.Region, _.Amount))
+                .Union(other.Source<Order>("Order").Select(_ => new Label(_.Region, _.Amount)))
+                .ToListAsync());
+
+        await Assert.That(exception!.Message).Contains("another ScryClient");
+    }
+
     [Test]
     public async Task UnionDeduplicatesAcrossTheSides()
     {

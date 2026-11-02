@@ -247,6 +247,7 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
             .OrderByDescending(When)
             .ThenByDescending(Mark)
             .ThenBy(_ => _.Ordinal)
+            .ThenByDescending(_ => _.Event.Id)
             .Where(_ => Before(_, after))
             .ToAsyncEnumerable();
     }
@@ -274,14 +275,22 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
         disclosure.Review?.Id ?? disclosure.Event.Id;
 
     // The units of one event follow each other in the order they were sent, so within the event a
-    // cursor names, what follows it is every unit after the one it names.
+    // cursor names, what follows it is every unit after the one it names — and, where one review
+    // showed the row at that unit of several events, the showings of the events after the one it
+    // names. A cursor naming no event takes all of those as read.
     static bool Before(ScryRowDisclosure disclosure, ScryDisclosureCursor? after)
     {
         if (after is { } cursor &&
             When(disclosure) == cursor.At &&
             Mark(disclosure) == cursor.Id)
         {
-            return disclosure.Ordinal > cursor.Ordinal;
+            if (disclosure.Ordinal != cursor.Ordinal ||
+                cursor.Event is not { } shown)
+            {
+                return disclosure.Ordinal > cursor.Ordinal;
+            }
+
+            return disclosure.Event.Id.CompareTo(shown) < 0;
         }
 
         return Before(When(disclosure), Mark(disclosure), after);

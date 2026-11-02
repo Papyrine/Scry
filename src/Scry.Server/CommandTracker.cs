@@ -221,23 +221,40 @@ sealed class CommandTracker(ScryOptions options, string stamp, Action<CommandRec
         }
 
         pruning = true;
-        _ = PruneLoop();
+        var interval = options.CommandRetention < TimeSpan.FromMinutes(1) ? options.CommandRetention : TimeSpan.FromMinutes(1);
+        _ = PruneLoop(new(this), interval);
     }
 
-    async Task PruneLoop()
+    // Holds the tracker weakly, and ends once it has been collected. A processor is not disposable,
+    // so nothing would otherwise stop the loop, and a strong hold would keep every processor that
+    // ever accepted a command — and the timer — for the life of the process.
+    static async Task PruneLoop(WeakReference<CommandTracker> held, TimeSpan interval)
     {
-        var interval = options.CommandRetention < TimeSpan.FromMinutes(1) ? options.CommandRetention : TimeSpan.FromMinutes(1);
         using var timer = new PeriodicTimer(interval);
-        while (await timer.WaitForNextTickAsync())
+        while (await timer.WaitForNextTickAsync() &&
+               Tick(held))
         {
-            try
-            {
-                Prune(DateTimeOffset.UtcNow);
-            }
-            catch (Exception exception)
-            {
-                QueryRecorder.SignalFailed("command-prune", exception);
-            }
         }
+    }
+
+    // Apart from the loop so that the tracker is never one of its locals: a debug build keeps every
+    // local of an async method alive across its awaits, which would hold the tracker strongly again.
+    static bool Tick(WeakReference<CommandTracker> held)
+    {
+        if (!held.TryGetTarget(out var tracker))
+        {
+            return false;
+        }
+
+        try
+        {
+            tracker.Prune(DateTimeOffset.UtcNow);
+        }
+        catch (Exception exception)
+        {
+            QueryRecorder.SignalFailed("command-prune", exception);
+        }
+
+        return true;
     }
 }

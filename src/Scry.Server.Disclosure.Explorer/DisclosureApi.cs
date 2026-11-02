@@ -747,11 +747,11 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             return null;
         }
 
-        return new(mark.At, mark.Id, mark.Ordinal);
+        return new(mark.At, mark.Id, mark.Ordinal, mark.Event);
     }
 
     static PageMark Mark(ScryDisclosureCursor cursor) =>
-        new(cursor.At, cursor.Id, cursor.Ordinal);
+        new(cursor.At, cursor.Id, cursor.Ordinal, cursor.Event);
 
     static EventLine Line(ScryDisclosureEvent header, ScryDisclosureClose? close) =>
         new(

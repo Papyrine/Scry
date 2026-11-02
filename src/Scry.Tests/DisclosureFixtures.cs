@@ -55,7 +55,7 @@ static class Disclosures
     {
         await using var context = TestContext.CreateSeeded();
         var output = new ArrayBufferWriter<byte>();
-        var fallback = await processor.TryExecuteBufferedAsync(
+        await processor.TryExecuteBufferedAsync(
             request,
             context,
             services ?? EmptyServiceProvider.Instance,
@@ -64,10 +64,6 @@ static class Disclosures
             output,
             binary: binary,
             caller: caller);
-        if (fallback is not null)
-        {
-            ResponseWriter.Write(output, fallback);
-        }
 
         return output.WrittenSpan.ToArray();
     }

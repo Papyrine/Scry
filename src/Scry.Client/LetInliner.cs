@@ -42,7 +42,7 @@ sealed class LetInliner :
                 throw Unsupported();
             }
 
-            bindings[variable] = Visit(binding.Right);
+            bindings[variable] = Fixed(Visit(binding.Right));
         }
 
         var inlined = Visit(value);
@@ -55,6 +55,20 @@ sealed class LetInliner :
         }
 
         return inlined;
+    }
+
+    // A binding that reads nothing of the row is closure state, evaluated once where it is bound, as
+    // F# evaluates it: 'let now = DateTime.UtcNow' substituted as written would be read afresh
+    // wherever it is read, and two reads of one variable could differ. A binding that reads the row
+    // is substituted as it stands, since a query computes nothing else.
+    static Expression Fixed(Expression bound)
+    {
+        if (QueryTranslator.UnboundParameter.In(bound) is not null)
+        {
+            return bound;
+        }
+
+        return Expression.Constant(QueryTranslator.Evaluate(bound), bound.Type);
     }
 
     protected override Expression VisitParameter(ParameterExpression node)

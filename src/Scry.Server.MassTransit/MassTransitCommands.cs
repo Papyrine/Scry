@@ -1,6 +1,7 @@
 /// <summary>
 /// <see cref="ICommandDispatcher"/> over MassTransit: publishes the command the server bound, with its
-/// id and caller as headers, to whichever consumer handles it.
+/// id and caller as headers, to whichever consumer handles it. The message's own id is the command's,
+/// which is what lets the fault MassTransit publishes for it name the command.
 /// </summary>
 sealed class MassTransitDispatcher(IServiceProvider services, BusCommands claims) :
     ICommandDispatcher
@@ -19,6 +20,7 @@ sealed class MassTransitDispatcher(IServiceProvider services, BusCommands claims
                 Pipe.Execute<PublishContext>(
                     context =>
                     {
+                        context.MessageId = envelope.Id;
                         context.Headers.Set(ScryCommandHeaders.CommandId, envelope.Id.ToString("D"));
                         if (envelope.Caller is { } caller)
                         {
@@ -59,17 +61,47 @@ sealed class MassTransitCommandCompletedConsumer(ScryProcessor processor) :
 }
 
 /// <summary>
+/// Fails a command on the server once MassTransit has given up on it: the fault it publishes when a
+/// message's consume has failed for good — after every retry and redelivery, or at once where there
+/// are none. Every fault carries the id of the message it is about, and a command's message carries
+/// the command's id as its own.
+/// </summary>
+/// <remarks>
+/// The non-generic <see cref="Fault"/>, which every <c>Fault&lt;T&gt;</c> is too, so that one consumer
+/// hears the commands of every type — the types a server carries are its options', and may be all of
+/// them. A fault of anything else names no command this node holds, and changes nothing.
+/// </remarks>
+sealed class MassTransitCommandFaultConsumer(ScryProcessor processor) :
+    IConsumer<Fault>
+{
+    /// <inheritdoc />
+    public Task Consume(ConsumeContext<Fault> context)
+    {
+        if (context.Message.FaultedMessageId is { } id)
+        {
+            // The fixed text: what failed is on the fault, with its exception, and a caller is owed
+            // the fact rather than the stack.
+            processor.FailCommand(id, "Command execution failed.");
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
 /// Around each message a Scry server published as a command: once its consumers are done, publishes
-/// how it ended. Registered for every message type by <c>UseScryCommands</c>, and passes anything else
-/// straight through.
+/// that it succeeded. Registered for every message type by <c>UseScryCommands</c>, and passes anything
+/// else straight through.
 /// </summary>
 /// <remarks>
 /// The success goes through the consume context, so with an outbox it leaves only if the consumer's
-/// work is kept. The failure goes through the bus, since an outbox discards what a faulted consume
-/// published — and it is reported when the failure leaves this filter, which is once retries are
-/// spent where the filter is configured outside the retry.
+/// work is kept. A failure is not reported here: the filter runs inside a <c>UseMessageRetry</c>,
+/// whatever order the two were configured in, and is told which attempt it is in but not whether
+/// another will follow. A failed attempt is rethrown for the retry to decide, and the command is
+/// failed by the fault MassTransit publishes once nothing more will be tried
+/// (<see cref="MassTransitCommandFaultConsumer"/>).
 /// </remarks>
-sealed class ScryCommandFilter<TMessage>(IBus bus) :
+sealed class ScryCommandFilter<TMessage> :
     IFilter<ConsumeContext<TMessage>>
     where TMessage : class
 {
@@ -83,24 +115,7 @@ sealed class ScryCommandFilter<TMessage>(IBus bus) :
         }
 
         var result = context.GetOrAddPayload(() => new CommandResult());
-        try
-        {
-            await next.Send(context);
-        }
-        catch (Exception)
-        {
-            // The fixed text: what failed is on the fault, with its exception, and a caller is owed
-            // the fact rather than the stack.
-            await bus.Publish(
-                new MassTransitCommandCompleted
-                {
-                    Id = id,
-                    Succeeded = false,
-                    Error = "Command execution failed."
-                });
-            throw;
-        }
-
+        await next.Send(context);
         await context.Publish(
             new MassTransitCommandCompleted
             {

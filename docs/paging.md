@@ -105,7 +105,7 @@ Paging is governed by these `ScryOptions` settings:
 | --- | --- | --- |
 | `MaxPageSize` | 1000 | Hard ceiling on the page size. A `Take`, or a `ToPageAsync` size, above it is rejected at validation. |
 | `DefaultPageSize` | 100 | Page size applied to a `ToPageAsync()` that omits a size. |
-| `CursorKey` | *(ephemeral)* | Key the cursors are sealed under. When unset, a random per-process key is used — cursors then do not survive a restart or work across instances. Set a stable key for a scaled-out or restart-tolerant deployment. |
+| `CursorKey` | *(ephemeral)* | Key the cursors are sealed under. When unset, a random per-process key is used — cursors then do not survive a restart or work across instances. Set a stable key for a scaled-out or restart-tolerant deployment. The [ETags](caching.md#what-identifies-a-response) are signed with it too. |
 
 `DefaultPageSize` closes the paging hole where an unbounded page would otherwise bypass `MaxPageSize`: a paged result is always a bounded page, and `HasMore` tells the caller whether more exists. Truncation is never silent. (`ToListAsync` is unchanged — it still returns the full authorized set, bounded only by an explicit `Take` and by row policies; "give me everything" stays an explicit choice.)
 

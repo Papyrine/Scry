@@ -42,10 +42,24 @@ public sealed class ScryPolicyCache
     /// </summary>
     /// <remarks>
     /// Also reported as a change to <typeparamref name="TEntity"/>, as <see cref="InvalidateScope{TEntity}"/> is.
+    /// Each key has to be of the key member's own type — an <c>int</c> key is not invalidated by a
+    /// <c>long</c> — and one that is not is refused here, before anything is forgotten.
     /// </remarks>
     public void InvalidateRows<TEntity>(IReadOnlyCollection<object> keys)
     {
         var registration = For<TEntity>();
+
+        // Checked at the call, where it can still be refused. Pended, a key of the wrong type would
+        // be cast to the key's type by every refresh of every scope, and each would fail before
+        // deciding anything: every query of the source a 500, until each scope was invalidated.
+        foreach (var key in keys)
+        {
+            if (key?.GetType() != registration.Key)
+            {
+                throw new ArgumentException($"'{typeof(TEntity).Name}' is keyed by {registration.Key.Name}, so a key of its rows has to be one; {key?.GetType().Name ?? "null"} was given.", nameof(keys));
+            }
+        }
+
         registration.Store.InvalidateRows(registration.Name, keys);
         changes.Notify<TEntity>();
     }

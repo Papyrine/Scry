@@ -613,22 +613,32 @@ public static ScryOptions UseMassTransitCommands(this ScryOptions options, Actio
 }
 
 /// <summary>
-/// On the server's bus: the consumer that hears how each command ended. On a temporary endpoint of
-/// its own, so that every node receives every completion — only the node that dispatched a command
-/// holds it, and one queue shared between nodes would hand each completion to one of them.
+/// On the server's bus: the consumers that hear how each command ended — the completion a worker
+/// publishes when its consumer succeeds, and the fault MassTransit publishes once it has given up
+/// on one. On temporary endpoints of their own, so that every node receives every answer — only
+/// the node that dispatched a command holds it, and one queue shared between nodes would hand each
+/// answer to one of them.
 /// </summary>
+/// <remarks>
+/// A fault is how a failure is told, so a worker's bus must publish them, which it does unless
+/// told not to. One that does not leaves a failed command to be failed by the server's own
+/// retention, as "No completion was received", when <c>CommandRetention</c> has passed.
+/// </remarks>
 public static IBusRegistrationConfigurator AddScryCommandCompletions(this IBusRegistrationConfigurator configurator)
 {
     configurator
         .AddConsumer<MassTransitCommandCompletedConsumer>()
         .Endpoint(_ => _.Temporary = true);
+    configurator
+        .AddConsumer<MassTransitCommandFaultConsumer>()
+        .Endpoint(_ => _.Temporary = true);
     return configurator;
 }
 
 /// <summary>
-/// On a worker's bus: publishes how each command a Scry server sent ended, once its consumers are
-/// done. Configure it before <c>UseMessageRetry</c>, so a failure is reported once retries are
-/// spent rather than at the first attempt.
+/// On a worker's bus: publishes that each command a Scry server sent succeeded, once its consumers
+/// are done. A failure is the fault MassTransit publishes once retries and redeliveries are spent,
+/// so a retry that recovers from a failed attempt completes the command.
 /// </summary>
 public static void UseScryCommands(this IBusFactoryConfigurator configurator, IRegistrationContext context) =>
     configurator.UseConsumeFilter(typeof(ScryCommandFilter<>), context);
@@ -648,7 +658,7 @@ public static void SetScryResult(this ConsumeContext context, object result)
     holder.Json = JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options);
 }
 ```
-<sup><a href='/src/Scry.Server.MassTransit/ScryMassTransitExtensions.cs#L6-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-useMassTransitCommands' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.MassTransit/ScryMassTransitExtensions.cs#L6-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-useMassTransitCommands' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: useRebusCommands -->

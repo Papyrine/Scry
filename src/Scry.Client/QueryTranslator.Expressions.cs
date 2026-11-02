@@ -30,6 +30,14 @@ sealed partial class QueryTranslator
 
                     return TranslateConversion(convert, root);
 
+                // An operator over closure state alone is the value it computes, as a member or a call
+                // read off closure state is: carried as the operator, the renderer would print
+                // (true ? "a" : "b") where the query said a value, and the request would not read
+                // back as the one written.
+                case ConditionalExpression or BinaryExpression or UnaryExpression {NodeType: ExpressionType.Not or ExpressionType.Negate}
+                    when UnboundParameter.In(expression) is null:
+                    return ConstantOf(Evaluate(expression));
+
                 case UnaryExpression {NodeType: ExpressionType.Not} not:
                     return new UnaryNode(UnaryOp.Not, TranslateExpr(not.Operand, root));
 

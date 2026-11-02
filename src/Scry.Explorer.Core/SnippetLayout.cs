@@ -45,6 +45,22 @@ sealed record SnippetLayout(string Code, int Split, ScryDiagnostic? Problem)
                 continue;
             }
 
+            // What does not parse is said as what it is. A query with something left over after it —
+            // a stray bracket, a call cut off from its receiver — reads to the parser as statements
+            // that are not declarations, and would otherwise be refused as a preamble that is not one.
+            if (statement.GetDiagnostics().FirstOrDefault(_ => _.Severity == DiagnosticSeverity.Error) is { } error)
+            {
+                var span = error.Location.SourceSpan;
+                return new(
+                    code,
+                    split,
+                    new(
+                        error.GetMessage(CultureInfo.InvariantCulture),
+                        Math.Clamp(span.Start - 1, 0, code.Length),
+                        Math.Clamp(span.End - 1, 0, code.Length),
+                        IsError: true));
+            }
+
             // A declaration is the whole of what the preamble is for: the query reads it as captured
             // state and the translator folds it into the constant it stands for, so nothing written
             // there reaches the wire on its own. Anything else would run in the browser without

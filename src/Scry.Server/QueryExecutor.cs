@@ -226,6 +226,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         DbContext db,
         CallScope scope,
         string stamp,
+        IReadOnlyList<EnumAlias>? aliases,
         IBufferWriter<byte> output,
         ResponseSpill? spill,
         Cancel cancel)
@@ -243,7 +244,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         {
             var folded = fold.Finish(await Execution.RunAsync(fold.Query, fold.Call, cancel));
             capture?.Begin(Disclosure(folded.Kind));
-            return (folded.Kind, ResponseWriter.WriteTerminal(output, folded, stamp, capture));
+            return (folded.Kind, ResponseWriter.WriteTerminal(output, folded, stamp, aliases, capture));
         }
 
         if (plan.Page is { } page)
@@ -253,7 +254,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             capture?.Begin(ScryDisclosureKind.Page);
             return (
                 ResultKind.Page,
-                await ResponseWriter.WritePageAsync(output, spill, paged, stamp, capture, cancel));
+                await ResponseWriter.WritePageAsync(output, spill, paged, stamp, aliases, capture, cancel));
         }
 
         var rowSet = plan.Rows!.Value;
@@ -261,7 +262,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         capture?.Begin(ScryDisclosureKind.List);
         return (
             ResultKind.List,
-            await ResponseWriter.WriteListAsync(output, spill, rowSet, stamp, capture, cancel));
+            await ResponseWriter.WriteListAsync(output, spill, rowSet, stamp, aliases, capture, cancel));
     }
 
     static ScryDisclosureKind Disclosure(ResultKind kind)
@@ -1013,6 +1014,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // Min/Max are generic in the value type; Sum/Average have one overload per numeric type.
         var call = QueryComposition.Fold(name, aggregate.Function is AggregateFn.Min or AggregateFn.Max, values);
 
+        // Text over an in-memory source compares ordinally, as its ordering does.
+        if (aggregate.Function is AggregateFn.Min or AggregateFn.Max &&
+            values.ElementType == typeof(string) &&
+            values is EnumerableQuery)
+        {
+            call = Expression.Call(
+                aggregate.Function == AggregateFn.Min ? queryableMinComparing : queryableMaxComparing,
+                values.Expression,
+                ExpressionBuilder.ordinalText);
+        }
+
         return new(values, call, null, null);
     }
 
@@ -1537,6 +1549,22 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     static IQueryable ApplyOrder(IQueryable query, LambdaExpression keySelector, bool descending, bool then)
     {
         var method = (then ? "ThenBy" : "OrderBy") + (descending ? "Descending" : "");
+
+        // Text over an in-memory source is ordered ordinally, as it is compared there: the default
+        // comparer is the current culture's, so the same request would otherwise be ordered per
+        // Accept-Language, and disagree with CompareTo.
+        if (keySelector.ReturnType == typeof(string) &&
+            query is EnumerableQuery)
+        {
+            return QueryComposition.Compose(
+                query,
+                Expression.Call(
+                    ordinalOrders.GetOrAdd(method, OrdinalOrder).MakeGenericMethod(query.ElementType, typeof(string)),
+                    query.Expression,
+                    Expression.Quote(keySelector),
+                    ExpressionBuilder.ordinalText));
+        }
+
         return QueryComposition.Compose(
             query,
             QueryComposition.Call(
@@ -1545,6 +1573,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 query.Expression,
                 Expression.Quote(keySelector)));
     }
+
+    static ConcurrentDictionary<string, MethodInfo> ordinalOrders = new();
+    static MethodInfo queryableMinComparing = ExpressionBuilder.ComparingFold(typeof(Queryable), "Min");
+    static MethodInfo queryableMaxComparing = ExpressionBuilder.ComparingFold(typeof(Queryable), "Max");
+
+    static MethodInfo OrdinalOrder(string method) =>
+        typeof(Queryable).GetMethods()
+            .Single(_ => _.Name == method && _.GetParameters().Length == 3);
 
     // The count is bound rather than inlined so every offset and limit shares one statement — and so
     // one compiled plan serves every page a client walks.
@@ -1790,10 +1826,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         db.Model.FindEntityType(elementType)?.FindProperty(member) is { IsNullable: false };
 
     byte[] SigningKey() =>
-        options.CursorKey ?? ephemeralSigningKey;
-
-    // Used when no CursorKey is configured: cursors are valid only within this process's lifetime.
-    static byte[] ephemeralSigningKey = RandomNumberGenerator.GetBytes(32);
+        ServerKey.For(options);
 
     static Terminal Scalar(object? value) =>
         new(ResultKind.Scalar, value, Row: null, Plan: null, Binary: null);

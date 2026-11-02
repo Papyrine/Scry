@@ -34,14 +34,15 @@ static class ScryMcpGrammar
           Runs one query and answers its result as JSON: `{"kind": "List"|"Single"|"Scalar"|"Page", "payload": ...}`.
 
           `root` is a source name from `describe_schema`. `pipeline` is an array of operators, each an object
-          with a `$type`, applied in order. At most one terminal operator (count, any, all, first, single, last,
-          aggregate, page) and it must be last; without one the rows are answered as a list, capped by the
+          with a `$type`, applied in order. At most one terminal operator (count, longCount, any, all, first,
+          single, last, aggregate, page) and it must be last; without one the rows are answered as a list, capped by the
           server's page size — use `take` or `page` to bound it.
 
           Operators ($type: payload):
             where: predicate  |  orderBy / thenBy: key, descending  |  skip / take: count
             select: projection  |  distinct  |  reverse  |  groupBy: keys (one key)
             count / longCount / any: predicate?  |  all: predicate  |  first / single / last: orDefault, predicate?
+            aggregate: function, selector — functions {{Folds()}}; selector is a Node over the row
             page: size?, cursor?
             All operators: {{Discriminators<QueryOp>()}}
 
@@ -110,6 +111,11 @@ static class ScryMcpGrammar
         Lists the commands this caller may send at all. Advisory: a command is decided again when it is sent,
         and one aimed at a row can still be refused for that row.
         """;
+
+    // What the aggregate terminal folds by: every aggregate but the two it does not carry — a count has
+    // its own operator, and joining text is a grouped aggregate only.
+    static string Folds() =>
+        string.Join(", ", Enum.GetNames<AggregateFn>().Where(_ => _ is not (nameof(AggregateFn.Count) or nameof(AggregateFn.Join))));
 
     static string Names<T>()
         where T : struct, Enum =>

@@ -39,6 +39,55 @@ public class EnumAliasTests
         }
     }
 
+    // The written path carries the aliases itself, after the stamp, in the bytes serializing the
+    // general envelope produces — for every kind of answer, so that a drifted client's answer is
+    // bounded as it is written like any other.
+    [Test]
+    [Arguments("list")]
+    [Arguments("page")]
+    [Arguments("scalar")]
+    [Arguments("single")]
+    public async Task WrittenAliasesMatchTheGeneralEnvelope(string shape)
+    {
+        IReadOnlyList<QueryOp> pipeline = shape switch
+        {
+            "list" => [new SelectOp(new([new("Status", new NodeValue(new MemberNode(["Status"])))]))],
+            "page" => [new OrderByOp(new MemberNode(["Name"]), Descending: false), new PageOp(Size: 2)],
+            "scalar" => [new CountOp()],
+            _ => [new OrderByOp(new MemberNode(["Name"]), Descending: false), new FirstOp(OrDefault: true)]
+        };
+        var request = QueryRequest.Create("Employee", pipeline, "stamp-from-an-older-model");
+
+        await using var general = TestContext.CreateSeeded();
+        var expected = new ArrayBufferWriter<byte>();
+        await using (var json = new Utf8JsonWriter(expected))
+        {
+            ScryJson.Write(json, SharedProcessor.Instance.Execute(request, general));
+        }
+
+        await using var written = TestContext.CreateSeeded();
+        var output = new ArrayBufferWriter<byte>();
+        await SharedProcessor.Instance.TryExecuteBufferedAsync(
+            request,
+            written,
+            EmptyServiceProvider.Instance,
+            new HeaderDictionary(),
+            new HeaderDictionary(),
+            output);
+
+        // A page's cursor is sealed under a fresh nonce each time, so it is the one part the two
+        // answers cannot share.
+        var answer = Unsealed(Encoding.UTF8.GetString(output.WrittenSpan));
+        using (Assert.Multiple())
+        {
+            await Assert.That(answer).Contains("\"enumAliases\"");
+            await Assert.That(answer).IsEqualTo(Unsealed(Encoding.UTF8.GetString(expected.WrittenSpan)));
+        }
+    }
+
+    static string Unsealed(string answer) =>
+        Regex.Replace(answer, "\"cursor\":\"[^\"]*\"", "\"cursor\":\"\"");
+
     // Value names are hashed into the stamp, so a matching (or absent) stamp proves the client
     // already knows the current names — nothing is sent in the common case.
     [Test]

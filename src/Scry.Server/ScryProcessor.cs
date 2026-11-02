@@ -624,21 +624,17 @@ public sealed partial class ScryProcessor
 
     /// <summary>
     /// Executes like <see cref="Execute(QueryRequest, DbContext, IServiceProvider, IHeaderDictionary, IHeaderDictionary)"/>,
-    /// but writes the result into <paramref name="output"/> as complete response bytes, returning null.
-    /// The one result that does not go that way is the rare drifted-client envelope carrying the enum
-    /// alias table, which is returned instead for the caller to serialize the general way. Rejections
-    /// and failures throw exactly as <c>Execute</c> does.
+    /// but writes the result into <paramref name="output"/> as complete response bytes — the enum alias
+    /// table a drifted client is answered with included, so that a transport's size limit, and a live
+    /// query's, bounds that answer as it is written like any other. Rejections and failures throw
+    /// exactly as <c>Execute</c> does.
     /// </summary>
     /// <remarks>
     /// <paramref name="spill"/> is what may let a large result stop being resident; null keeps the
     /// whole envelope buffered, which is what the batch's per-entry buffer needs.
-    /// <para>
-    /// With the disclosure audit on nothing is returned at all: the drifted client's envelope is
-    /// written into <paramref name="output"/> here as well, so that it is whole before the record of
-    /// it is accepted. <paramref name="caller"/> is who that record is kept under.
-    /// </para>
+    /// <paramref name="caller"/> is who the disclosure audit's record is kept under.
     /// </remarks>
-    internal async ValueTask<QueryResponse?> TryExecuteBufferedAsync(
+    internal async ValueTask TryExecuteBufferedAsync(
         QueryRequest request,
         DbContext data,
         IServiceProvider services,
@@ -674,50 +670,14 @@ public sealed partial class ScryProcessor
                 Disclosure = capture
             };
 
-            // The alias table is carried on the envelope only for a drifted client; that rare envelope keeps
-            // the fully-general path rather than teaching the writer a second shape.
+            // The alias table is carried on the envelope only for a drifted client, after the stamp.
+            IReadOnlyList<EnumAlias>? aliases = null;
             if (drifted && schema.EnumAliases.Count > 0)
             {
-                var fallback = await executor.ExecuteAsync(request, data, scope, cancel) with
-                {
-                    Stamp = schema.Stamp,
-                    EnumAliases = schema.EnumAliases
-                };
-                if (capture is null &&
-                    subscription is null)
-                {
-                    recorder.Succeeded(fallback);
-                    return fallback;
-                }
-
-                // Written here rather than handed back for the caller to write, as it is where the
-                // audit is off. A transport's size limit refuses a response as it is written, and a
-                // refusal has to come before the record of the answer is accepted, never after it. A
-                // live run's output is that limit, so its answer is written here with the audit off too.
-                ResponseWriter.Write(output, fallback);
-                if (capture is null)
-                {
-                    recorder.Succeeded(fallback);
-                    return null;
-                }
-
-                if (subscription is not null)
-                {
-                    subscription.Capture = capture;
-                    subscription.Recorder = recorder;
-                    subscription.Fallback = fallback;
-                    parked = true;
-                    return null;
-                }
-
-                await capture.CommitAsync(cancel);
-                recorder.Disclosure = capture.Event;
-                recorder.Succeeded(fallback);
-                capture.Released();
-                return null;
+                aliases = schema.EnumAliases;
             }
 
-            var (kind, rows) = await executor.ExecuteBufferedAsync(request, data, scope, schema.Stamp, output, spill, cancel);
+            var (kind, rows) = await executor.ExecuteBufferedAsync(request, data, scope, schema.Stamp, aliases, output, spill, cancel);
 
             // A live query's answer is sent only if it differs from the last one, which is decided
             // after this returns. So neither the record nor the report is made here: both wait with
@@ -730,7 +690,7 @@ public sealed partial class ScryProcessor
                 subscription.Kind = kind;
                 subscription.Rows = rows;
                 parked = true;
-                return null;
+                return;
             }
 
             // On record before it is reported, and before the transport is handed the last of it.
@@ -750,7 +710,7 @@ public sealed partial class ScryProcessor
                 disclosure!.Remember(revalidates, capture.Memo());
             }
 
-            return null;
+            return;
         }
         catch (ScryValidationException exception)
             when (drifted)
@@ -1090,7 +1050,7 @@ public sealed partial class ScryProcessor
             // No spill: an entry is inserted into the envelope only once it is whole, which is the
             // whole reason it is written into a buffer of its own.
             var output = budget?.Checking(entry) ?? entry;
-            var fallback = await TryExecuteBufferedAsync(
+            await TryExecuteBufferedAsync(
                 query,
                 data,
                 services,
@@ -1102,14 +1062,6 @@ public sealed partial class ScryProcessor
                 cancel,
                 caller: caller,
                 correlation: correlation);
-
-            // The writer declined this one, so the buffer is untouched and the envelope is serialized
-            // into it — which makes it an entry like any other: checked as it is written, charged once
-            // it is whole, and inserted the one way.
-            if (fallback is not null)
-            {
-                ResponseWriter.Write(output, fallback);
-            }
 
             budget?.Spend(entry.WrittenCount);
         }

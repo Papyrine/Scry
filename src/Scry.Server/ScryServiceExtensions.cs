@@ -668,9 +668,8 @@ public static partial class ScryServiceExtensions
             var db = (DbContext)services.GetRequiredService(options.ContextType);
 
             // The result is written straight from the projected values — no dictionaries, no
-            // JsonElement round trip — whatever its kind. Only a drifted client's alias-carrying
-            // envelope comes back as a QueryResponse to be serialized the general way; the two
-            // produce identical bytes.
+            // JsonElement round trip — whatever its kind, a drifted client's alias-carrying envelope
+            // included.
             using var spill = new ResponseSpill(context, options.ResponseSpillThreshold);
 
             // One budget for the JSON and the parts, since the limit is on what the response carries
@@ -678,7 +677,7 @@ public static partial class ScryServiceExtensions
             var budget = ResponseBudget.For(options);
             var output = budget?.Charging(spill.Output) ?? spill.Output;
             var collector = new BinaryPartCollector(budget);
-            var fallback = await processor.TryExecuteBufferedAsync(
+            await processor.TryExecuteBufferedAsync(
                 request,
                 db,
                 services,
@@ -691,14 +690,6 @@ public static partial class ScryServiceExtensions
                 url,
                 caller: options.DisclosureCaller(context),
                 revalidates: Revalidates(context, options, url));
-
-            // The writer declined this one, so the buffer it was handed is untouched — the envelope is
-            // serialized into it rather than into a right-sized array that would be written once and
-            // dropped. Past here the response is one span whichever produced it.
-            if (fallback is not null)
-            {
-                ResponseWriter.Write(output, fallback);
-            }
 
             // Something is already on the wire, which only a plan carrying no binary slot is ever
             // allowed to put there — so the collector is empty by construction and there is nothing

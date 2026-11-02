@@ -67,6 +67,19 @@ sealed partial class QueryTranslator
             _ => null
         };
 
+    // The type an operand of Equals has before it was boxed to reach the object overload, as an
+    // optional's value: a boxed optional is its value or null, so int? and int are one type here.
+    static Type Boxed(Expression operand)
+    {
+        if (operand is UnaryExpression {NodeType: ExpressionType.Convert, Operand: var inner} &&
+            operand.Type == typeof(object))
+        {
+            operand = inner;
+        }
+
+        return Nullable.GetUnderlyingType(operand.Type) ?? operand.Type;
+    }
+
     static bool IsRooted(MemberExpression member, ParameterExpression root)
     {
         Expression? current = member;
@@ -107,7 +120,7 @@ sealed partial class QueryTranslator
     static int IntArgument(Expression expression) =>
         (int)Convert.ChangeType(Evaluate(expression)!, typeof(int), CultureInfo.InvariantCulture);
 
-    static object? Evaluate(Expression expression)
+    internal static object? Evaluate(Expression expression)
     {
         // Closure state reads nothing of any row. An expression that reaches a lambda parameter — the
         // row of an enclosing lambda read from a nested one, the index of an indexed Where — is not
@@ -184,7 +197,7 @@ sealed partial class QueryTranslator
 
     // The first parameter an expression reads that no lambda inside it declares: what makes it
     // something other than closure state.
-    sealed class UnboundParameter :
+    internal sealed class UnboundParameter :
         ExpressionVisitor
     {
         HashSet<ParameterExpression> bound = [];

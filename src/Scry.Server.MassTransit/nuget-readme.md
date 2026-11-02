@@ -36,7 +36,7 @@ builder.Services.AddMassTransit(
     });
 ```
 
-The server validates, authorizes and binds the command as it would for an in-process handler, then publishes it with the command's id and caller as headers. The consumer is an ordinary `IConsumer<T>`. Once it is done, the worker publishes the outcome. Through the consume context on success, so with an outbox it leaves only if the consumer's work was kept. Through the bus on failure, once the failure leaves the filter, which is after retries are spent when `UseScryCommands` is configured before `UseMessageRetry`. A consumer of a command with a result answers with `context.SetScryResult(result)`.
+The server validates, authorizes and binds the command as it would for an in-process handler, then publishes it with the command's id and caller as headers. The consumer is an ordinary `IConsumer<T>`. Once it is done, the worker publishes the outcome. Through the consume context on success, so with an outbox it leaves only if the consumer's work was kept. A failure is the fault MassTransit publishes once it has given up on the message — after `UseMessageRetry` and any redelivery, or at once where there are none — so a retry that recovers from a failed attempt completes the command. The server's `AddScryCommandCompletions` consumes those faults; a worker that turns fault publishing off leaves a failed command to the server's `CommandRetention`. A consumer of a command with a result answers with `context.SetScryResult(result)`.
 
 It claims nothing until told: a MassTransit message is any class. Everything it does not claim stays with its in-process handler. Completions are consumed on a temporary endpoint per node, so the node that dispatched a command hears how it ended.
 

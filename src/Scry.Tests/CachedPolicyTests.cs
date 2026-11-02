@@ -236,6 +236,28 @@ public class CachedPolicyTests
         }
     }
 
+    // A key of another type than the key member's is refused at the call. Pended, it would be cast to
+    // the key's type by every refresh of every scope, and each would fail before deciding anything.
+    [Test]
+    public async Task AKeyOfAnotherTypeIsRefusedAtTheCall()
+    {
+        await using var database = await TestContext.CreateIsolated("CachedPolicyMistypedKey");
+        var policy = new CountingRegionPolicy();
+        var processor = Cached();
+        await Seed(database);
+        await using var reading = database.NewDbContext();
+        var client = ClientFor(reading, processor, policy);
+        var before = await client.Source<Order>("Order").CountAsync();
+
+        var exception = Assert.Throws<ArgumentException>(() => processor.PolicyCache.InvalidateRows<Order>([5L]));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(exception!.Message).Contains("Int64");
+            await Assert.That(await client.Source<Order>("Order").CountAsync()).IsEqualTo(before);
+        }
+    }
+
     [Test]
     public async Task AGrantRevokedWhileARowIsBeingDecidedDoesNotStand()
     {

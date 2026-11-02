@@ -95,7 +95,8 @@ public interface IScryDisclosureReader
 
 /// <summary>
 /// Where a listing left off: the time and id of the last item read — and, for a listing of a row's
-/// receivers, which unit of that event it was, since one event can carry a row in several.
+/// receivers, which unit of that event it was, since one event can carry a row in several, and which
+/// event, since one review can have shown the row at the same unit of several.
 /// </summary>
 /// <param name="At">When the last item read was made: an event's time, or a review's.</param>
 /// <param name="Id">Its id.</param>
@@ -103,7 +104,11 @@ public interface IScryDisclosureReader
 /// Which unit the last item read was, in a listing of a row's receivers. Left out, such a listing is
 /// taken up after everything of that event.
 /// </param>
-public readonly record struct ScryDisclosureCursor(DateTimeOffset At, Guid Id, int Ordinal = int.MaxValue)
+/// <param name="Event">
+/// Which event the last item read was of, in a listing of a row's receivers. Left out, such a listing
+/// is taken up after every item of that time, id and unit.
+/// </param>
+public readonly record struct ScryDisclosureCursor(DateTimeOffset At, Guid Id, int Ordinal = int.MaxValue, Guid? Event = null)
 {
     /// <summary>Where a listing of events that ended on <paramref name="entry"/> is taken up from.</summary>
     public static ScryDisclosureCursor After(ScryDisclosureEntry entry) =>
@@ -111,7 +116,7 @@ public readonly record struct ScryDisclosureCursor(DateTimeOffset At, Guid Id, i
 
     /// <summary>Where a listing of a row's receivers that ended on <paramref name="row"/> is taken up from.</summary>
     public static ScryDisclosureCursor After(ScryRowDisclosure row) =>
-        new(row.Review?.At ?? row.Event.At, row.Review?.Id ?? row.Event.Id, row.Ordinal);
+        new(row.Review?.At ?? row.Event.At, row.Review?.Id ?? row.Event.Id, row.Ordinal, row.Event.Id);
 
     /// <summary>Where a listing of reviews that ended on <paramref name="review"/> is taken up from.</summary>
     public static ScryDisclosureCursor After(ScryDisclosureReview review) =>

@@ -7,7 +7,7 @@ sealed partial class QueryTranslator
     /// of its own, so its root, filters and projection are read straight off it — both sides project
     /// their own shape, and the server checks the two agree.
     /// </summary>
-    static SetOp TranslateSet(MethodCallExpression call, SetKind kind)
+    SetOp TranslateSet(MethodCallExpression call, SetKind kind)
     {
         if (call.Arguments.Count != 2)
         {
@@ -22,6 +22,8 @@ sealed partial class QueryTranslator
         {
             throw new NotSupportedException($"The other side of '{call.Method.Name}' must be a Scry source.");
         }
+
+        Beside(provider, $"The other side of '{call.Method.Name}'");
 
         var ops = Translate(queryable.Expression).ToList();
 
@@ -114,13 +116,15 @@ sealed partial class QueryTranslator
     // every server reads; an ordering bounded by paging crosses as the inner side's own pipeline,
     // under the wire version that introduced it. Every other operator would describe rows the join
     // has already consumed.
-    static (string Root, Node? Predicate, IReadOnlyList<QueryOp>? Ops) InnerSource(Expression expression)
+    (string Root, Node? Predicate, IReadOnlyList<QueryOp>? Ops) InnerSource(Expression expression)
     {
         var value = Evaluate(expression);
         if (value is not IQueryable {Provider: QueryProvider provider} queryable)
         {
             throw new NotSupportedException("The inner side of a join must be a Scry source.");
         }
+
+        Beside(provider, "The inner side of a join");
 
         var ops = Translate(queryable.Expression);
         if (ops.All(_ => _ is WhereOp))

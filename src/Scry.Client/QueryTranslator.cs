@@ -14,7 +14,10 @@ sealed partial class QueryTranslator
     /// </summary>
     public static IReadOnlyList<QueryOp> Translate(Expression expression, out IReadOnlyList<AttachmentBinding> attachments)
     {
-        var translator = new QueryTranslator();
+        var translator = new QueryTranslator
+        {
+            client = RootClient(expression)
+        };
         var ops = new List<QueryOp>();
         // A variable a lambda binds is substituted before anything is read, so every reader below sees
         // the one expression the lambda stands for — see LetInliner.
@@ -31,6 +34,37 @@ sealed partial class QueryTranslator
     {
         var inlined = (LambdaExpression) LetInliner.Inline(lambda);
         return new QueryTranslator().TranslateExpr(inlined.Body, inlined.Parameters[0]);
+    }
+
+    // The client the query was captured from, where it is known: what another source read inside it
+    // has to belong to, since it is only ever sent to this client's server and named there.
+    ScryClient? client;
+
+    static ScryClient? RootClient(Expression expression)
+    {
+        while (expression is MethodCallExpression {Arguments.Count: > 0} call)
+        {
+            expression = call.Arguments[0];
+        }
+
+        if (expression is ConstantExpression {Value: IQueryable {Provider: QueryProvider provider}})
+        {
+            return provider.Client;
+        }
+
+        return null;
+    }
+
+    // A source of another client is named by its root name alone on the wire, and would be read from
+    // whatever source of that name this client's server has — another server's rows are never what
+    // comes back. Refused rather than sent.
+    void Beside(QueryProvider provider, string where)
+    {
+        if (client is not null &&
+            !ReferenceEquals(provider.Client, client))
+        {
+            throw new NotSupportedException($"{where} is a source of another ScryClient. A query is answered by one server, so every source it reads has to come from the client it was captured from.");
+        }
     }
 
     void Visit(Expression expression, List<QueryOp> ops)

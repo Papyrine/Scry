@@ -345,14 +345,7 @@ public sealed partial class ScryProcessor
                 recorder.Disclosure = capture.Event;
             }
 
-            if (run.Fallback is { } fallback)
-            {
-                recorder.Succeeded(fallback);
-            }
-            else
-            {
-                recorder.Succeeded(run.Kind, run.Rows);
-            }
+            recorder.Succeeded(run.Kind, run.Rows);
 
             capture.Released();
         }

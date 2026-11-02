@@ -51,6 +51,37 @@ public class PocoCultureTests
         await Assert.That(names).Count().IsEqualTo(3);
     }
 
+    // Ordering and Min read text the way CompareTo does: ordinally, where a capital sorts before every
+    // lowercase letter. The culture would put "apple" first, and both would disagree with a CompareTo
+    // that put "Banana" below it.
+    [Test]
+    public async Task OrderingTextAgreesWithCompareTo()
+    {
+        using var _ = Under("en-US");
+        var processor = ScryProcessor.Create<TestContext>(
+            options => options.AddPocoSource<Holiday>(
+                _ =>
+                [
+                    new() { Name = "apple" },
+                    new() { Name = "Banana" },
+                    new() { Name = "cherry" }
+                ]));
+        await using var context = TestContext.CreateSeeded();
+        var client = new ScryClient((request, _) => Task.FromResult(processor.Execute(request, context)));
+        var holidays = client.Source<Holiday>("Holiday");
+
+        var ordered = await holidays.OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync();
+        var least = await holidays.MinAsync(_ => _.Name);
+        var below = await holidays.Where(_ => _.Name.CompareTo("apple") < 0).Select(_ => new NameRow(_.Name)).ToListAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(ordered.Select(_ => _.Name)).IsEquivalentTo(["Banana", "apple", "cherry"], CollectionOrdering.Matching);
+            await Assert.That(least).IsEqualTo("Banana");
+            await Assert.That(below.Select(_ => _.Name)).IsEquivalentTo(["Banana"]);
+        }
+    }
+
     // The conversions between text and a value read the current culture under LINQ to Objects, where
     // the provider's CONVERT reads none. German separates decimals with a comma and groups with a dot,
     // so a culture-sensitive parse would have read "1.5" as fifteen.

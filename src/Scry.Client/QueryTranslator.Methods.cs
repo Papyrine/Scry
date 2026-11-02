@@ -56,6 +56,20 @@ sealed partial class QueryTranslator
             !TakesComparison(call) &&
             EqualityOperands(call) is var (equated, against))
         {
+            // Through the object overload the two can be of different types, which C# answers false
+            // for whatever the values: an int is never equal to the text "5". Sent as ==, the server
+            // would read the text at the member's type and answer true.
+            if (Boxed(equated) is var left &&
+                Boxed(against) is var right &&
+                left != typeof(object) &&
+                right != typeof(object) &&
+                !left.IsAssignableFrom(right) &&
+                !right.IsAssignableFrom(left))
+            {
+                throw new NotSupportedException(
+                    $"'Equals' compares a '{left.Name}' with a '{right.Name}', which is false for every row. Compare values of the same type.");
+            }
+
             return new BinaryNode(BinaryOp.Equal, TranslateExpr(equated, root), TranslateExpr(against, root));
         }
 

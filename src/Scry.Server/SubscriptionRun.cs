@@ -31,7 +31,4 @@ sealed class SubscriptionRun
 
     /// <summary>How many rows it answered with.</summary>
     public int? Rows { get; set; }
-
-    /// <summary>The envelope a drifted client was answered with, where that is what the run produced.</summary>
-    public QueryResponse? Fallback { get; set; }
 }

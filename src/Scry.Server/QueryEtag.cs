@@ -12,11 +12,13 @@ using Microsoft.Net.Http.Headers;
 /// server did before any of it existed.
 /// </para>
 /// <para>
-/// The ETag is <c>"{schemaStamp}-{freshness}-{query}-{scope}"</c> and each part earns its place: the
+/// The ETag is <c>"{schemaStamp}-{signature}"</c>, the signature an HMAC over the freshness token,
+/// the query and the scope, and each part earns its place: the
 /// schema stamp so a deployment that changed the queryable surface is never answered from a cache the
 /// previous one filled, the freshness token so a write invalidates every entry, the query so one
 /// query's ETag is never accepted for another, and the scope so a response shaped for one caller is
-/// never handed to the next.
+/// never handed to the next. Signed with the server's key, so a caller cannot make the tag of a
+/// query it was never answered.
 /// </para>
 /// </remarks>
 static class QueryEtag
@@ -47,7 +49,7 @@ static class QueryEtag
             return false;
         }
 
-        var etag = Etag(processor.SchemaStamp, token, query, options.CacheScope?.Invoke(context));
+        var etag = Etag(ServerKey.For(options), processor.SchemaStamp, token, query, options.CacheScope?.Invoke(context));
 
         // Told that its copy is still current only once that has been recorded, where the disclosure
         // audit is on. Where it cannot be — nothing is remembered of the query — the query is
@@ -127,16 +129,25 @@ static class QueryEtag
         return Fingerprint.Of(encoded);
     }
 
-    // The freshness token and the scope are hashed like the query is: a tag is stored by the
-    // caller for as long as it caches, and the two are the database's write position and a tenant
-    // or principal — neither is the caller's to read, and both only have to be stable and distinct.
-    internal static string Etag(string schemaStamp, string freshness, string query, string? scope)
+    // Signed, not only hashed. Every part but the key is something a caller can compute or has been
+    // handed: the stamp is a response header, the query is its own URL, and a genuine tag carries the
+    // rest. An unkeyed hash would let a caller holding one tag mint the tag of any other query and be
+    // answered 304 for a query never decoded, validated or policy-checked — recorded, with the
+    // disclosure audit on, as confirmed to a caller who never received it. The key is the cursor
+    // key, so a farm that shares one shares its tags. The freshness token and the scope go in under
+    // the signature only: neither is the caller's to read.
+    internal static string Etag(byte[] key, string schemaStamp, string freshness, string query, string? scope)
     {
-        if (scope is null)
+        var builder = new StringBuilder("scry-etag-v1\n")
+            .Append(freshness).Append('\n')
+            .Append(query).Append('\n');
+        if (scope is not null)
         {
-            return $"\"{schemaStamp}-{Fingerprint.Of(freshness)}-{query}\"";
+            builder.Append('+').Append(scope);
         }
 
-        return $"\"{schemaStamp}-{Fingerprint.Of(freshness)}-{query}-{Fingerprint.Of(scope)}\"";
+        Span<byte> mac = stackalloc byte[HMACSHA256.HashSizeInBytes];
+        HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(builder.ToString()), mac);
+        return $"\"{schemaStamp}-{Base64Url.EncodeToString(mac[..18])}\"";
     }
 }

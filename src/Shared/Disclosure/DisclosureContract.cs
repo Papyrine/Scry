@@ -20,7 +20,7 @@ sealed record CatalogSource(string Name, bool Keyed, IReadOnlyList<CatalogMember
 sealed record CatalogMember(string Name, bool Sensitive);
 
 /// <summary>Where a listing left off, handed back to ask for what follows.</summary>
-sealed record PageMark(DateTimeOffset At, Guid Id, int Ordinal);
+sealed record PageMark(DateTimeOffset At, Guid Id, int Ordinal, Guid? Event = null);
 
 /// <summary>Who received a row.</summary>
 /// <param name="Source">The row's source.</param>
