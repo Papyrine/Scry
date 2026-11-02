@@ -149,6 +149,21 @@ public class DisclosureUiTests :
         await ask.ClickAsync();
         await Assertions.Expect(answers).ToHaveCountAsync(3);
 
+        // A date alone as the far bound is the whole of that day. The answers were sent on the first of
+        // March, by the server's clock: up to the day before finds none, and up to that day finds them
+        // all, where the day's first instant would have found none. The address carries the day's last
+        // instant, and the field shows the date that meant it.
+        var to = page.Locator("[data-testid='caller-to']");
+        await to.FillAsync("2026-02-28");
+        await ask.ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid='events-none']")).ToContainTextAsync("no answer sent to dee.caller in that time");
+        await to.FillAsync("2026-03-01");
+        await ask.ClickAsync();
+        await Assertions.Expect(answers).ToHaveCountAsync(3);
+        await Assert.That(new Uri(page.Url).Fragment).IsEqualTo("#caller?caller=dee.caller&from=2026-01-01T00%3A00%3A00&to=2026-03-01T23%3A59%3A59.9999999");
+        await Assertions.Expect(to).ToHaveValueAsync("2026-03-01");
+        await to.FillAsync("");
+
         // Somebody the record has never heard of was sent nothing, and the page says so.
         await page.Locator("[data-testid='caller-name']").FillAsync("nobody.at.all");
         await ask.ClickAsync();

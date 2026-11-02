@@ -28,6 +28,9 @@ public class SignTests
         }
     }
 
+    // Sign has no unsigned overload, so the member is widened to reach one. Widened rather than cast to
+    // int: a cast across the sign at one width is refused, since a quantity past int's range would
+    // read negative in C# and positive here.
     [Test]
     public async Task ReadsTheSignOfAnIntegerMember()
     {
@@ -35,7 +38,7 @@ public class SignTests
         var client = ClientFor(context);
 
         var rows = await client.Source<Order>("Order")
-            .Select(_ => new {_.Quantity, Sign = Math.Sign((int)_.Quantity - 3)})
+            .Select(_ => new {_.Quantity, Sign = Math.Sign((long)_.Quantity - 3)})
             .ToListAsync();
 
         using (Assert.Multiple())

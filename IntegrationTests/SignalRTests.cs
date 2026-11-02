@@ -201,6 +201,33 @@ public class SignalRTests
         await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Validation);
     }
 
+    // The sample model renames nothing, so a drifted client's stream is asked of the binary fixture's
+    // model, where DocumentKind.Draft used to be Sketch. The hub's begin marker carries the rename as
+    // the alias table, exactly as the stream endpoint's does, and a client generated before the rename
+    // has to be handed it with every row — and the stamp beside it — or its rows throw over the hub
+    // where they read over HTTP.
+    [Test]
+    public async Task ADriftedClientsStreamOverTheHubResolvesARenamedEnumValue()
+    {
+        await using var server = await BinaryServer.Start();
+        var stale = ScrySignalRClient.Create(server.Connection);
+        stale.SchemaStamp = "stamp-from-before-the-rename";
+
+        var kinds = new List<Stale.DocumentKind>();
+        await foreach (var row in stale.Source<Stale.Doc>("Document", ["Id", "Name", "Kind"])
+                           .OrderBy(_ => _.Id)
+                           .ToAsyncEnumerable())
+        {
+            kinds.Add(row.Kind);
+        }
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(kinds).IsEquivalentTo([Stale.DocumentKind.Sketch, Stale.DocumentKind.Final], CollectionOrdering.Matching);
+            await Assert.That(stale.SchemaStale).IsTrue();
+        }
+    }
+
     // The hub is handed a string and reads it with Scry's own reader. Bound by the hub's serializer
     // instead, a member the vocabulary does not name would have been skipped rather than refused.
     [Test]
@@ -456,6 +483,86 @@ public class SignalRTests
     {
         protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
             Task.FromResult(AuthenticateResult.NoResult());
+    }
+
+    /// <summary>The model a client generated before DocumentKind.Sketch became Draft reads with.</summary>
+    static class Stale
+    {
+        public enum DocumentKind
+        {
+            Sketch,
+            Final
+        }
+
+        public record Doc(int Id, string Name, DocumentKind Kind);
+    }
+
+    /// <summary>
+    /// A server over the binary fixture's model that maps the hub and nothing else, and a connection to
+    /// it. The database is one row of each kind, so a stream reads both values of the renamed enum.
+    /// </summary>
+    sealed class BinaryServer(WebApplication app, HubConnection connection, SqlDatabase<BinaryContext> database) :
+        IAsyncDisposable
+    {
+        // A LocalDB instance of its own: the binary fixture builds this model's template in the default
+        // one from a seed of its own, and two builds of one template at once deadlock inside SQL Server.
+        static SqlInstance<BinaryContext> sqlInstance = new(
+            constructInstance: _ => new(_.Options),
+            buildTemplate: async context =>
+            {
+                await context.Database.EnsureCreatedAsync();
+                context.Documents.AddRange(
+                    new() {Name = "sketched", Kind = DocumentKind.Draft},
+                    new() {Name = "finished", Kind = DocumentKind.Final});
+                await context.SaveChangesAsync();
+            },
+            storage: Storage.FromSuffix<BinaryContext>("Hub"));
+
+        public HubConnection Connection => connection;
+
+        public static async Task<BinaryServer> Start()
+        {
+            var database = await sqlInstance.Build();
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+            builder.Logging.ClearProviders();
+            builder.Services.AddSignalR();
+            builder.Services.AddDbContext<BinaryContext>(_ => _.UseSqlServer(database.ConnectionString));
+            builder.Services.AddScry<BinaryContext>(_ => _.AllowUnmappedSources = true);
+
+            var app = builder.Build();
+            try
+            {
+                app.MapScryHub("/hub");
+                await app.StartAsync();
+
+                var connection = new HubConnectionBuilder()
+                    .WithUrl(
+                        "http://localhost/hub",
+                        options =>
+                        {
+                            options.HttpMessageHandlerFactory = _ => app.GetTestServer().CreateHandler();
+                            options.Transports = HttpTransportType.LongPolling;
+                        })
+                    .Build();
+                await connection.StartAsync();
+                return new(app, connection, database);
+            }
+            catch
+            {
+                await app.DisposeAsync();
+                await database.DisposeAsync();
+                throw;
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await connection.DisposeAsync();
+            await app.StopAsync();
+            await app.DisposeAsync();
+            await database.DisposeAsync();
+        }
     }
 }
 

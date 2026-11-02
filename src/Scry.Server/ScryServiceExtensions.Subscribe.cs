@@ -20,6 +20,14 @@ public static partial class ScryServiceExtensions
     /// transport other than this one has it too. What is left here is the framing, and what only a
     /// connection has: a heartbeat, a lifetime, and the authentication ticket's expiry.
     /// </para>
+    /// <para>
+    /// The expiry is read before the first run, not after it. A scheme that tolerates clock skew
+    /// authenticates a ticket for some minutes past its expiry, and a client whose first answer was
+    /// delivered before the stream was ended counts that as success and asks again at once — so a
+    /// ticket already expired when the stream is asked for would otherwise have the query run in a
+    /// tight loop, on a first run the throttle never applies to, for as long as the skew allows. Ended
+    /// before anything runs, the client is handed nothing, and its backoff grows.
+    /// </para>
     /// </remarks>
     static async Task HandleSubscribe(HttpContext context)
     {
@@ -47,6 +55,18 @@ public static partial class ScryServiceExtensions
         }
 
         var drifted = request.Stamp is { } stamp && stamp != processor.SchemaStamp;
+
+        // Already over before it began: told so, as a stream that ended, without subscribing or
+        // running anything. Nothing was delivered, so the client's retry delay is what bounds how
+        // soon it asks again.
+        var deadline = Deadline(context, options);
+        if (Passed(deadline.At))
+        {
+            Commit(context);
+            await End(context, deadline.Reason);
+            return;
+        }
+
         var db = (DbContext)services.GetRequiredService(options.ContextType);
 
         // Cancelled to end the query when this decides the stream is over, as well as when the client
@@ -89,6 +109,7 @@ public static partial class ScryServiceExtensions
         await Hold(
             context,
             options,
+            deadline,
             () => answers.Pending,
             async () =>
             {

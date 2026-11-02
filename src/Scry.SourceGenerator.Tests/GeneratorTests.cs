@@ -120,6 +120,110 @@
         return VerifyGenerated(model);
     }
 
+    // Reflection on the server returns public instance properties alone, so a protected or a static
+    // 'new' never reaches it and the base's public declaration is what it reads. The generator once let
+    // the hiding declaration claim the name and then dropped it, hiding the base's member from the
+    // client and from nothing else.
+    [Test]
+    public async Task ANewMemberTheServerCannotSeeLeavesTheBasesToTheModel()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public class Base
+            {
+                public int Id { get; set; }
+                public string Name { get; set; } = "";
+                public int Code { get; set; }
+            }
+
+            public class Mid : Base
+            {
+                protected new string Name { get; set; } = "";
+                public static new int Code { get; set; }
+            }
+
+            [Queryable]
+            public class Row : Mid
+            {
+                public bool Active { get; set; }
+            }
+            """;
+
+        var row = (await GeneratedSources(model)).Single(_ => _.Contains("public class RowQueryModel"));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(row).Contains("public string Name { get; init; } = null!;");
+            await Assert.That(row).Contains("public int Code { get; init; }");
+        }
+    }
+
+    // A 'new' member of another type is a different member under an inherited name, which the derived
+    // model could carry only by hiding the inherited one — and the server reads the derived type. Refused
+    // rather than emitted as the base's; the server refuses the same model at startup.
+    [Test]
+    public async Task AMemberHidingAnInheritedOneWithAnotherTypeIsReported()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Asset
+            {
+                public int Id { get; set; }
+                public int Code { get; set; }
+            }
+
+            [Queryable]
+            public class Vehicle : Asset
+            {
+                public new string Code { get; set; } = "";
+            }
+            """;
+
+        var result = (await RunGenerator(model)).GetRunResult();
+
+        var diagnostic = result.Diagnostics.Single();
+        using (Assert.Multiple())
+        {
+            await Assert.That(diagnostic.Id).IsEqualTo("SCRY001");
+            await Assert.That(diagnostic.GetMessage()).Contains("'Vehicle.Code' hides 'Asset.Code' with another type: 'string' where the hidden member is 'int'.");
+            await Assert.That(result.Results.SelectMany(_ => _.GeneratedSources)).IsEmpty();
+        }
+    }
+
+    // The underlying type is the declaration's, as Enum.GetUnderlyingType reads it on the server. Read
+    // off the members' constants instead, an enum with none stamped as an int whatever it was declared over.
+    [Test]
+    public async Task AnEnumWithNoMembersKeepsItsUnderlyingType()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public enum Empty : byte
+            {
+            }
+
+            [Queryable]
+            public class Row
+            {
+                public int Id { get; set; }
+                public Empty Kind { get; set; }
+            }
+            """;
+
+        var enums = (await GeneratedSources(model)).Single(_ => _.Contains("public enum Empty"));
+
+        await Assert.That(enums).Contains("public enum Empty : byte");
+    }
+
     [Test]
     public Task Hierarchy()
     {
@@ -615,6 +719,84 @@
             """;
 
         return VerifyGenerated(model);
+    }
+
+    // The other axis of the same clash: a query model is named for its type, so two types of one simple
+    // name are one class whatever each is named on the wire. Reported once, as the type-name clash, since
+    // the fix a source-name clash names cannot work here — and reported the same whether the source
+    // names happen to clash too.
+    [Test]
+    [Arguments("[Queryable(Name = \"Staff\")]", "[Queryable(Name = \"Payees\")]")]
+    [Arguments("[Queryable]", "[Queryable]")]
+    public async Task TypeNamesSharingAQueryModelAreReported(string first, string second)
+    {
+        var model = $$"""
+            using Scry;
+
+            namespace Hr
+            {
+                {{first}}
+                public class Employee
+                {
+                    public int Id { get; set; }
+                }
+            }
+
+            namespace Payroll
+            {
+                {{second}}
+                public class Employee
+                {
+                    public int Id { get; set; }
+                }
+            }
+            """;
+
+        var result = (await RunGenerator(model)).GetRunResult();
+
+        var diagnostic = result.Diagnostics.Single();
+        using (Assert.Multiple())
+        {
+            await Assert.That(diagnostic.Id).IsEqualTo("SCRY002");
+            await Assert.That(diagnostic.GetMessage()).IsEqualTo("Two queryable types named 'Employee' would both be generated as 'EmployeeQueryModel'. A query model is named for its type rather than its source, so [Queryable(Name = \"...\")] cannot tell them apart: rename one of the types.");
+            await Assert.That(result.Results.SelectMany(_ => _.GeneratedSources)).IsEmpty();
+        }
+    }
+
+    // An enum is emitted as a type of its own name, and a reserved keyword cannot be written as one.
+    // Refused rather than escaped, as a source name is: every member typed as the enum spells its name
+    // on both sides, and an '@' the server's description does not carry would move the stamp.
+    [Test]
+    public async Task KeywordEnumNameIsReported()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public enum @lock
+            {
+                Open,
+                Shut
+            }
+
+            [Queryable]
+            public class Door
+            {
+                public int Id { get; set; }
+                public @lock State { get; set; }
+            }
+            """;
+
+        var result = (await RunGenerator(model)).GetRunResult();
+
+        var diagnostic = result.Diagnostics.Single();
+        using (Assert.Multiple())
+        {
+            await Assert.That(diagnostic.Id).IsEqualTo("SCRY019");
+            await Assert.That(diagnostic.GetMessage()).IsEqualTo("The enum 'lock' is emitted as a type of its own name, which cannot be written as a C# type name, so nothing can be generated for it. Rename it to a plain identifier that is not a reserved keyword.");
+            await Assert.That(result.Results.SelectMany(_ => _.GeneratedSources)).IsEmpty();
+        }
     }
 
     // A source name is also the property the entry point exposes, so one that is not an identifier

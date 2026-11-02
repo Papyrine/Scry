@@ -74,4 +74,29 @@ public class SensitiveSchemaTests
             await Assert.That(sensitive.IsSensitive("Employee", ["NoSuchMember", "Extension"])).IsTrue();
         }
     }
+
+    // The segment the walk ends a path with to ask about the type the path reaches rather than a
+    // member of it — the element of a collection a query flattened into and returned whole. The same
+    // question an empty path asks of a source, one collection further along.
+    [Test]
+    public async Task ThePathToACollectionsElementAsksAboutTheElement()
+    {
+        using (Assert.Multiple())
+        {
+            await Assert.That(sensitive.IsSensitive("Employee", [anyMember])).IsTrue();
+            await Assert.That(sensitive.IsSensitive("Department", [anyMember])).IsFalse();
+            await Assert.That(sensitive.IsSensitive("Order", ["Lines", anyMember])).IsFalse();
+            await Assert.That(sensitive.IsSensitive("Employee", ["PreviousAddresses", anyMember])).IsTrue();
+        }
+    }
+
+    // Off a row this cannot name, a row returned whole holds every member of some type — so if any type
+    // marks one, it is taken to be among them.
+    [Test]
+    public async Task AnUnresolvedRowReturnedWholeIsMarkedWhereAnythingIs() =>
+        await Assert.That(sensitive.IsSensitive(null, ["Entries", anyMember])).IsTrue();
+
+    // SensitiveWalk.AnyMember, which is compiled into the client and the server both and so cannot be
+    // named from here without an alias. A change to it fails these loudly.
+    const string anyMember = "*";
 }

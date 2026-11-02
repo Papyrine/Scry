@@ -127,15 +127,18 @@ public class RepresentationChangeTests
         }
     }
 
-    // Narrowing a numeric is caught the same way, and equally only for values that no longer fit.
+    // Narrowing a numeric is not caught at all: a comparison's constant the member no longer holds is
+    // read at its own type and the member widened to meet it, as C# compares an int against a long, so
+    // the drifted client is answered — with no row, where none is that large — rather than refused.
+    // A constant the member does hold is read at the member's type as before.
     [Test]
-    public async Task NarrowingRejectsAValueThatNoLongerFits()
+    public async Task NarrowingComparesAValueThatNoLongerFits()
     {
-        var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => RowCount("Employee", "Id", BinaryOp.Equal, new("99999999999", ClrTypeTag.Int64)));
-        await Assert.That(exception.Message).Contains("is not a valid Int32 value");
-
-        await Assert.That(RowCount("Employee", "Id", BinaryOp.Equal, new("1", ClrTypeTag.Int64))).IsEqualTo(1);
+        using (Assert.Multiple())
+        {
+            await Assert.That(RowCount("Employee", "Id", BinaryOp.Equal, new("99999999999", ClrTypeTag.Int64))).IsEqualTo(0);
+            await Assert.That(RowCount("Employee", "Id", BinaryOp.Equal, new("1", ClrTypeTag.Int64))).IsEqualTo(1);
+        }
     }
 
     // The response half is governed by JSON's token kinds, not by CLR types. A change that crosses from

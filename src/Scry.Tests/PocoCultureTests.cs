@@ -51,6 +51,50 @@ public class PocoCultureTests
         await Assert.That(names).Count().IsEqualTo(3);
     }
 
+    // The conversions between text and a value read the current culture under LINQ to Objects, where
+    // the provider's CONVERT reads none. German separates decimals with a comma and groups with a dot,
+    // so a culture-sensitive parse would have read "1.5" as fifteen.
+    [Test]
+    public async Task ParsingTextDoesNotFollowTheRequestsCulture()
+    {
+        using var _ = Under("de-DE");
+        await using var context = TestContext.CreateSeeded();
+
+        // A holiday holds no numeric text, so the text is a constant; the row the predicate is built
+        // over still decides which source the function runs in.
+        var request = QueryRequest.Create(
+            "Holiday",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.LessThan,
+                        new CallNode(KnownFunction.DecimalFrom, new ConstNode("1.5", ClrTypeTag.String), []),
+                        new ConstNode("2", ClrTypeTag.Decimal))),
+                new CountOp()
+            ]);
+
+        var response = SharedProcessor.Instance.Execute(request, context);
+
+        await Assert.That(response.Payload.GetInt32()).IsEqualTo(3).Because("1.5 is below 2; read as fifteen, nothing would be");
+    }
+
+    // German writes a date with dots, day first, so a culture-sensitive ToString would have read
+    // "01.01.2026".
+    [Test]
+    public async Task PrintingAValueDoesNotFollowTheRequestsCulture()
+    {
+        using var _ = Under("de-DE");
+        await using var context = TestContext.CreateSeeded();
+        var client = new ScryClient((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
+
+        var rows = await client.Source<Holiday>("Holiday")
+            .Where(_ => _.Name == "New Year")
+            .Select(_ => new NameRow(_.Date.ToString()))
+            .ToListAsync();
+
+        await Assert.That(rows.Single().Name).IsEqualTo("01/01/2026");
+    }
+
     static async Task<List<string>> Names(Expression<Func<Holiday, bool>> predicate)
     {
         await using var context = TestContext.CreateSeeded();

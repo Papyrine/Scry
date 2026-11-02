@@ -13,6 +13,13 @@ sealed class DescribedEnums() :
 
     public void Add(Type type, Func<Type, ScryEnumInfo> describe)
     {
+        // Emitted under the type's own name, which the generator refuses as SCRY019 where C# cannot
+        // write it. Refused here too, so the mistake surfaces at startup whichever side is built first.
+        if (!CSharpIdentifier.IsValid(type.Name))
+        {
+            throw new($"The enum '{type.FullName}' is reachable from the queryable surface, and its name cannot be written as a C# type name, so no client can be generated for it. Rename it to a plain identifier that is not a reserved keyword.");
+        }
+
         if (types.TryGetValue(type.Name, out var existing))
         {
             if (existing != type)

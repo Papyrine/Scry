@@ -35,8 +35,11 @@ public static class ModelSynthesizer
                 builder.AppendLine("[global::System.Flags]");
             }
 
+            // Escaped as a member name is: an enum named with a reserved keyword is refused by the
+            // generator and the server, and a description that still carries one is written as C#
+            // can declare it rather than as a line that does not parse.
             var underlying = enumeration.Underlying == "int" ? "" : $" : {enumeration.Underlying}";
-            builder.AppendLine($"public enum {enumeration.Name}{underlying}");
+            builder.AppendLine($"public enum {CSharpIdentifier.Escape(enumeration.Name)}{underlying}");
             builder.AppendLine("{");
             for (var i = 0; i < enumeration.Values.Count; i++)
             {

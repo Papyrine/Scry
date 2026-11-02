@@ -46,21 +46,36 @@ sealed class ProjectionMembersConverter :
         }
 
         var members = new List<ProjectionMember>();
-        var names = new HashSet<string>(StringComparer.Ordinal);
+        // Keyed as a row writes a name — camel-cased — and holding the name as it was spelled, for the
+        // refusal to name both.
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
         while (reader.Read() &&
                reader.TokenType != JsonTokenType.EndArray)
         {
             var member = ReadMember(ref reader, options);
             // Two members of one name would be read last-wins, a second spelling of a shorter request.
-            if (!names.Add(member.Name))
+            // Two whose names differ only in their leading case are the same once a row is written,
+            // every name camel-cased: one key carried twice, which the reader of that row refuses.
+            var written = JsonNamingPolicy.CamelCase.ConvertName(member.Name);
+            if (!names.TryAdd(written, member.Name))
             {
-                throw new JsonException($"A projection has two members named '{member.Name}'.");
+                throw new JsonException(NamedTwice(names[written], member.Name));
             }
 
             members.Add(member);
         }
 
         return members;
+    }
+
+    static string NamedTwice(string first, string second)
+    {
+        if (string.Equals(first, second, StringComparison.Ordinal))
+        {
+            return $"A projection has two members named '{first}'.";
+        }
+
+        return $"A projection has two members, '{first}' and '{second}', that a row writes as one name.";
     }
 
     static ProjectionMember ReadMember(ref Utf8JsonReader reader, JsonSerializerOptions options)
@@ -106,6 +121,12 @@ sealed class ProjectionMembersConverter :
                 }
 
                 name = reader.GetString();
+                // Held to what the string spelling is held to: a member is named, or it is refused.
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    throw new JsonException("A projection member's name cannot be blank.");
+                }
+
                 continue;
             }
 

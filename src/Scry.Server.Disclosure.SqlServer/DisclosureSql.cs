@@ -55,7 +55,9 @@ sealed class DisclosureSql
         // part of an answer is put: said of the view, that is what keeps the other segments from
         // being looked in at all.
         Ended = Ending(Close);
+        EndedAnywhere = Ending(Close, anywhere: true);
         Columns = "e.[EventId], e.[At], e.[Caller], e.[Kind], e.[Subscribed], e.[Delivery], e.[Source], e.[Request], e.[Shape], e.[Sensitive], e.[Stamp], e.[Correlation], e.[Node], e.[ContentType], c.[Outcome], c.[Units], c.[ClosedAt], c.[Response], e.[Agent]";
+        Anywhere = new(Event, Units, Entities, Field, Content, Close, Review, ReviewEvent, EndedAnywhere);
     }
 
     public string Schema { get; }
@@ -125,8 +127,23 @@ sealed class DisclosureSql
     /// <summary>Joins an event, aliased <c>e</c>, to how it ended, aliased <c>c</c>.</summary>
     public string Ended { get; }
 
+    /// <summary>
+    /// The same, with the close looked for in every segment rather than the event's own: for an
+    /// answer whose later parts went to another segment than its event did, which
+    /// <see cref="Ended"/> reads as never closed. Every segment is looked in, so it is for the few
+    /// events known to be such and not for a listing.
+    /// </summary>
+    public string EndedAnywhere { get; }
+
     /// <summary>The columns of an event and how it ended, in the order they are read back in.</summary>
     public string Columns { get; }
+
+    /// <summary>
+    /// The record as read through the views over every segment, in the same words as one segment is
+    /// read in by <see cref="Reading"/>: for the answer with parts in two segments, which a reading of
+    /// its own segment would read half of.
+    /// </summary>
+    public DisclosureReading Anywhere { get; }
 
     /// <summary>
     /// One segment as the record is read: each table of it with the <c>[Segment]</c> the views give
@@ -153,8 +170,16 @@ sealed class DisclosureSql
             Ending(close));
     }
 
-    static string Ending(string close) =>
-        $"OUTER APPLY (SELECT TOP (1) x.[Outcome], x.[Units], x.[At] AS [ClosedAt], x.[Response] FROM {close} x WHERE x.[EventId] = e.[EventId] AND x.[Segment] = e.[Segment] ORDER BY x.[Sequence] DESC) c";
+    static string Ending(string close, bool anywhere = false)
+    {
+        var held = " AND x.[Segment] = e.[Segment]";
+        if (anywhere)
+        {
+            held = "";
+        }
+
+        return $"OUTER APPLY (SELECT TOP (1) x.[Outcome], x.[Units], x.[At] AS [ClosedAt], x.[Response] FROM {close} x WHERE x.[EventId] = e.[EventId]{held} ORDER BY x.[Sequence] DESC) c";
+    }
 
     /// <summary>The tables of one segment.</summary>
     public DisclosureTables Segment(int number) =>

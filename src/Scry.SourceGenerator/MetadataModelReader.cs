@@ -27,26 +27,28 @@ static class MetadataModelReader
             return ModelExtract.Empty;
         }
 
-        // The generator runs inside the compiler process, whose working directory is not the
-        // project's. The shipped targets resolve the path against the project before it becomes
-        // compiler-visible; one that arrives relative anyway was wired by hand, and would otherwise
-        // read as a file that does not exist and generate nothing, silently.
-        if (!Path.IsPathRooted(dllPath))
-        {
-            return new(
-                $"ScryModelDll '{dllPath}' is a relative path. The generator runs inside the compiler process, whose working directory is not the project's, so the path must be absolute: resolve it with $([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)')) before it becomes compiler-visible, as the Scry.Client targets do.",
-                [],
-                [],
-                []);
-        }
-
-        if (!File.Exists(dllPath))
-        {
-            return ModelExtract.Empty;
-        }
-
         try
         {
+            // The generator runs inside the compiler process, whose working directory is not the
+            // project's. The shipped targets resolve the path against the project before it becomes
+            // compiler-visible; one that arrives relative anyway was wired by hand, and would otherwise
+            // read as a file that does not exist and generate nothing, silently. Inside the try: on
+            // .NET Framework, which Visual Studio hosts the generator on, a path carrying an invalid
+            // character throws here, and thrown out of the pipeline it is a CS8785 naming no cause.
+            if (!Path.IsPathRooted(dllPath))
+            {
+                return new(
+                    $"ScryModelDll '{dllPath}' is a relative path. The generator runs inside the compiler process, whose working directory is not the project's, so the path must be absolute: resolve it with $([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)')) before it becomes compiler-visible, as the Scry.Client targets do.",
+                    [],
+                    [],
+                    []);
+            }
+
+            if (!File.Exists(dllPath))
+            {
+                return ModelExtract.Empty;
+            }
+
             // Read off the file rather than out of a byte array: only the metadata block is needed,
             // and an array would be copied once more to become the immutable one the reader takes.
             // ReSharper disable once RedundantSuppressNullableWarningExpression
@@ -353,11 +355,16 @@ static class MetadataModelReader
         ImmutableArray<CommandProblem>.Builder problems)
     {
         var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
-        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder))
+        // Read as the server binds a payload: a property it can both read and set. One it cannot leaves
+        // its name to a base's declaration, as reflection's set of public properties does.
+        var chain = PropertiesAlongTheChain(
+            reader,
+            type,
+            decoder,
+            _ => HasPublicInstanceGetter(reader, _) && HasPublicInstanceSetter(reader, _));
+        foreach (var (property, attributes, arguments) in chain)
         {
-            if (!HasPublicInstanceGetter(reader, property) ||
-                !HasPublicInstanceSetter(reader, property) ||
-                HasAttribute(reader, attributes, commandIgnoreAttribute))
+            if (HasAttribute(reader, attributes, commandIgnoreAttribute))
             {
                 continue;
             }
@@ -400,9 +407,14 @@ static class MetadataModelReader
 
     // Every property of the type and of its bases in this assembly, base-most first, as a class lays its
     // inherited members out — the server reads inherited members by reflection. A name declared more than
-    // once along the chain is one property, described by its nearest declaration. Each comes with the
-    // attributes of every declaration it overrides (AlongOverrides), and with the type arguments its
-    // declaring level is read with, which a generic base's signatures need.
+    // once along the chain is one property, described by its nearest declaration that the caller reads
+    // at all. Each comes with the attributes of every declaration it overrides (AlongOverrides), and with
+    // the type arguments its declaring level is read with, which a generic base's signatures need.
+    //
+    // Only a declaration the caller reads claims its name. Reflection on the server returns public
+    // instance properties alone, so a protected or static 'new' never reaches it, and the base's public
+    // declaration of the name is what it describes; one that claimed the name here only to be dropped
+    // would hide that declaration from the client and from nothing else.
     //
     // Given the opted-in types, members are collected only up to the first base that opted in: that base
     // is the generated model's own base, whose members the model inherits rather than declares again.
@@ -411,6 +423,7 @@ static class MetadataModelReader
         MetadataReader reader,
         TypeDefinition type,
         SignatureDecoder decoder,
+        Func<PropertyDefinition, bool> reads,
         Dictionary<string, Discovered>? optedIn = null)
     {
         var chain = Chain(reader, type, decoder).ToList();
@@ -426,6 +439,11 @@ static class MetadataModelReader
             foreach (var handle in chain[index].Type.GetProperties())
             {
                 var property = reader.GetPropertyDefinition(handle);
+                if (!reads(property))
+                {
+                    continue;
+                }
+
                 var name = reader.GetString(property.Name);
 
                 // A nearer declaration of the name already describes it, whether it overrides this one
@@ -443,6 +461,28 @@ static class MetadataModelReader
 
         levels.Reverse();
         return levels.SelectMany(_ => _).ToList();
+    }
+
+    // What reflection returns for a type's public instance properties: one with any public accessor
+    // that is not static. The server reads a query model's members off exactly that set, so the same
+    // declaration claims a name on both sides, whatever each then drops it for.
+    static bool IsPublicInstance(MetadataReader reader, PropertyDefinition property)
+    {
+        var accessors = property.GetAccessors();
+        return IsPublicInstance(reader, accessors.Getter) ||
+               IsPublicInstance(reader, accessors.Setter);
+    }
+
+    static bool IsPublicInstance(MetadataReader reader, MethodDefinitionHandle accessor)
+    {
+        if (accessor.IsNil)
+        {
+            return false;
+        }
+
+        var attributes = reader.GetMethodDefinition(accessor).Attributes;
+        return (attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
+               (attributes & MethodAttributes.Static) == 0;
     }
 
     // The attributes of a declaration and of every declaration it overrides further up the chain, nearest
@@ -674,13 +714,9 @@ static class MetadataModelReader
 
         var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
         var valid = true;
-        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder))
+        // Read as the server describes a result: the properties it can read.
+        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder, _ => HasPublicInstanceGetter(reader, _)))
         {
-            if (!HasPublicInstanceGetter(reader, property))
-            {
-                continue;
-            }
-
             var signature = property.DecodeSignature(decoder, arguments);
             if (signature.ParameterTypes.Length > 0)
             {
@@ -787,18 +823,8 @@ static class MetadataModelReader
         return fullName.Substring(dot + 1);
     }
 
-    static bool HasPublicInstanceSetter(MetadataReader reader, PropertyDefinition property)
-    {
-        var setter = property.GetAccessors().Setter;
-        if (setter.IsNil)
-        {
-            return false;
-        }
-
-        var attributes = reader.GetMethodDefinition(setter).Attributes;
-        return (attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
-               (attributes & MethodAttributes.Static) == 0;
-    }
+    static bool HasPublicInstanceSetter(MetadataReader reader, PropertyDefinition property) =>
+        IsPublicInstance(reader, property.GetAccessors().Setter);
 
     /// <summary>
     /// Fills in <see cref="SourceInfo.Keys"/> for every model carrying an attachment. An attachment is
@@ -848,9 +874,12 @@ static class MetadataModelReader
             .Where(_ => _ is {IsNavigation: false, IsCollection: false, IsAttachment: false, Capability: null})
             .ToList();
 
+        // Distinct, because a command's target is read before inherited members are folded away: an
+        // override of a base's [Key] is then two declarations of one key, where the server has one.
         var declared = candidates
             .Where(_ => _.IsKey)
             .Select(_ => _.Name)
+            .Distinct(StringComparer.Ordinal)
             .OrderBy(_ => _, StringComparer.Ordinal)
             .ToImmutableArray();
         if (declared.Length > 0)
@@ -916,7 +945,10 @@ static class MetadataModelReader
         Dictionary<string, Discovered> discovered)
     {
         var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
-        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder, discovered))
+        // Read as the server reads a query model's members: off the public instance properties, which
+        // a declaration with a public setter alone belongs to, then dropping any without a public getter.
+        // Both sides have the same declaration claim a name, so both hide the same members.
+        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder, _ => IsPublicInstance(reader, _), discovered))
         {
             if (!HasPublicInstanceGetter(reader, property) ||
                 HasAttribute(reader, attributes, queryIgnoreAttribute))
@@ -965,6 +997,11 @@ static class MetadataModelReader
     // rather than declared again: an override is two declarations in metadata and one member in
     // reflection, and the server describes it on the base alone (Schema.Declared). Declaring it again
     // would also hide the inherited member, which the consumer's build warns about.
+    //
+    // That holds only while the two declare one type. A 'new' member of another type is a different
+    // member under the same name, which the derived model could carry only by hiding the inherited one
+    // — and then the server, reading the derived type, would answer with a value the client reads as
+    // the base's. The model is refused instead, as the server refuses it at startup.
     static ImmutableArray<SourceInfo>.Builder WithoutInheritedMembers(ImmutableArray<SourceInfo>.Builder sources)
     {
         var byModel = new Dictionary<string, SourceInfo>(StringComparer.Ordinal);
@@ -982,14 +1019,43 @@ static class MetadataModelReader
                 continue;
             }
 
-            var inherited = new HashSet<string>(Inherited(baseSource, byModel).Select(_ => _.Name), StringComparer.Ordinal);
+            var inherited = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+            foreach (var member in Inherited(baseSource, byModel))
+            {
+                inherited[member.Name] = member;
+            }
+
+            foreach (var property in source.Properties)
+            {
+                if (inherited.TryGetValue(property.Name, out var hidden) &&
+                    Scry.ScryGenerator.Display(property) != Scry.ScryGenerator.Display(hidden))
+                {
+                    throw new InvalidOperationException(
+                        $"'{source.ClrName}.{property.Name}' hides '{DeclaringModel(baseSource, property.Name, byModel).ClrName}.{property.Name}' with another type: '{Scry.ScryGenerator.Display(property)}' where the hidden member is '{Scry.ScryGenerator.Display(hidden)}'. A derived query model inherits its base's members, so a member it hides is read as the base's. Give it the type it hides, or rename it.");
+                }
+            }
+
             sources[i] = source with
             {
-                Properties = [with(source.Properties.Where(_ => !inherited.Contains(_.Name)).ToImmutableArray())]
+                Properties = [with(source.Properties.Where(_ => !inherited.ContainsKey(_.Name)).ToImmutableArray())]
             };
         }
 
         return sources;
+    }
+
+    // The nearest opted-in base declaring a member of the name: the one the derived model inherits it from.
+    static SourceInfo DeclaringModel(SourceInfo baseSource, string name, Dictionary<string, SourceInfo> byModel)
+    {
+        var current = baseSource;
+        while (current.Properties.All(_ => _.Name != name) &&
+               current.BaseModelName is { } baseName &&
+               byModel.TryGetValue(baseName, out var above))
+        {
+            current = above;
+        }
+
+        return current;
     }
 
     static PropertyInfo? Classify(
@@ -1097,23 +1163,35 @@ static class MetadataModelReader
         }
 
         // Each member's value is read with its name: re-emitted without it, every member past the
-        // first explicit one would hold a different value from the model's. Must stay in lockstep
-        // with Schema.DescribeEnum, which describes the same enum by reflection.
+        // first explicit one would hold a different value from the model's. The underlying type is the
+        // declaration's own, read off the instance field every enum carries, as Enum.GetUnderlyingType
+        // reads it on the server: taken from the members' constants instead, an enum with none would
+        // read as an int whatever it was declared over. Must stay in lockstep with Schema.DescribeEnum,
+        // which describes the same enum by reflection.
         var members = ImmutableArray.CreateBuilder<string>();
         var values = ImmutableArray.CreateBuilder<string>();
-        var underlying = "int";
+        string? underlying = null;
         foreach (var fieldHandle in definition.GetFields())
         {
             var field = reader.GetFieldDefinition(fieldHandle);
+            if ((field.Attributes & FieldAttributes.Static) == 0)
+            {
+                underlying = UnderlyingKeyword(field, fullName);
+                continue;
+            }
+
             if ((field.Attributes & FieldAttributes.Literal) == 0)
             {
                 continue;
             }
 
             members.Add(reader.GetString(field.Name));
-            var (keyword, value) = ReadConstant(reader, reader.GetConstant(field.GetDefaultValue()));
-            underlying = keyword;
-            values.Add(value);
+            values.Add(ReadConstant(reader, reader.GetConstant(field.GetDefaultValue())));
+        }
+
+        if (underlying is null)
+        {
+            throw new InvalidOperationException($"The enum '{fullName}' declares no instance field, so the type it is declared over cannot be read.");
         }
 
         var flags = HasAttribute(reader, definition.GetCustomAttributes(), flagsAttribute);
@@ -1121,21 +1199,47 @@ static class MetadataModelReader
         return name;
     }
 
-    // An enum member's constant, as the keyword of its type and the decimal the declaration spells.
-    static (string Keyword, string Value) ReadConstant(MetadataReader reader, Constant constant)
+    // The keyword of an enum's underlying type, read off the signature of its one instance field. Only
+    // the integral types C# can declare an enum over: the runtime allows a few more, which no model
+    // written in a .NET language carries and the server's display would not spell.
+    static string UnderlyingKeyword(FieldDefinition field, string fullName)
+    {
+        if (field.DecodeSignature(fieldDecoder, []) is PrimitiveDecoded
+            {
+                Code: PrimitiveTypeCode.SByte or
+                PrimitiveTypeCode.Byte or
+                PrimitiveTypeCode.Int16 or
+                PrimitiveTypeCode.UInt16 or
+                PrimitiveTypeCode.Int32 or
+                PrimitiveTypeCode.UInt32 or
+                PrimitiveTypeCode.Int64 or
+                PrimitiveTypeCode.UInt64
+            } primitive &&
+            PrimitiveKeyword(primitive.Code) is { } keyword)
+        {
+            return keyword;
+        }
+
+        throw new NotSupportedException($"The enum '{fullName}' is declared over a type that is not an integral type, which is not supported.");
+    }
+
+    static SignatureDecoder fieldDecoder = new();
+
+    // An enum member's constant, as the decimal the declaration spells.
+    static string ReadConstant(MetadataReader reader, Constant constant)
     {
         var blob = reader.GetBlobReader(constant.Value);
         var culture = System.Globalization.CultureInfo.InvariantCulture;
         return constant.TypeCode switch
         {
-            ConstantTypeCode.SByte => ("sbyte", blob.ReadSByte().ToString(culture)),
-            ConstantTypeCode.Byte => ("byte", blob.ReadByte().ToString(culture)),
-            ConstantTypeCode.Int16 => ("short", blob.ReadInt16().ToString(culture)),
-            ConstantTypeCode.UInt16 => ("ushort", blob.ReadUInt16().ToString(culture)),
-            ConstantTypeCode.Int32 => ("int", blob.ReadInt32().ToString(culture)),
-            ConstantTypeCode.UInt32 => ("uint", blob.ReadUInt32().ToString(culture)),
-            ConstantTypeCode.Int64 => ("long", blob.ReadInt64().ToString(culture)),
-            ConstantTypeCode.UInt64 => ("ulong", blob.ReadUInt64().ToString(culture)),
+            ConstantTypeCode.SByte => blob.ReadSByte().ToString(culture),
+            ConstantTypeCode.Byte => blob.ReadByte().ToString(culture),
+            ConstantTypeCode.Int16 => blob.ReadInt16().ToString(culture),
+            ConstantTypeCode.UInt16 => blob.ReadUInt16().ToString(culture),
+            ConstantTypeCode.Int32 => blob.ReadInt32().ToString(culture),
+            ConstantTypeCode.UInt32 => blob.ReadUInt32().ToString(culture),
+            ConstantTypeCode.Int64 => blob.ReadInt64().ToString(culture),
+            ConstantTypeCode.UInt64 => blob.ReadUInt64().ToString(culture),
             _ => throw new NotSupportedException($"An enum member of constant type '{constant.TypeCode}' is not supported.")
         };
     }
@@ -1325,19 +1429,8 @@ static class MetadataModelReader
                reader.GetString(baseType.Name) == "Enum";
     }
 
-    static bool HasPublicInstanceGetter(MetadataReader reader, PropertyDefinition property)
-    {
-        var getter = property.GetAccessors().Getter;
-        if (getter.IsNil)
-        {
-            return false;
-        }
-
-        var method = reader.GetMethodDefinition(getter);
-        var attributes = method.Attributes;
-        return (attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
-               (attributes & MethodAttributes.Static) == 0;
-    }
+    static bool HasPublicInstanceGetter(MetadataReader reader, PropertyDefinition property) =>
+        IsPublicInstance(reader, property.GetAccessors().Getter);
 
     static bool HasAttribute(MetadataReader reader, IEnumerable<CustomAttributeHandle> attributes, string fullName)
     {

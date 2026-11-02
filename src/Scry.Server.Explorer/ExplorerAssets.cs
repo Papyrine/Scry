@@ -187,3 +187,48 @@ sealed partial class ExplorerAssets
             _ => "application/octet-stream"
         };
 }
+
+/// <summary>
+/// The host page as it is served under each prefix a request arrives with. The page's base href has
+/// to begin with the host's <c>PathBase</c> — set by <c>UsePathBase</c>, or forwarded by a proxy — or
+/// every asset the page names is asked for at an address nothing answers; and a request is the first
+/// anything knows of the prefix. So the page is built once per prefix, its policy and its tag with
+/// it, since both follow from the text. Bounded, because a forwarded prefix is whatever a client
+/// sent: past the bound a page is built for its request and kept by nobody.
+/// </summary>
+sealed class ServedPages<TPage>(Func<string, TPage> build)
+    where TPage : class
+{
+    // More than a host is mounted under, and few enough that a client sending a new prefix with
+    // every request holds next to nothing.
+    const int most = 16;
+
+    Lock gate = new();
+    Dictionary<string, TPage> pages = new(StringComparer.Ordinal);
+
+    /// <summary>The page for the prefix a request arrived under: its <c>PathBase</c>, or none.</summary>
+    public TPage For(string? prefix)
+    {
+        prefix = (prefix ?? "").TrimEnd('/');
+        lock (gate)
+        {
+            if (pages.TryGetValue(prefix, out var kept))
+            {
+                return kept;
+            }
+        }
+
+        // Built outside the lock: two requests arriving at once under a new prefix build it twice,
+        // which costs less than every request waiting on a hash.
+        var page = build(prefix);
+        lock (gate)
+        {
+            if (pages.Count < most)
+            {
+                pages.TryAdd(prefix, page);
+            }
+        }
+
+        return page;
+    }
+}

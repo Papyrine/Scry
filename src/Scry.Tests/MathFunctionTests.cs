@@ -174,14 +174,35 @@ public class MathFunctionTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        // The promotion applies to arithmetic only: a comparison keeps inferring the constant's type
-        // from the member, which is what lets a bare literal compare against a decimal column.
+        // A comparison keeps inferring a narrower constant's type from the member, which is what lets
+        // a bare literal compare against a decimal column; only a constant written wider than the
+        // member, and not fitting it, widens the member instead — see NumericPromotionTests.
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Amount > 80)
             .Select(_ => new {_.Amount})
             .ToListAsync();
 
         await Assert.That(rows.Select(_ => _.Amount).Order()).IsEquivalentTo([100m, 250m], CollectionOrdering.Matching);
+    }
+
+    // SQL's ROUND rounds a midpoint away from zero and the client drops the mode that says so, while
+    // Math.Round's default rounds a midpoint to even — so an in-memory source once answered a midpoint
+    // differently from a column. A holiday's day of the month halved: the firsts and the twenty-fifth
+    // all land on a midpoint, which away from zero rounds up and to even would have rounded down.
+    [Test]
+    public async Task RoundOverAnInMemorySourceRoundsAwayFromZero()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var whole = await client.Source<Holiday>("Holiday").CountAsync(_ => Math.Round(_.Date.Day / 2m) == 1m);
+        var toADigit = await client.Source<Holiday>("Holiday").CountAsync(_ => Math.Round(_.Date.Day / 4m, 1) == 0.3m);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(whole).IsEqualTo(2).Because("New Year and Workers Day fall on a first, and 0.5 rounds to 1");
+            await Assert.That(toADigit).IsEqualTo(2).Because("0.25 rounds to 0.3");
+        }
     }
 
     static ScryClient ClientFor(TestContext context) =>

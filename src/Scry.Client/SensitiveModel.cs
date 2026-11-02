@@ -83,7 +83,7 @@ static class SensitiveModel
         var described = Describe(model);
         if (path.Count == 0)
         {
-            return described.Sensitive || described.SensitiveMembers.Count > 0;
+            return Marked(described);
         }
 
         for (var i = 0; i < path.Count; i++)
@@ -91,6 +91,13 @@ static class SensitiveModel
             if (described.Sensitive)
             {
                 return true;
+            }
+
+            // The type the path has reached, returned whole: the element of a collection the query
+            // flattened into and never projected. The same question an empty path asks of a source.
+            if (path[i] == SensitiveWalk.AnyMember)
+            {
+                return Marked(described);
             }
 
             if (!described.Members.TryGetValue(path[i], out var property))
@@ -111,10 +118,20 @@ static class SensitiveModel
         return described.Sensitive;
     }
 
+    static bool Marked(Model described) =>
+        described.Sensitive || described.SensitiveMembers.Count > 0;
+
     static bool Unresolved(IReadOnlyList<string> path)
     {
         lock (gate)
         {
+            // A row returned whole off a type this cannot name holds every member of some type. If any
+            // model marks one, it is assumed to be among them.
+            if (path.Contains(SensitiveWalk.AnyMember))
+            {
+                return anyName.Count > 0;
+            }
+
             return path.Any(anyName.Contains);
         }
     }

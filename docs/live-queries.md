@@ -470,7 +470,7 @@ public TimeSpan ChangeProbeInterval { get; set; } = TimeSpan.FromSeconds(1);
 
 Three things report a change, and a fourth covers what none of them can see.
 
-**The change interceptor.** `ScryChangeInterceptor` reports what a `DbContext` saves, by entity, as soon as it can be read: after the save where no transaction is open, and after the commit where one is. A save inside a transaction that rolls back reports nothing. `AddScry` registers it; the host adds it to the contexts that write:
+**The change interceptor.** `ScryChangeInterceptor` reports what a `DbContext` saves, by entity, as soon as it can be read: after the save where no transaction is open, and after the commit where one is. A save inside a transaction that rolls back reports nothing. A transaction the context was handed with `UseTransaction` is committed by its owner, which the context never hears of, so a save inside one is reported at the save: early, costing a run that reads what was there before, rather than never. `AddScry` registers it; the host adds it to the contexts that write:
 
 <!-- snippet: changeInterceptor -->
 <a id='snippet-changeInterceptor'></a>
@@ -656,7 +656,7 @@ public sealed class RepriceOrderHandler(SampleContext data) :
 <sup><a href='/samples/Sample.NServiceBusWorker/RepriceOrderHandler.cs#L2-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusHandler' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-What each incoming message's handlers saved is published once, after they are done, through that message's own context. So the event leaves with the rest of what the handler sent, and only if the handler's work was kept: with the outbox, after its transaction commits. A handler that throws publishes nothing, and one that is retried publishes once.
+What each incoming message's handlers saved is published once, after they are done, through that message's own context. So the event leaves with the rest of what the handler sent, and only if the handler's work was kept: with the outbox, after its transaction commits. That holds for a save inside the outbox's own transaction, handed to the context with `UseTransaction`: the interceptor reports it at the save, the report is held with the message's other outgoing operations, and the outbox dispatches them together once the transaction has committed. A handler that throws publishes nothing, and one that is retried publishes once.
 
 The server hears it through its own endpoint:
 
@@ -777,7 +777,7 @@ A connection that ends is asked for again, and the consumer sees no more than a 
 
 What is asked again after: a connection that was cut or refused to open, a server that failed or was at its limit, and a stream the server ended on purpose. What ends a live query for good is what asking again would not fix: a rejection, a denial, a client the server calls stale. `ScryClient.Reconnect` is the policy — by default at once, then after a second, doubling to thirty, for as long as it takes. A live query that gave up would be a page that went stale without saying so.
 
-The server ends every stream at `SubscriptionLifetime`, thirty minutes by default, or when the authentication ticket that opened it expires if that is sooner. Authorization is decided once per request, and a live query is one request: ending it is what makes a caller prove who they are again.
+The server ends every stream at `SubscriptionLifetime`, thirty minutes by default, or when the authentication ticket that opened it expires if that is sooner. Authorization is decided once per request, and a live query is one request: ending it is what makes a caller prove who they are again. A ticket already expired when the stream is asked for ends it before the query runs. The client is handed no answer, so its reconnect delay grows — where an answer delivered first would have had it ask again at once, running the query on every attempt for as long as the scheme's clock skew kept authenticating the ticket.
 
 Because all of this is meant to be invisible to the consumer, it is also hard to see when it misbehaves. The [debug sidecar](sidecar.md#live-queries) is where to look: it lists a live query as one row across every connection it took to hold it open, and under it every connection and every event — the answers with their identifiers and sizes, the heartbeats, and how each connection finished.
 

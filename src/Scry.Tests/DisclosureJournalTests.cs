@@ -343,6 +343,35 @@ public class DisclosureJournalTests
         }
     }
 
+    // A host waiting for the journal to catch up, with no time limit of its own, is let go when the
+    // journal closes under it: told that it will not catch up in this process, rather than left
+    // waiting on a shipper that has stopped. Asked again afterwards, the journal says so at once.
+    [Test]
+    public async Task WaitingToCatchUpEndsWhenTheJournalCloses()
+    {
+        using var directory = new JournalDirectory();
+        var behind = new SwitchedSink(new ScryMemoryDisclosureStore())
+        {
+            Down = true
+        };
+        var journal = new ScryDisclosureJournal(directory.Path, behind, Quick());
+        await journal.AppendAsync(Batch(0), Cancel.None);
+        var draining = journal.DrainAsync();
+
+        await journal.DisposeAsync();
+
+        var ended = await Assert.ThrowsExactlyAsync<ScryDisclosureException>(() => draining.WaitAsync(patience));
+        var refused = await Assert.ThrowsExactlyAsync<ScryDisclosureException>(() => journal.DrainAsync());
+        using (Assert.Multiple())
+        {
+            await Assert.That(ended!.Message).Contains("closed before the sink behind it had accepted");
+            await Assert.That(refused!.Message).Contains("closed before the sink behind it had accepted");
+
+            // What it held is where the next process finds it.
+            await Assert.That(directory.Segments()).Count().IsEqualTo(1);
+        }
+    }
+
     // Closed, the journal accepts nothing, and says so rather than taking a record it will not keep.
     [Test]
     public async Task AClosedJournalAcceptsNothing()

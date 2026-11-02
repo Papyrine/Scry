@@ -8,7 +8,8 @@ namespace Scry;
 /// any other, so the translator folds what the query takes from them into constants.
 /// A trailing terminal operator (e.g. <c>.ToListAsync()</c>, <c>.FirstAsync()</c>,
 /// <c>.CountAsync()</c>, or plain LINQ <c>.ToList()</c>) is recognised and folded into the wire
-/// request as its <see cref="QueryOp"/> terminal.
+/// request as its <see cref="QueryOp"/> terminal; one the client unfolds into other operators
+/// (<c>MaxByAsync</c>, <c>ElementAtAsync</c>) is unfolded the same way.
 /// </summary>
 public sealed class SnippetExecutor
 {
@@ -95,7 +96,7 @@ public sealed class SnippetExecutor
         var result = compilation.Emit(stream);
         if (!result.Success)
         {
-            throw new($"Could not compile the query: {Errors(result)}");
+            throw new($"Could not compile the query: {Errors(result.Diagnostics)}");
         }
 
         stream.Position = 0;
@@ -141,7 +142,7 @@ public sealed class SnippetExecutor
         var result = compilation.Emit(stream);
         if (!result.Success)
         {
-            throw new($"Could not compile the query models: {Errors(result)}");
+            throw new($"Could not compile the query models: {Errors(result.Diagnostics)}");
         }
 
         var image = stream.ToArray();
@@ -149,10 +150,10 @@ public sealed class SnippetExecutor
         return MetadataReference.CreateFromImage(image);
     }
 
-    static string Errors(EmitResult result) =>
+    static string Errors(IEnumerable<Diagnostic> diagnostics) =>
         string.Join(
             "; ",
-            result.Diagnostics
+            diagnostics
                 .Where(_ => _.Severity == DiagnosticSeverity.Error)
                 .Take(3)
                 .Select(_ => _.GetMessage()));
@@ -179,6 +180,8 @@ public sealed class SnippetExecutor
     // selectors, element selectors, comparers) reshape the result client-side and do not affect the
     // request, so these are stripped regardless of argument count. Both the Scry async terminals (the
     // real client API) and the plain-LINQ equivalents are accepted, so habitual `.ToList()` works too.
+    // ToAsyncEnumerable sends the request ToListAsync sends and reads the answer from the streaming
+    // endpoint instead; the explorer has no stream to read, so it is the list.
     static HashSet<string> collectionTerminals =
     [
         with(StringComparer.Ordinal),
@@ -191,9 +194,42 @@ public sealed class SnippetExecutor
         "ToDictionaryAsync",
         "ToDictionary",
         "ToLookupAsync",
-        "ToLookup" // ToAsyncEnumerable is intentionally absent: streaming is not supported yet (the client
-        // terminal throws), so the explorer must not fold it into a valid list request either.
+        "ToLookup",
+        "ToAsyncEnumerable"
     ];
+
+    // Terminals the client unfolds into an ordering and a First rather than sending as their own
+    // operator: the ordering each is, and the First it ends in. Unfolded here the same way, so the
+    // request is the one the client would send.
+    static Dictionary<string, (string Ordering, string First)> orderedTerminals = Unfolded(
+        ("MaxBy", "OrderByDescending", first),
+        ("MaxByOrDefault", "OrderByDescending", firstOrDefault),
+        ("MinBy", "OrderBy", first),
+        ("MinByOrDefault", "OrderBy", firstOrDefault));
+
+    // Terminals the client unfolds into a Skip and a First: ElementAt, and the First it ends in.
+    static Dictionary<string, (string Ordering, string First)> elementTerminals = Unfolded(
+        ("ElementAt", "Skip", first),
+        ("ElementAtOrDefault", "Skip", firstOrDefault));
+
+    const string first = "new global::Scry.FirstOp(false, null)";
+    const string firstOrDefault = "new global::Scry.FirstOp(true, null)";
+
+    // The page terminal, which has a wire operator of its own and takes its size and cursor as plain
+    // arguments rather than lambdas.
+    const string pageTerminal = "ToPageAsync";
+
+    static Dictionary<string, (string Ordering, string First)> Unfolded(params (string Name, string Ordering, string First)[] terminals)
+    {
+        var unfolded = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
+        foreach (var (name, ordering, terminal) in terminals)
+        {
+            unfolded[name] = (ordering, terminal);
+            unfolded[name + "Async"] = (ordering, terminal);
+        }
+
+        return unfolded;
+    }
 
     // Scalar and element terminals, and the wire operator each is, from the lambda it was written
     // with where it takes one: a predicate, or an aggregate's selector. Null where it was written
@@ -213,8 +249,8 @@ public sealed class SnippetExecutor
             terminals[name + "Async"] = (bare, op);
         }
 
-        Add("First", "new global::Scry.FirstOp(false, null)", _ => new FirstOp(false, _));
-        Add("FirstOrDefault", "new global::Scry.FirstOp(true, null)", _ => new FirstOp(true, _));
+        Add("First", first, _ => new FirstOp(false, _));
+        Add("FirstOrDefault", firstOrDefault, _ => new FirstOp(true, _));
         Add("Single", "new global::Scry.SingleOp(false, null)", _ => new SingleOp(false, _));
         Add("SingleOrDefault", "new global::Scry.SingleOp(true, null)", _ => new SingleOp(true, _));
         Add("Last", "new global::Scry.LastOp(false, null)", _ => new LastOp(false, _));
@@ -230,21 +266,35 @@ public sealed class SnippetExecutor
         return terminals;
     }
 
-    // What a trailing terminal leaves for the runner: the queryable before it, the terminal's name,
-    // and the text of the lambda it was written with, where it was.
-    readonly record struct Rewritten(string Expression, string? Terminal, string? Argument);
+    // What a trailing terminal leaves for the runner: the queryable before it, the wire terminal as
+    // the runner writes it (null where the result is a list), and — for a terminal written with a
+    // lambda — the terminal's name and the lambda's text, which only the client's translator can read.
+    readonly record struct Rewritten(string Expression, string? Terminal, string? Named = null, string? Argument = null);
 
     /// <summary>
     /// Splits a trailing terminal operator off the user's expression: returns the underlying queryable
-    /// expression and its wire terminal op ("" means enumerate to a list). A trailing ';' and a leading
-    /// 'await' are tolerated. The terminal is stripped rather than executed — synchronous enumeration
-    /// (e.g. plain <c>.ToList()</c>) would deadlock on the single-threaded WASM runtime. Anything that
-    /// is not a recognised terminal is left intact (i.e. translated as a list).
+    /// expression and its wire terminal op (null means enumerate to a list). A trailing ';' and a
+    /// leading 'await' are tolerated. The terminal is stripped rather than executed — synchronous
+    /// enumeration (e.g. plain <c>.ToList()</c>) would deadlock on the single-threaded WASM runtime.
+    /// A terminal the client unfolds — <c>MaxByAsync</c> into an ordering and a First,
+    /// <c>ElementAtAsync</c> into a Skip and a First — is unfolded onto the queryable the same way.
+    /// Anything that is not a recognised terminal is left intact (i.e. translated as a list).
     /// </summary>
     static Rewritten Rewrite(string code)
     {
         var cleaned = code.TrimEnd().TrimEnd(';').TrimEnd();
         var expression = SyntaxFactory.ParseExpression(cleaned);
+
+        // The parser reads as far as it can and keeps the rest as skipped trivia, which ToString()
+        // leaves out: unchecked, a snippet with a parenthesis too many would run as the prefix that
+        // parsed, and a terminal past the break would be dropped with it. Refused as the printer and
+        // the builder refuse the same text.
+        if (expression.GetDiagnostics().Any(_ => _.Severity == DiagnosticSeverity.Error) ||
+            expression.FullSpan.End != cleaned.Length)
+        {
+            throw new($"Could not compile the query: {Errors(expression.GetDiagnostics())}");
+        }
+
         if (expression is AwaitExpressionSyntax awaited)
         {
             expression = awaited.Expression;
@@ -257,12 +307,13 @@ public sealed class SnippetExecutor
         {
             var name = member.Name.Identifier.ValueText;
             var arguments = invocation.ArgumentList.Arguments;
+            var source = member.Expression.ToString();
 
             // Collection terminals enumerate to a list; their arguments (selectors/comparers) are
             // client-side shaping and do not change the wire request, so strip whatever the arity.
             if (collectionTerminals.Contains(name))
             {
-                return new(member.Expression.ToString(), null, null);
+                return new(source, null);
             }
 
             // A scalar terminal with no lambda, or with the one lambda it takes: a predicate narrows
@@ -272,18 +323,58 @@ public sealed class SnippetExecutor
                 if (arguments.Count == 0 &&
                     terminal.Bare is not null)
                 {
-                    return new(member.Expression.ToString(), name, null);
+                    return new(source, terminal.Bare);
                 }
 
                 if (arguments is [{Expression: LambdaExpressionSyntax lambda}])
                 {
-                    return new(member.Expression.ToString(), name, lambda.ToString());
+                    return new(source, null, name, lambda.ToString());
                 }
+            }
+
+            // The key selector or the index is written onto the queryable, where ToScryRequest
+            // translates it as it translates any OrderBy or Skip; only the First is the terminal.
+            if (orderedTerminals.TryGetValue(name, out var ordered))
+            {
+                if (arguments is not [{ } key])
+                {
+                    throw Unfoldable(name, "one argument, its key selector");
+                }
+
+                return new($"{source}.{ordered.Ordering}({key.Expression})", ordered.First);
+            }
+
+            if (elementTerminals.TryGetValue(name, out var element))
+            {
+                if (arguments is not [{ } index])
+                {
+                    throw Unfoldable(name, "one argument, the index");
+                }
+
+                return new($"{source}.{element.Ordering}({index.Expression})", element.First);
+            }
+
+            // A page's size and cursor are values, not lambdas, so they are written into the operator
+            // as they were written into the call, and evaluated where the runner runs.
+            if (name == pageTerminal)
+            {
+                if (arguments.Count > 2)
+                {
+                    throw Unfoldable(name, "at most two arguments, the page size and the cursor");
+                }
+
+                var values = string.Join(", ", arguments.Select(_ => _.Expression.ToString()));
+                return new(source, $"new global::Scry.PageOp({values})");
             }
         }
 
-        return new(expression.ToString(), null, null);
+        return new(expression.ToString(), null);
     }
+
+    // A terminal the explorer knows and cannot unfold as it was written. Named, so the banner says
+    // which call it is about rather than what the runner failed to compile around it.
+    static Exception Unfoldable(string name, string takes) =>
+        new($"Could not compile the query: {name} takes {takes}.");
 
     // A terminal with a lambda is written as a CountOp, and replaced once the runner has run: the
     // runner cannot reach the translator that reads its lambda, and a CountOp shapes the pipeline before
@@ -291,16 +382,12 @@ public sealed class SnippetExecutor
     // a helper that takes the element type from the queryable and the result from the lambda.
     static string Wrap(string preamble, Rewritten rewritten)
     {
-        var terminal = "";
+        var terminal = rewritten.Terminal ?? "";
         var lambda = "";
         if (rewritten.Argument is { } argument)
         {
             terminal = "new global::Scry.CountOp()";
             lambda = $"Lambda = Typed(scrySource, {argument});";
-        }
-        else if (rewritten.Terminal is { } name)
-        {
-            terminal = scalarTerminals[name].Bare!;
         }
 
         return $$"""
@@ -332,7 +419,7 @@ public sealed class SnippetExecutor
     // The request the runner made, with the terminal it stood in for put in its place.
     static QueryRequest Terminated(QueryRequest request, Rewritten rewritten, Type runner)
     {
-        if (rewritten is not {Terminal: { } name, Argument: not null} ||
+        if (rewritten is not {Named: { } name, Argument: not null} ||
             runner.GetField("Lambda")!.GetValue(null) is not System.Linq.Expressions.LambdaExpression lambda)
         {
             return request;

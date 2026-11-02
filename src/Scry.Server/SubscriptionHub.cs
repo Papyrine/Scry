@@ -24,6 +24,17 @@ sealed class SubscriptionHub(ScryOptions options, ScryChanges changes)
     /// </summary>
     public SubscriptionLease Enter(string? caller, IServiceProvider services)
     {
+        // The probe is asked from a scope of its own, which only a real container can make. Refused
+        // for every live query handed a provider without one, not only the one that would start the
+        // probe, so the same call always has the same answer — and never run without the probe, which
+        // would be a live query that misses what the host said it would see.
+        if (options.ChangeProbe is not null &&
+            services.GetService<IServiceScopeFactory>() is null)
+        {
+            throw new InvalidOperationException(
+                $"ScryOptions.{nameof(options.ChangeProbe)} is set, and the probe runs in a service scope of its own, which this service provider cannot make. Subscribe through the overload that takes an IServiceProvider — ScryProcessor.Subscribe(request, data, services, cancel) — and hand it the host's.");
+        }
+
         SubscriptionLease lease;
         lock (gate)
         {
@@ -110,11 +121,11 @@ sealed class SubscriptionHub(ScryOptions options, ScryChanges changes)
         changes.Attach(services);
         listening = changes.Listen(Offer);
 
-        if (options.ChangeProbe is { } probe &&
-            services.GetService<IServiceScopeFactory>() is { } scopes)
+        // Enter refused any provider that could not supply the factory before this was reached.
+        if (options.ChangeProbe is { } probe)
         {
             probing = new();
-            _ = Probe(probe, scopes, probing.Token);
+            _ = Probe(probe, services.GetRequiredService<IServiceScopeFactory>(), probing.Token);
         }
     }
 

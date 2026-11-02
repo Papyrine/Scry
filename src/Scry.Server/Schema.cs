@@ -84,8 +84,9 @@ sealed partial class Schema
 
     /// <summary>
     /// The sources whose rows may depend on who asked, each with why: one carrying a row or
-    /// attachment policy, and a POCO source supplied by a factory, which is given the request's
-    /// services. Ordered by name so a startup message names the same one every run.
+    /// attachment policy, one carrying a capability a command policy decides, and a POCO source
+    /// supplied by a factory, which is given the request's services. Ordered by name so a startup
+    /// message names the same one every run.
     /// </summary>
     internal IEnumerable<CallerDependence> CallerDependentSources
     {
@@ -98,6 +99,10 @@ sealed partial class Schema
                 {
                     yield return new(source.Name, "carries a policy, so its rows depend on who asked", Hint: null);
                 }
+                else if (CarriesPoliciedCapability(source))
+                {
+                    yield return new(source.Name, "carries a capability decided by a command policy, so its rows depend on who asked", Hint: null);
+                }
                 else if (source.FactorySupplied)
                 {
                     yield return new(
@@ -108,6 +113,16 @@ sealed partial class Schema
             }
         }
     }
+
+    // A capability is decided per call by its command's policy — false where Allow refuses the caller,
+    // the policy's Rows read against the row where it has them — so the same row reads differently
+    // for two callers, with nothing in the URL to say which asked. One with no policy is true for
+    // everyone, and asks nothing of the caller.
+    bool CarriesPoliciedCapability(ScrySource source) =>
+        types[source.ClrType].Members.Values
+            .Any(_ => _.Kind == MemberKind.Capability &&
+                      commands.TryGetValue(_.Command!, out var command) &&
+                      command.Policy is not null);
 
     /// <summary>
     /// Maps an enum value name off the wire to its current name, translating one a client was
@@ -680,11 +695,17 @@ sealed partial class Schema
             }
         }
 
+        // A member a derived type hides with `new` is described once, on the base, and the generated
+        // derived model inherits it as the base declares it. One redeclared with another type would
+        // then be read by a client as the base's type and answered by the server as the derived one's,
+        // so it is refused here; the generator refuses the same shape.
+        EnsureHidingKeepsTheType(schema);
+
         // Pass 1c: build the cached policies' adapters, which need the member metadata above to derive
         // the key their answers are remembered by. One adapter per registration however many sources
         // carry it, since what it holds — the answers, and the gate serializing the work to produce
         // them — is exactly what those sources have to share.
-        var cached = BuildCachedPolicies(schema, options);
+        var cached = BuildCachedPolicies(schema, options, found);
 
         // Resolved here rather than during discovery: a cached policy's adapter is part of the chain,
         // and building one needs the metadata that pass 1 produced.
@@ -716,6 +737,13 @@ sealed partial class Schema
                 schema.policiedSources[type] = source;
             }
         }
+
+        // A query model is named after its CLR type, so two opted-in types of one name — sources under
+        // distinct wire names, or complex types, in two namespaces — would be one model generated
+        // twice, which the generator refuses: no client could be built against this server, and the
+        // described types would have no one order. After the source names, so two same-named types
+        // with no Name of their own are still reported as the duplicate source they also are.
+        EnsureTypeNamesDistinct(queryableTypes);
 
         // Pass 2b: derive the key every attachment is fetched by. Deferred until the member metadata
         // and base links exist, since a key declared on a base is still the derived row's.
@@ -849,8 +877,80 @@ sealed partial class Schema
             $"Source name '{name}' on '{type.Name}' cannot be written as a C# property name. A source name is also the property the generated client and the explorer expose it as, so it has to be one C# can express. Set [Queryable(Name = \"...\")] to a plain identifier that is not a reserved keyword.");
     }
 
+    // Read through the override chain, as the other member attributes are: an override is the member
+    // the declaration it overrides renamed.
     static IReadOnlyList<string> PreviousNamesOf(MemberInfo member) =>
         member.GetCustomAttribute<PreviousNamesAttribute>()?.Names ?? [];
+
+    // Declared-only for a type, like every other opt-in read here: a derived source has a wire name of
+    // its own, so a base's previous names are the base's. Read inheritably, a type would claim every
+    // name a base it derives from used to answer to, and two opted-in types would claim each one.
+    static IReadOnlyList<string> PreviousNamesOf(Type type) =>
+        type.GetCustomAttribute<PreviousNamesAttribute>(inherit: false)?.Names ?? [];
+
+    /// <summary>
+    /// Refuses two opted-in types — sources or complex types — sharing a simple name, as
+    /// <see cref="DescribedEnums"/> refuses two enums: every query model is emitted into one namespace
+    /// under <c>{Type}QueryModel</c>, so two types of one name would be one model twice.
+    /// </summary>
+    static void EnsureTypeNamesDistinct(HashSet<Type> queryableTypes)
+    {
+        var clash = queryableTypes
+            .GroupBy(_ => _.Name, StringComparer.Ordinal)
+            .Where(_ => _.Count() > 1)
+            .OrderBy(_ => _.Key, StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (clash is null)
+        {
+            return;
+        }
+
+        var names = clash
+            .Select(_ => _.FullName)
+            .OrderBy(_ => _, StringComparer.Ordinal)
+            .ToList();
+        throw new($"The types '{names[0]}' and '{names[1]}' are both opted in and share the name '{clash.Key}'. A client is generated with a query model per opted-in type, named '{clash.Key}QueryModel' after the type, so two types of one name would be one model twice. Rename one.");
+    }
+
+    /// <summary>
+    /// Refuses a member an opted-in type declares with <c>new</c> over an opted-in base's member of
+    /// another type. The derived model is generated inheriting the base's, so the member is described
+    /// once, as the base declares it; the server would read the derived declaration. Compared by the
+    /// display the client is generated with, which is what the two sides have to agree on.
+    /// </summary>
+    static void EnsureHidingKeepsTheType(Schema schema)
+    {
+        foreach (var meta in schema.types.Values.OrderBy(_ => _.ClrType.Name, StringComparer.Ordinal))
+        {
+            if (meta.Base is not { } clrBase ||
+                !schema.types.TryGetValue(clrBase, out var baseMeta))
+            {
+                continue;
+            }
+
+            foreach (var member in meta.Members.Values.OrderBy(_ => _.Name, StringComparer.Ordinal))
+            {
+                if (!baseMeta.Members.TryGetValue(member.Name, out var hidden))
+                {
+                    continue;
+                }
+
+                var display = Display(member);
+                var hiddenDisplay = Display(hidden);
+                if (display == hiddenDisplay)
+                {
+                    continue;
+                }
+
+                throw new($"'{meta.ClrType.Name}.{member.Name}' hides '{clrBase.Name}.{member.Name}' with another type: '{display}' over '{hiddenDisplay}'. Both types are opted in, and a generated {meta.ClrType.Name}QueryModel inherits the member from {clrBase.Name}QueryModel as the base declares it, so a client would read it as '{hiddenDisplay}' where the server answers with '{display}'. Declare the member with one type along the hierarchy, or rename the one on '{meta.ClrType.Name}'.");
+            }
+        }
+    }
+
+    // How a member is spelled in generated code, asked of one member alone: the enums it reaches are
+    // collected into a scratch list and dropped.
+    static string Display(Member member) =>
+        DescribeShape(member, new()).TypeDisplay;
 
     void RegisterSourcePreviousNames(Type type, ScrySource source)
     {
@@ -948,7 +1048,38 @@ sealed partial class Schema
         }
 
         ValidateAttachmentKeys(model, contextType);
+        ValidateCachedPolicyKeys(model, contextType);
         ValidateCommandKeys(model, contextType);
+    }
+
+    /// <summary>
+    /// Confirms the key each cached policy files its answers under is the key EF really gives the
+    /// entity — the check an attachment's key gets, for the same reason: the derivation reads <c>[Key]</c>
+    /// and the naming conventions, never <c>OnModelCreating</c>. Filed under a member that is not the
+    /// row's identity, an answer made for one row would stand for every row sharing the value.
+    /// </summary>
+    void ValidateCachedPolicyKeys(IModel model, Type contextType)
+    {
+        foreach (var registration in cachedPolicies)
+        {
+            if (model.FindEntityType(registration.Entity) is not { } entity)
+            {
+                continue;
+            }
+
+            // Derived to exactly one member at build, which is what let the registration be made.
+            var derived = DeriveKeys(types[registration.Entity]).Single().Name;
+            var actual = entity.FindPrimaryKey()?.Properties.Select(_ => _.Name).ToList() ?? [];
+            if (actual is [var only] &&
+                only == derived)
+            {
+                continue;
+            }
+
+            var entityName = registration.Entity.Name;
+            var describe = actual.Count == 0 ? "no primary key" : $"a primary key of ({string.Join(", ", actual)})";
+            throw new($"Cached row policy '{registration.Policy.Name}' files its answers for '{entityName}' under a key derived as '{derived}', but {contextType.Name} gives '{entityName}' {describe}. The derivation reads [Key] and the 'Id'/'{entityName}Id' conventions, as a client's does, and never sees OnModelCreating — so a fluently configured key cannot be found there. Mark the key member with [Key] to state it where both can read it; an entity whose real key has several members cannot carry a cached policy.");
+        }
     }
 
     /// <summary>
@@ -1321,18 +1452,41 @@ sealed partial class Schema
     /// applies, holding the store its answers live in and the accessors for the key they are remembered
     /// by and the version that says a row needs deciding again.
     /// </summary>
-    static Dictionary<Type, PolicyUse> BuildCachedPolicies(Schema schema, ScryOptions options)
+    static Dictionary<Type, PolicyUse> BuildCachedPolicies(
+        Schema schema,
+        ScryOptions options,
+        List<(Type Type, string Name, SourceKind Kind)> found)
     {
         Dictionary<Type, PolicyUse> adapters = [];
+        var kinds = found.ToDictionary(_ => _.Type, _ => _.Kind);
+
+        // The store files a policy's answers under the policy type's name, so one type registered
+        // against two entities would file both under one record: the entity registered first.
+        Dictionary<Type, Type> filing = [];
         foreach (var (entity, (policy, version, handling)) in options.CachedPolicies)
         {
             // A cached policy filters a source, and a type that is not one has no rows for it to
             // decide about — the same reason an ordinary policy on a complex type is refused.
-            if (!schema.types.TryGetValue(entity, out var meta))
+            if (!kinds.TryGetValue(entity, out var kind))
             {
                 throw new($"Cached row policy '{policy.Name}' is registered against '{entity.Name}', which is not an opted-in source. Attach it to a [Queryable] type.");
             }
 
+            // Answers are filed per row under its primary key, and the rows owed one are read back from
+            // the context's set — which a POCO has no table for, and a keyless view no key for. Either
+            // would start, and then fault on the first query to read it.
+            if (kind != SourceKind.Entity)
+            {
+                throw new($"Cached row policy '{policy.Name}' is registered against '{entity.Name}', a {kind.ToString().ToLowerInvariant()} source. Answers are filed per row under its primary key and the rows owed one are read back from the context's set, which a POCO has no table for and a keyless view no key for. Attach it to a [Queryable] entity.");
+            }
+
+            if (!filing.TryAdd(policy, entity))
+            {
+                var first = filing[policy];
+                throw new($"Cached row policy '{policy.Name}' is registered against both '{first.Name}' and '{entity.Name}'. Answers are filed in the store under the policy type's name, so the two registrations would share one record, and one entity's allowed keys and watermark would stand for the other's. Derive a subclass per entity — sealed class {entity.Name}{policy.Name} : {policy.Name} — and register each against its own.");
+            }
+
+            var meta = schema.types[entity];
             var keys = DeriveKeys(meta);
             if (keys.Count != 1)
             {
@@ -1498,9 +1652,12 @@ sealed partial class Schema
     /// The element type of a collection member, or null when the type is not a collection. A string is
     /// excluded deliberately — it is <c>IEnumerable&lt;char&gt;</c> and is always a scalar here.
     /// </summary>
-    // Answered once per type: the walk below reflects over the type's interfaces, and the builder
-    // asks about the same declared collection types on every request that flattens or aggregates one.
-    static readonly ConcurrentDictionary<Type, Type?> collectionElements = new();
+    // Answered once per type, for a bounded number of them: the walk below reflects over the type's
+    // interfaces, and the builder asks about the same declared collection types on every request that
+    // flattens or aggregates one. Bounded because a composition asks about the type of every call it
+    // composes, and a deduplicated or set query's is a row type closed over whatever the request
+    // projected — one more for every shape a client thinks of.
+    static BoundedTypeCache<Type?> collectionElements = new(1024);
 
     public static Type? CollectionElement(Type type) =>
         collectionElements.GetOrAdd(type, FindCollectionElement);
@@ -1955,10 +2112,19 @@ sealed partial class Schema
     public static bool IsScalar(Type type)
     {
         var underlying = Nullable.GetUnderlyingType(type) ?? type;
-        if (underlying.IsEnum ||
-            underlying.IsPrimitive)
+        if (underlying.IsEnum)
         {
             return true;
+        }
+
+        // nint and nuint are primitive to reflection, but a value as wide as the machine's word has
+        // no one spelling a client could be generated with, and the generator's keyword map — the
+        // other half of this list, MetadataModelReader.PrimitiveKeyword — has no case for them. Exposed
+        // here alone, every client would report itself stale.
+        if (underlying.IsPrimitive)
+        {
+            return underlying != typeof(IntPtr) &&
+                   underlying != typeof(UIntPtr);
         }
 
         return underlying == typeof(string) ||

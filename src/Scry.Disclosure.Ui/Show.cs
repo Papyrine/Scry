@@ -119,17 +119,26 @@ static class Show
     /// <summary>What a time field shows before anything is typed in it: the one form it reads.</summary>
     public const string TimeHint = "2026-03-01 09:00";
 
+    /// <summary>What a <c>To</c> field says of itself: a date alone in it means the whole of that day.</summary>
+    public const string ToHint = "A date alone is the whole of that day.";
+
     // A date, or a date and a time, written the one way that means the same wherever it is read. A
     // field the browser draws would show it in the reader's own order of day and month, under a
-    // heading that says UTC, and be read differently by two people looking at one link.
+    // heading that says UTC, and be read differently by two people looking at one link. The last form
+    // is the one an address carries a day's last instant in.
     static string[] forms =
     [
         "yyyy-MM-dd",
         "yyyy-MM-dd HH:mm",
         "yyyy-MM-dd HH:mm:ss",
         "yyyy-MM-ddTHH:mm",
-        "yyyy-MM-ddTHH:mm:ss"
+        "yyyy-MM-ddTHH:mm:ss",
+        "yyyy-MM-ddTHH:mm:ss.FFFFFFF"
     ];
+
+    // The last instant of a day, which is what a bare date means as a To bound: both bounds are
+    // inclusive, so the day's first instant would leave the day out.
+    static TimeSpan dayEnd = TimeSpan.FromDays(1) - TimeSpan.FromTicks(1);
 
     /// <summary>
     /// The instant a typed time names, or null where it names none: nothing typed, or something this
@@ -154,6 +163,29 @@ static class Show
     public static string? Stamp(string? typed) =>
         Instant(typed)?.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// A typed <c>To</c> bound as an address carries it. A date alone means the whole of that day, so
+    /// it is carried as the day's last instant; anything else is carried as <see cref="Stamp"/> carries it.
+    /// </summary>
+    public static string? StampTo(string? typed)
+    {
+        if (Instant(typed) is not { } instant)
+        {
+            return null;
+        }
+
+        if (IsDate(typed))
+        {
+            return instant.Add(dayEnd).ToString("yyyy-MM-ddTHH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture);
+        }
+
+        return Stamp(typed);
+    }
+
+    // Whether what was typed is a date alone.
+    static bool IsDate(string? typed) =>
+        DateTime.TryParseExact((typed ?? "").Trim(), forms[0], CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+
     /// <summary>What an address carries as a time, as its field shows it: to the minute, unless it has seconds.</summary>
     public static string Typed(string? stamp)
     {
@@ -168,5 +200,20 @@ static class Show
         }
 
         return instant.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// What an address carries as a <c>To</c> bound, as its field shows it: a day's last instant is
+    /// the date alone that meant it, and anything else is as <see cref="Typed"/> shows it.
+    /// </summary>
+    public static string TypedTo(string? stamp)
+    {
+        if (Instant(stamp) is { } instant &&
+            instant.TimeOfDay == dayEnd)
+        {
+            return instant.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
+        return Typed(stamp);
     }
 }

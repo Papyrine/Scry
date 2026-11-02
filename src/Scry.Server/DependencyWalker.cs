@@ -13,6 +13,12 @@
 /// needed to be.
 /// </para>
 /// <para>
+/// A global query filter is not in the expression either — EF applies it as it compiles the query,
+/// after this has read it — so each type's filters are read here from the model, as the query will
+/// have them: a filter that reaches another type through a navigation, or reads another set outright,
+/// makes that type one the query depends on.
+/// </para>
+/// <para>
 /// What this cannot see is what is not in the expression: a policy that loaded a list in C# and
 /// filters by it, or answers by a claim or the clock. Nothing reported reaches those, which is what a
 /// live query's poll is for.
@@ -23,6 +29,10 @@ sealed class DependencyWalker(IModel model) :
 {
     HashSet<string> names = [with(StringComparer.Ordinal)];
     bool unknown;
+
+    // The types whose filters have been read, so a filter on one type reaching another whose filter
+    // reaches the first is read once each rather than for ever.
+    HashSet<IReadOnlyEntityType> filtered = [];
 
     public static IReadOnlySet<string>? Read(IModel model, IEnumerable<Expression?> expressions)
     {
@@ -52,14 +62,25 @@ sealed class DependencyWalker(IModel model) :
     public override Expression? Visit(Expression? node)
     {
         // A set reached some other way than as a query root: a policy that captured db.Grants in a
-        // closure shows up as a member typed DbSet<Grant>, which EF only turns into a root later.
+        // closure, or a filter reading another of the context's sets, shows up as a member typed
+        // DbSet<Grant>, which EF only turns into a root later.
         if (node is not null &&
             node is not QueryRootExpression &&
             ElementOfQueryable(node.Type) is { } element)
         {
+            var mapped = false;
             foreach (var type in model.FindEntityTypes(element))
             {
                 Add(type);
+                mapped = true;
+            }
+
+            // A query held in a field and typed over a shape no entity has — a projection built ahead
+            // of time — reads tables its tree would name, and its tree is not here to be read.
+            if (!mapped &&
+                node is MemberExpression)
+            {
+                unknown = true;
             }
         }
 
@@ -143,6 +164,22 @@ sealed class DependencyWalker(IModel model) :
         }
 
         names.Add(EntityNames.Root(type));
+        Filters(type.GetRootType());
+    }
+
+    // What EF adds to every query of the type as it compiles it, read off the root: a filter may only
+    // be declared there, and every type under it is read through it.
+    void Filters(IReadOnlyEntityType root)
+    {
+        if (!filtered.Add(root))
+        {
+            return;
+        }
+
+        foreach (var filter in root.GetDeclaredQueryFilters())
+        {
+            Visit(filter.Expression);
+        }
     }
 
     // Read by name: the mapping annotations are the relational package's, which this assembly does not

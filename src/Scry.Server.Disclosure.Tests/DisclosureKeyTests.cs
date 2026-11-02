@@ -152,6 +152,56 @@ public class DisclosureKeyTests
         }
     }
 
+    // The explorer has no model to say what type a key is, so a piece of text is read as every
+    // spelling it could be: as typed, then as the server writes what it parses as — a GUID in
+    // lowercase with hyphens, a date in ISO form, with its zone where one was typed. A key of several
+    // values is every combination. Text that parses as nothing else is one spelling, and so is a GUID
+    // already spelled as the record spells it.
+    [Test]
+    [Arguments("3F2504E0-4F89-11D3-9A0C-0305E82C3301", "[\"3F2504E0-4F89-11D3-9A0C-0305E82C3301\"] [\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"]")]
+    [Arguments("{3f2504e0-4f89-11d3-9a0c-0305e82c3301}", "[\"{3f2504e0-4f89-11d3-9a0c-0305e82c3301}\"] [\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"]")]
+    [Arguments("3f2504e0-4f89-11d3-9a0c-0305e82c3301", "[\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"]")]
+    [Arguments("2026-03-01 09:00:00", "[\"2026-03-01 09:00:00\"] [\"2026-03-01T09:00:00\"]")]
+    [Arguments("2026-03-01 09:00", "[\"2026-03-01 09:00\"] [\"2026-03-01T09:00:00\"]")]
+    [Arguments("2026-03-01", "[\"2026-03-01\"] [\"2026-03-01T00:00:00\"]")]
+    [Arguments("2026-03-01T09:00:00Z", "[\"2026-03-01T09:00:00Z\"] [\"2026-03-01T09:00:00+00:00\"]")]
+    [Arguments("2026-03-01T09:00:00+02:00", "[\"2026-03-01T09:00:00\\u002B02:00\"] [\"2026-03-01T09:00:00+02:00\"]")]
+    [Arguments("\"A\", \"2026-03-01 09:00\"", "[\"A\",\"2026-03-01 09:00\"] [\"A\",\"2026-03-01T09:00:00\"]")]
+    [Arguments("North", "[\"North\"]")]
+    [Arguments("\"2026\"", "[\"2026\"]")]
+    [Arguments("5", "[5]")]
+    public async Task AKeyIsReadAsEverySpellingItCouldBe(string typed, string spelled) =>
+        await Assert.That(string.Join(' ', Spelled(typed).Select(ScryDisclosureEntity.KeyOf))).IsEqualTo(spelled);
+
+    // The key typed again is the key where the two share a spelling: a GUID typed in one case and
+    // confirmed in the other is one key, and another value is not.
+    [Test]
+    public async Task AKeyTypedAgainIsTheKeyWhereTheTwoShareASpelling()
+    {
+        var upper = Spelled("3F2504E0-4F89-11D3-9A0C-0305E82C3301");
+        var lower = Spelled("3f2504e0-4f89-11d3-9a0c-0305e82c3301");
+        var bracketed = Spelled("[1]");
+        var bare = Spelled("1");
+        var other = Spelled("2");
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(DisclosureKeys.Same(upper, lower)).IsTrue();
+            await Assert.That(DisclosureKeys.Same(bracketed, bare)).IsTrue();
+            await Assert.That(DisclosureKeys.Same(bare, other)).IsFalse();
+        }
+    }
+
+    static IReadOnlyList<IReadOnlyList<object?>> Spelled(string typed)
+    {
+        if (!DisclosureKeys.TryRead(typed, out var spellings))
+        {
+            throw new($"'{typed}' is not a key.");
+        }
+
+        return spellings;
+    }
+
     // A processor over the clinic with the audit on, recording to a store of its own.
     static (ScryProcessor Processor, ScryMemoryDisclosureStore Store) Audited(Action<ScryDisclosureOptions>? configure = null)
     {

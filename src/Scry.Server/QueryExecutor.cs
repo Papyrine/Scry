@@ -324,7 +324,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     // stream reads its rows through here once per request, and a reflective invoke would box the
     // cancellation and build an argument array for each. The typed method takes the untyped query and
     // casts inside, since a delegate cannot bind an IQueryable argument to an IQueryable<T> parameter.
-    static ConcurrentDictionary<Type, Func<IQueryable, Cancel, IAsyncEnumerable<object>>> enumerators = new();
+    // Bounded, because the element type is one the request chose: a deduplicated projection closes a
+    // row type over whatever member types it names.
+    static BoundedTypeCache<Func<IQueryable, Cancel, IAsyncEnumerable<object>>> enumerators = new(1024);
 
     static MethodInfo enumerateTyped = typeof(QueryExecutor)
         .GetMethod(nameof(EnumerateTyped), BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -843,6 +845,23 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return Lists(probes, new(deduped, new(selector, shape, binarySlots, builtLeftOut: leftOut), Deduplicated: true, scope.Binary));
         }
 
+        // A grouped query's rows are its groups, so a terminal that counts or probes them folds the
+        // grouping, the filter over it and the projection — not the rows that fed them, which the
+        // folds below read: that counted the orders where the regions were asked for, and never ran
+        // a filter written over the groups. Built as the projection would be, since that is the
+        // shape the provider folds as a subquery; nothing of what it projects is sent.
+        if (groupBy is not null &&
+            terminal is CountOp or LongCountOp or AnyOp)
+        {
+            var (groups, _) = BuildProjected(builder, query, elementType, groupBy, select, groupFilter, identified: false, folded: true);
+            return terminal switch
+            {
+                CountOp => Folds(probes, groups, "Count"),
+                LongCountOp => Folds(probes, groups, "LongCount"),
+                _ => Folds(probes, groups, "Any")
+            };
+        }
+
         // Every other folding terminal reads the rows themselves and projects nothing. None of them can
         // co-occur with a Distinct: the validator allows only the three folded above.
         switch (terminal)
@@ -1290,6 +1309,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return predicate!;
     }
 
+    // `folded` says a grouped projection is counted or probed rather than returned, which the builder
+    // keeps out of the disclosure record.
     static (IQueryable<object?[]> Query, ProjectionPlan Plan) BuildProjected(
         ExpressionBuilder builder,
         IQueryable query,
@@ -1297,7 +1318,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         GroupByOp? groupBy,
         SelectOp? select,
         Node? groupFilter,
-        bool identified)
+        bool identified,
+        bool folded = false)
     {
         if (groupBy is not null)
         {
@@ -1309,7 +1331,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 grouped = Apply(grouped, "Where", builder.BuildGroupPredicate(groupFilter, elementType, keyType));
             }
 
-            var groupPlan = builder.BuildGroupProjection(select!.Projection, elementType, keyType);
+            var groupPlan = builder.BuildGroupProjection(select!.Projection, elementType, keyType, folded);
             return (ApplySelect(grouped, groupPlan.Selector), groupPlan);
         }
 

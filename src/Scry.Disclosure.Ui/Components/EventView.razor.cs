@@ -32,10 +32,15 @@ public partial class EventView
             return;
         }
 
+        // The turn moves on with what is shown, on every path: a reply still in flight for the
+        // address before is then dropped, rather than shown under an address that asked for nothing,
+        // or for an answer it is not.
+        var mine = ++turn;
         shown = Address;
         answer = null;
         failure = null;
         note = null;
+        loading = false;
         settled = false;
         var asked = DisclosureLink.Parse(Address)["id"];
         if (asked is null)
@@ -51,7 +56,6 @@ public partial class EventView
             return;
         }
 
-        var mine = ++turn;
         loading = true;
         var reply = await Client.Event(id);
         if (mine != turn)
@@ -73,11 +77,17 @@ public partial class EventView
 
     async Task Export(string format)
     {
+        var mine = turn;
         note = null;
         var reply = await Client.Export(new(format, Event: answer!.Event.Id));
         if (reply.Value is not { } file)
         {
-            note = reply.Refusal;
+            // Said of the answer it was asked of, not under one the page has moved to since.
+            if (mine == turn)
+            {
+                note = reply.Refusal;
+            }
+
             return;
         }
 

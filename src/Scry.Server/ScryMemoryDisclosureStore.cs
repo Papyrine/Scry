@@ -34,6 +34,9 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
         public bool Erased;
     }
 
+    // Units are kept in ordinal order, which is what finds one by its ordinal without a scan.
+    static Comparer<ScryDisclosureUnit> byOrdinal = Comparer<ScryDisclosureUnit>.Create((one, other) => one.Ordinal.CompareTo(other.Ordinal));
+
     Lock gate = new();
     TimeProvider clock = clock ?? TimeProvider.System;
     Dictionary<Guid, Recorded> events = [];
@@ -94,7 +97,28 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
                 recorded.Header = begin;
             }
 
-            recorded.Units.AddRange(batch.Units);
+            // In the order they were sent, which is the order they usually arrive in. A store fed from
+            // two places may be handed a later part of an answer before an earlier one, and a unit
+            // that arrives below the last kept then goes in at its place rather than on the end.
+            foreach (var unit in batch.Units)
+            {
+                var units = recorded.Units;
+                if (units.Count == 0 ||
+                    units[^1].Ordinal < unit.Ordinal)
+                {
+                    units.Add(unit);
+                    continue;
+                }
+
+                var index = units.BinarySearch(unit, byOrdinal);
+                if (index < 0)
+                {
+                    index = ~index;
+                }
+
+                units.Insert(index, unit);
+            }
+
             foreach (var entity in batch.Entities)
             {
                 recorded.Entities.Add(entity);
@@ -227,31 +251,17 @@ public sealed class ScryMemoryDisclosureStore(TimeProvider? clock = null) :
             .ToAsyncEnumerable();
     }
 
-    // An event's unit by its ordinal. Units are kept in the order they were accepted, which is
-    // ordinal order, so it is searched for rather than scanned for.
+    // An event's unit by its ordinal. Units are kept in ordinal order, whatever order they arrived
+    // in, so it is searched for rather than scanned for.
     static ScryDisclosureUnit UnitAt(Recorded recorded, int ordinal)
     {
-        var units = recorded.Units;
-        int low = 0, high = units.Count - 1;
-        while (low <= high)
+        var index = recorded.Units.BinarySearch(new(ordinal, default), byOrdinal);
+        if (index < 0)
         {
-            var middle = low + (high - low) / 2;
-            var at = units[middle].Ordinal;
-            if (at == ordinal)
-            {
-                return units[middle];
-            }
-
-            if (at < ordinal)
-            {
-                low = middle + 1;
-                continue;
-            }
-
-            high = middle - 1;
+            throw new InvalidOperationException($"Unit {ordinal} is not among the event's units.");
         }
 
-        throw new InvalidOperationException($"Unit {ordinal} is not among the event's units.");
+        return recorded.Units[index];
     }
 
     // When a row reached somebody: when the answer was made, or when a reviewer was shown it.

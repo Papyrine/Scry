@@ -393,7 +393,7 @@ Note this is the only channel for headers: they are not part of the [wire reques
 
 `processor.Subscribe(request, dbContext, services, …)` is the [live query](live-queries.md) form: an `IAsyncEnumerable<QueryResponse>` that a server-streaming call can return as it is. The limits on how many may be open are enforced there, so every transport has them.
 
-`processor.SendCommand(request, dbContext, services, requestHeaders, caller)` is the [command](commands.md) form: it validates, authorizes, checks the target and the limits, dispatches, and yields the receipts — the final one alone, or a pending one and then the final one — throwing for each refusal before anything is dispatched. `Receipt(id, caller)` asks for one again, and `Capabilities(...)` answers what a caller may send. `CompleteCommand` and `FailCommand` are what a dispatcher calls when the other end says how a command ended.
+`processor.SendCommand(request, dbContext, services, requestHeaders, caller)` is the [command](commands.md) form: it validates, authorizes, checks the target and the limits, dispatches, and yields the receipts — the final one alone, or a pending one and then the final one — throwing for each refusal before anything is dispatched. `Receipt(id, services, caller)` asks for one again, and `Capabilities(...)` answers what a caller may send. `CompleteCommand` and `FailCommand` are what a dispatcher calls when the other end says how a command ended.
 
 A transport that carries requests across a process boundary hands `ScryJson.DeserializeRequest` the bytes it received rather than binding a `QueryRequest` with a serializer of its own. What makes the wire format fail closed — an unknown member refused, a duplicated property refused, a null array element refused — is in `ScryJson.Options`, not on the types. It also calls `processor.EnsureReady(services)` once at startup, which is every check `MapScry` runs. [Scry.Server.SignalR](live-queries.md#over-signalr-instead-of-http) is a transport built this way.
 
@@ -407,7 +407,7 @@ Because `ScryClient` takes an arbitrary transport delegate, the same processor a
 static ScryClient ClientFor(TestContext context) =>
     new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L555-L558' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L604-L607' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

@@ -283,13 +283,14 @@ public class HttpRoundTripTests
 
     // A provider failure once rows are already on the wire: the status is long since sent, so the
     // failure rides the stream's error marker — carrying the fixed message, never the provider's
-    // text, exactly as a non-streamed 500 would. Dividing by a client constant is the reliable way
-    // to fail on the second row rather than the first, which is what proves the stream had begun.
+    // text, and the code a non-streamed 500 would have carried, so it surfaces as the same exception
+    // that 500 does. Dividing by a client constant is the reliable way to fail on the second row
+    // rather than the first, which is what proves the stream had begun.
     [Test]
     public async Task AProviderFailureAfterTheStreamBeganEndsItWithTheFixedMessage()
     {
         var rows = new List<RatioRow>();
-        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             async () =>
             {
                 await foreach (var row in query.Employee
@@ -304,9 +305,30 @@ public class HttpRoundTripTests
         using (Assert.Multiple())
         {
             await Assert.That(rows).IsNotEmpty().Because("the stream should have begun before the failure");
-            await Assert.That(exception!.Message).Contains("Query execution failed.");
+            await Assert.That(exception!.Code).IsEqualTo(ScryErrorCode.ExecutionFailed);
+            await Assert.That(exception.StatusCode).IsEqualTo(HttpStatusCode.InternalServerError);
+            await Assert.That(exception.Message).Contains("Query execution failed.");
             await Assert.That(exception.Message).DoesNotContain("zero").IgnoringCase();
         }
+    }
+
+    // The same failure from a drifted client is attributed to its stamp, as a non-streamed 500 is.
+    [Test]
+    public async Task AProviderFailureAfterADriftedStreamBeganIsAttributedToTheStaleClient()
+    {
+        var stale = ScryClient.ForHttp(http, "/api/query");
+        stale.SchemaStamp = "stamp-from-an-older-model";
+
+        await Assert.ThrowsExactlyAsync<ScryStaleClientException>(
+            async () =>
+            {
+                await foreach (var _ in stale.Source<EmployeeQueryModel>("Employee")
+                                   .OrderBy(row => row.Id)
+                                   .Select(row => new RatioRow(100 / (row.Id - 2)))
+                                   .ToAsyncEnumerable())
+                {
+                }
+            });
     }
 
     [Test]

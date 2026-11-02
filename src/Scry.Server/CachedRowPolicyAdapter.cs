@@ -227,16 +227,25 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
 
         var settling = registration.Settling<Unsettled>(scopeKey);
         var known = current.Watermark as TVersion?;
-        if (known is null &&
-            settling.Generation != current.Generation &&
-            current.AllowedKeys.Count == 0 &&
-            current.PendingKeys.Count == 0)
+
+        // The store says where it last forgot the scope: a Cleared past the one last seen here is a
+        // forgetting since, whatever the host pended or primed after it. A store that does not carry
+        // Cleared leaves it zero, and the scope's shape is then all there is to go on — nothing
+        // known, nothing allowed, nothing pending, and a generation that moved — which is also how a
+        // scope any store has evicted reads, since what is read then is one reserved afresh.
+        var forgotten = current.Cleared > settling.Cleared ||
+                        (known is null &&
+                         settling.Generation != current.Generation &&
+                         current.AllowedKeys.Count == 0 &&
+                         current.PendingKeys.Count == 0);
+        if (forgotten)
         {
             // A scope the host forgot is read whole again, and what was decided of it is gone with it.
             // Rows it invalidated are pending instead, and are decided again by their keys.
             settling.Clear();
         }
 
+        settling.Cleared = current.Cleared;
         settling.Generation = current.Generation;
 
         var now = Stopwatch.GetTimestamp();
@@ -333,6 +342,9 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
 
         // The scope's generation when this was last written, which moves when the host forgets it.
         public long Generation { get; set; } = -1;
+
+        // The scope's Cleared when this was last written: where the store had last forgotten it.
+        public long Cleared { get; set; }
 
         public void Clear()
         {

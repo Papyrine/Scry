@@ -80,6 +80,7 @@ public sealed class ScryDisclosureJournal :
     long shippedRecords;
     Exception? failure;
     bool closing;
+    bool halted;
     bool disposed;
     Thread writer;
     Task shipper;
@@ -804,6 +805,9 @@ public sealed class ScryDisclosureJournal :
         catch (OperationCanceledException)
             when (stop.IsCancellationRequested)
         {
+            // Stopped by the journal closing, with whatever the sink had not yet accepted still on
+            // disk. Whoever is waiting for the sink to catch up would wait for good: told instead.
+            Halted();
         }
         catch (Exception exception)
         {
@@ -821,6 +825,29 @@ public sealed class ScryDisclosureJournal :
             Reached();
         }
     }
+
+    // The shipper has stopped, so nobody waiting on it would ever be let go: each is told, and so is
+    // anybody who asks from now on.
+    void Halted()
+    {
+        List<TaskCompletionSource> left;
+        lock (gate)
+        {
+            halted = true;
+            left = [.. waiting.Select(_ => _.Reached)];
+            waiting.Clear();
+        }
+
+        foreach (var reached in left)
+        {
+            reached.TrySetException(Closed());
+        }
+    }
+
+    // Said to whoever asked the journal to catch up after its shipper stopped: what is left is on
+    // disk, and is shipped by the next process to open the directory.
+    static ScryDisclosureException Closed() =>
+        new("The disclosure journal was closed before the sink behind it had accepted everything it held, so it will not catch up in this process. What is left stays on disk, and is shipped when the journal is next opened.");
 
     void Advance(long position, int records)
     {
@@ -949,6 +976,12 @@ public sealed class ScryDisclosureJournal :
             if (shippedRecords >= wanted)
             {
                 return Task.CompletedTask;
+            }
+
+            // Nothing more will be shipped by this process, so the wait would never end.
+            if (halted)
+            {
+                throw Closed();
             }
 
             reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1097,9 +1130,11 @@ public sealed class ScryDisclosureJournal :
         }
 
         writer.Join();
+        Task? drained = null;
         try
         {
-            await DrainAsync().WaitAsync(options.DrainTimeout);
+            drained = DrainAsync();
+            await drained.WaitAsync(options.DrainTimeout);
         }
         catch (Exception exception)
             when (exception is
@@ -1111,6 +1146,14 @@ public sealed class ScryDisclosureJournal :
 
         await stopping.CancelAsync();
         await shipper;
+
+        // A wait given up at the timeout was failed by the shipper stopping, as every wait left is.
+        // Heard here, so that it is not a fault nobody observed.
+        if (drained is {IsFaulted: true} failed)
+        {
+            _ = failed.Exception;
+        }
+
         long held;
         lock (gate)
         {

@@ -20,16 +20,27 @@ namespace Scry;
 /// answer unchanged, and have no reason to look again.
 /// </para>
 /// <para>
+/// A transaction handed to the context with <c>UseTransaction</c> is committed by its owner, and
+/// nothing tells the context that happened. A save inside one is reported at the save: early, which
+/// costs a run that reads what was there before, rather than never. In a message handler that raise
+/// lands with the handler's other outgoing messages, which an outbox carries out only once the
+/// transaction has committed.
+/// </para>
+/// <para>
 /// What it cannot see is what never passes through <c>SaveChanges</c>: <c>ExecuteUpdate</c> and
 /// <c>ExecuteDelete</c>, raw SQL, a trigger, another process. Those are
-/// <see cref="ScryChanges.Notify{TEntity}"/>'s, or a change probe's. Nor can it see a transaction
-/// handed to the context with <c>UseTransaction</c> and committed by its owner — nothing tells the
-/// context that happened — which a live query's own poll is what catches.
+/// <see cref="ScryChanges.Notify{TEntity}"/>'s, or a change probe's.
 /// </para>
 /// </remarks>
 public sealed class ScryChangeInterceptor(ScryChanges changes) :
     SaveChangesInterceptor
 {
+    // Listening for EF's transaction events begins with the first interceptor rather than with the
+    // first save held under a transaction: a transaction handed to a context is announced before
+    // anything is saved in it, and announced once.
+    static ScryChangeInterceptor() =>
+        TransactionWatch.Listen();
+
     // What the save in progress on each context is about to write. Held from before the save, when the
     // entries still say what they are, to after it, when it is known to have happened.
     ConditionalWeakTable<DbContext, HashSet<string>> saving = new();
@@ -133,7 +144,10 @@ public sealed class ScryChangeInterceptor(ScryChanges changes) :
             return;
         }
 
-        if (context.Database.CurrentTransaction is not null)
+        // One the context began is reported when it commits. One it was handed is committed by its
+        // owner, out of the context's sight, so what was saved in it is reported now.
+        if (context.Database.CurrentTransaction is { } transaction &&
+            !TransactionWatch.IsExternal(context, transaction.TransactionId))
         {
             TransactionWatch.Hold(context, changes, names);
             return;

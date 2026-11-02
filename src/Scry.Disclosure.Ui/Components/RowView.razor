@@ -26,7 +26,7 @@
         </label>
         <label class="field">
             <span>To (UTC)</span>
-            <input class="@ToClass" data-testid="row-to" @bind="to" @bind:event="oninput" placeholder="@Show.TimeHint" autocomplete="off" spellcheck="false" />
+            <input class="@ToClass" data-testid="row-to" @bind="to" @bind:event="oninput" placeholder="@Show.TimeHint" title="@Show.ToHint" autocomplete="off" spellcheck="false" />
         </label>
         <button type="submit" class="btn primary" data-testid="row-ask" disabled="@Unaskable">Ask</button>
     </form>

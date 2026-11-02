@@ -28,13 +28,15 @@ sealed class ExplorerHost :
     /// <param name="defaults">Whether the explorer is left as a host that set nothing would have it.</param>
     /// <param name="audit">The audit's own settings.</param>
     /// <param name="services">Anything else the host registers.</param>
+    /// <param name="pathBase">A prefix the host is mounted under, as <c>UsePathBase</c> sets one.</param>
     public static async Task<ExplorerHost> Run(
         Action<ScryDisclosureExplorerOptions>? configure = null,
         Func<ScryMemoryDisclosureStore, IScryDisclosureSink>? sink = null,
         string environment = "Production",
         bool defaults = false,
         Action<ScryDisclosureOptions>? audit = null,
-        Action<IServiceCollection>? services = null)
+        Action<IServiceCollection>? services = null,
+        string? pathBase = null)
     {
         var host = new ExplorerHost();
         var builder = WebApplication.CreateBuilder(
@@ -64,6 +66,14 @@ sealed class ExplorerHost :
         builder.Services.AddSingleton<IScryDisclosureStatus>(host.Store);
         services?.Invoke(builder.Services);
         host.app = builder.Build();
+        if (pathBase is not null)
+        {
+            // Routing after the prefix is taken off, as a host mounted under one has to order them:
+            // left to itself the application would route first, and route on the whole path.
+            host.app.UsePathBase(pathBase);
+            host.app.UseRouting();
+        }
+
         host.app.MapScryDisclosureExplorer(
             options =>
             {

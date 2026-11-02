@@ -146,7 +146,7 @@ static class ScryMcpTools
         }
 
         var request = Request.From(services);
-        return await FirstReceipt(request.Processor.Receipt(parsed, request.Caller, cancel), cancel);
+        return await FirstReceipt(request.Processor.Receipt(parsed, request.Services, request.Caller, cancel), cancel);
     }
 
     static CallToolResult Capabilities(IServiceProvider services)

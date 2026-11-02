@@ -172,10 +172,10 @@ static partial class ClosureReader
         var left = Underlying(binary.Left.Type);
         var right = Underlying(binary.Right.Type);
 
-        // A shift counts in ints whatever it is shifting.
+        // A shift counts in ints whatever it is shifting, over the four widths Shift spells.
         if (binary.NodeType is ExpressionType.LeftShift or ExpressionType.RightShift)
         {
-            return right == typeof(int) && integrals.Contains(Numeric(left));
+            return right == typeof(int) && shiftable.Contains(Numeric(left));
         }
 
         if (left != right)
@@ -214,14 +214,24 @@ static partial class ClosureReader
         typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(char)
     ];
 
-    static bool IsComputable(Type type)
-    {
-        var numeric = Numeric(Underlying(type));
-        return numeric == typeof(bool) ||
-               numeric == typeof(float) ||
-               numeric == typeof(double) ||
-               integrals.Contains(numeric);
-    }
+    // The types an operator is computed over here: the ones C# computes its own in. The narrower
+    // integers and char are promoted to int before any operator reaches them, so a node over one is
+    // not a shape the compiler emits — a hand-built tree carries it, F#'s among them — and the reader
+    // leaves it to the compiled fallback rather than answering at a width Compute does not spell. The
+    // conversions are a separate matter: every integral converts, which is CanCoerce's list above.
+    static HashSet<Type> computable =
+    [
+        typeof(bool), typeof(int), typeof(uint), typeof(long), typeof(ulong),
+        typeof(float), typeof(double)
+    ];
+
+    static HashSet<Type> shiftable =
+    [
+        typeof(int), typeof(uint), typeof(long), typeof(ulong)
+    ];
+
+    static bool IsComputable(Type type) =>
+        computable.Contains(Numeric(Underlying(type)));
 
     // What a type counts as: an enum counts as the integer it is written on, since that is what the
     // compiler compares and converts.

@@ -35,8 +35,10 @@ sealed class CommandBinder
             }
         };
 
-        // By name, and only by name: a number would be a value the enum may not define.
-        options.Converters.Add(new JsonStringEnumConverter(namingPolicy: null, allowIntegerValues: false));
+        // By name, and only by name: a number would be a value the enum may not define. And by the
+        // declared spelling alone: the built-in reader matches a name whatever its case, which would
+        // make "gym" a second spelling of Gym where the wire has one.
+        options.Converters.Add(new ExactEnumConverterFactory());
     }
 
     void Restrict(JsonTypeInfo type)
@@ -208,5 +210,69 @@ sealed class CommandBinder
         }
 
         throw new ScryValidationException(message);
+    }
+
+    /// <summary>
+    /// Reads an enum by a declared name, exactly as spelled — for a flags enum, declared names joined
+    /// as the writer joins them — and nothing else: no number, no other casing, no padding. The rule
+    /// the wire's own reader holds a request to, applied here because the payload is read by a
+    /// serializer of its own.
+    /// </summary>
+    sealed class ExactEnumConverterFactory :
+        JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert) =>
+            typeToConvert.IsEnum;
+
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
+            (JsonConverter) Activator.CreateInstance(typeof(ExactEnumConverter<>).MakeGenericType(typeToConvert))!;
+    }
+
+    sealed class ExactEnumConverter<T> :
+        JsonConverter<T>
+        where T : struct, Enum
+    {
+        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.String &&
+                TryName(reader.GetString()!, out var value))
+            {
+                return value;
+            }
+
+            // Rewritten by the binder into a message naming the payload path alone, so what is said
+            // here is for a log and never for the client.
+            throw new JsonException($"A value of enum '{typeToConvert.Name}' is one of its names, spelled as it is declared.");
+        }
+
+        // Enum.TryParse alone would also take a number in a string, padding, and any join — each a
+        // second spelling of one value.
+        static bool TryName(string name, out T value)
+        {
+            if (Enum.IsDefined(typeof(T), name))
+            {
+                value = Enum.Parse<T>(name);
+                return true;
+            }
+
+            value = default;
+            if (!typeof(T).IsDefined(typeof(FlagsAttribute), false))
+            {
+                return false;
+            }
+
+            foreach (var part in name.Split(", "))
+            {
+                if (!Enum.IsDefined(typeof(T), part))
+                {
+                    return false;
+                }
+            }
+
+            return Enum.TryParse(name, ignoreCase: false, out value);
+        }
+
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
+            writer.WriteStringValue(value.ToString());
     }
 }

@@ -279,6 +279,26 @@ partial class QueryRenderer(Type? rootModel)
             return "byte";
         }
 
+        if (type == typeof(uint))
+        {
+            return "uint";
+        }
+
+        if (type == typeof(ulong))
+        {
+            return "ulong";
+        }
+
+        if (type == typeof(ushort))
+        {
+            return "ushort";
+        }
+
+        if (type == typeof(sbyte))
+        {
+            return "sbyte";
+        }
+
         if (type == typeof(bool))
         {
             return "bool";

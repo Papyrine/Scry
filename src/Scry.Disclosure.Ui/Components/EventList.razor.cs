@@ -65,6 +65,10 @@ public partial class EventList :
 
     void Reset()
     {
+        // The turn moves on with what is shown, so a reply still in flight for the question before is
+        // dropped rather than shown as this one's.
+        turn++;
+        loading = false;
         link = DisclosureLink.Parse(Address);
         events = [];
         next = null;
@@ -126,16 +130,23 @@ public partial class EventList :
 
     async Task Export(string format)
     {
+        var mine = turn;
         note = null;
         var reply = await Client.Export(Exported(format));
         if (reply.Value is not { } file)
         {
-            note = reply.Refusal;
+            // Said of the question it was asked of, not under one the page has moved to since.
+            if (mine == turn)
+            {
+                note = reply.Refusal;
+            }
+
             return;
         }
 
         await Js.InvokeVoidAsync("disclosure.download", file.Name, file.Type, file.Bytes);
-        if (file.Cut)
+        if (file.Cut &&
+            mine == turn)
         {
             note = "That file holds only the newest answers: there were more than one export writes.";
         }

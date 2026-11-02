@@ -6,16 +6,27 @@ static class SqlStores
 {
     static TimeSpan patience = TimeSpan.FromSeconds(60);
 
-    public static ScrySqlServerDisclosureStore Store(SqlDatabase<ClinicContext> database, Action<ScrySqlServerDisclosureOptions>? configure = null)
+    /// <summary>
+    /// A store over the test's database, moved on when the test says so, so that what it then reads
+    /// is what it expects to be there. <paramref name="page"/> makes a listing's pages that small,
+    /// for a test of what happens where a page ends.
+    /// </summary>
+    public static ScrySqlServerDisclosureStore Store(SqlDatabase<ClinicContext> database, Action<ScrySqlServerDisclosureOptions>? configure = null, int? page = null)
     {
         var options = new ScrySqlServerDisclosureOptions
         {
             ConnectionString = database.ConnectionString,
-
-            // Moved on when a test says so, so that what it then reads is what it expects to be there.
             DrainInterval = null
         };
         configure?.Invoke(options);
+        if (page is { } size)
+        {
+            return new(options)
+            {
+                Page = size
+            };
+        }
+
         return new(options);
     }
 

@@ -30,7 +30,12 @@ public interface ICachedPolicyStore
     /// rows the host told it to forget and are dropped whole; where rows were invalidated since
     /// (<see cref="InvalidateRows"/>), the decisions stand but nothing pending is resolved by them,
     /// since the keys the host re-pended are among the ones this round claims to have answered.
-    /// Only an update against the current generation resolves what it decided.
+    /// Only an update against the current generation resolves what it decided. Which of the two a
+    /// stale update is comes from <see cref="CachedPolicyScope.Cleared"/>: an update against a
+    /// generation below it was decided before the scope was last forgotten, and is dropped. A store
+    /// keeps that value in the scope itself, written in the same step as the forgetting and carried
+    /// by every later update and invalidation, so that no update can land between the scope being
+    /// emptied and the record of where that happened.
     /// </remarks>
     void Apply(string policy, string scope, CachedPolicyUpdate update);
 
@@ -69,6 +74,16 @@ public sealed record CachedPolicyScope(
     /// invalidation from one decided after. Zero for a scope nothing has ever been said about.
     /// </summary>
     public long Generation { get; init; }
+
+    /// <summary>
+    /// The <see cref="Generation"/> at which this scope was last forgotten
+    /// (<see cref="ICachedPolicyStore.InvalidateScope"/>), or zero where it never was. Rows the host
+    /// pends or primes after a forgetting move <see cref="Generation"/> past it, so this is what still
+    /// says the forgetting happened: a round decided against a generation below it describes rows the
+    /// host said to forget, and an adapter that remembered anything of the scope from before it has
+    /// to forget that too. Carried unchanged by every update and invalidation that is not a forgetting.
+    /// </summary>
+    public long Cleared { get; init; }
 }
 
 /// <summary>What one round of deciding produced.</summary>

@@ -226,6 +226,31 @@ public class SidecarTests
         await Assert.That(session.State).IsEqualTo(ScrySubscriptionState.Reconnecting);
     }
 
+    // A live query the app ends — disposing its subscription while the pump waits for the next event —
+    // is the ordinary end of one, not a cut connection with a failure to show: nothing is wrong, and
+    // nothing is asked for again.
+    [Test]
+    public async Task ALiveQueryTheConsumerCancelsIsClosedCleanly()
+    {
+        var (store, client) = Stubbed(_ => Sse(ChunkStream.Shut(Ping())));
+
+        using var request = Subscribe();
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var stopping = new CancelSource();
+        var reading = stream.ReadAsync(new byte[64], stopping.Token).AsTask();
+        await stopping.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => reading);
+        var session = store.Entries.Single().Session!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(session.Connections.Single().Ended).IsEqualTo("closed");
+            await Assert.That(session.Error).IsNull();
+            await Assert.That(session.State).IsEqualTo(ScrySubscriptionState.Closed);
+        }
+    }
+
     // The client names the live query a connection belongs to beside the request, so a reconnect
     // lands on the row it resumed rather than starting one.
     [Test]

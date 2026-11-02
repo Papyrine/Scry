@@ -174,6 +174,10 @@ static class CursorCodec
     /// a key the seek predicate compares against something else. The temporal spellings in particular
     /// are round-trip forms rather than default ones — a key truncated to the second or the minute
     /// seeks from a row boundary that is not the one the page ended on, which repeats or skips rows.
+    /// An enum is the one deliberate difference: a client spells one by name, and a cursor by its
+    /// number. The column can hold a value the enum does not declare — whose name is its number
+    /// anyway — and the seek side reads a number back from a cursor, sealed and minted here, where
+    /// it refuses one in a client's constant.
     /// </remarks>
     public static (string? Value, ClrTypeTag Tag) TagValue(object? value)
     {
@@ -196,7 +200,7 @@ static class CursorCodec
             Time time => (time.ToString("O", culture), ClrTypeTag.String),
             Guid guid => (guid.ToString(), ClrTypeTag.Guid),
             byte[] bytes => (Convert.ToBase64String(bytes), ClrTypeTag.Bytes),
-            Enum enumeration => (enumeration.ToString(), ClrTypeTag.Enum),
+            Enum enumeration => (enumeration.ToString("D"), ClrTypeTag.Enum),
             _ => (Convert.ToString(value, culture), ClrTypeTag.String)
         };
     }

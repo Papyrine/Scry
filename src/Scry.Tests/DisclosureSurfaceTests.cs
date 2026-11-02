@@ -393,7 +393,7 @@ public class DisclosureSurfaceTests
 
         var sent = await host.Send("RenameShift", new {id = 1, name = "Night"}, caller: "alice", id: id);
         List<CommandReceipt> again = [];
-        await foreach (var receipt in host.Processor.Receipt(id, "alice"))
+        await foreach (var receipt in host.Processor.Receipt(id, host.Services, "alice"))
         {
             again.Add(receipt);
         }
@@ -425,6 +425,63 @@ public class DisclosureSurfaceTests
             var allowed = (await store.Reconstruct(events[2].Event.Id))!;
             await Assert.That(allowed.Units.Single().Content.Kind).IsEqualTo(ScryDisclosureContentKind.Capabilities);
         }
+    }
+
+    // Asked for again by its id, a receipt is recorded under whoever the request's own services say is
+    // asking, and on whose behalf: the host's resolvers run over the re-attach's scope as they ran
+    // over the send's. A transport that names nobody has given the record nothing else to go on.
+    [Test]
+    public async Task AReceiptAskedForAgainIsRecordedUnderTheCallerTheRequestNames()
+    {
+        var store = new ScryMemoryDisclosureStore();
+        await using var host = await CommandHost.Start(
+            "DisclosureReceiptCaller",
+            _ => _.UseDisclosureAudit(
+                store,
+                _ =>
+                {
+                    _.Caller = _ => _.GetRequiredService<CurrentCaller>().Name;
+                    _.Agent = _ => _.GetRequiredService<CurrentCaller>().Agent;
+                    _.Clock = new SteppingClock();
+                }),
+            _ => _.AddScoped<CurrentCaller>());
+        var id = Guid.NewGuid();
+        await using var sending = Signed(host, "alice", "console");
+        await host.Send("RenameShift", new {id = 1, name = "Night"}, id: id, services: sending.ServiceProvider);
+
+        await using var asking = Signed(host, "alice", "sidecar");
+        List<CommandReceipt> again = [];
+        await foreach (var receipt in host.Processor.Receipt(id, asking.ServiceProvider))
+        {
+            again.Add(receipt);
+        }
+
+        var events = await Disclosures.Events(store);
+        using (Assert.Multiple())
+        {
+            await Assert.That(again.Single().Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(events.Select(_ => _.Event.Kind)).IsEquivalentTo(
+                [ScryDisclosureKind.CommandReceipt, ScryDisclosureKind.CommandReceipt],
+                CollectionOrdering.Matching);
+            await Assert.That(events.Select(_ => _.Event.Agent ?? "")).IsEquivalentTo(["console", "sidecar"], CollectionOrdering.Matching);
+        }
+    }
+
+    // A call's own scope with the caller filled in, as an app's middleware fills in the current user.
+    static AsyncServiceScope Signed(CommandHost host, string name, string agent)
+    {
+        var scope = host.Services.CreateAsyncScope();
+        var caller = scope.ServiceProvider.GetRequiredService<CurrentCaller>();
+        caller.Name = name;
+        caller.Agent = agent;
+        return scope;
+    }
+
+    sealed class CurrentCaller
+    {
+        public string? Name { get; set; }
+
+        public string? Agent { get; set; }
     }
 
     // A policy set to refuse rather than hide tells the caller that a row it may not read matched.

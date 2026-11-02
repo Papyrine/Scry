@@ -4,66 +4,52 @@
 /// how much is held is bounded while it is being written rather than measured afterwards.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Counted in <see cref="Advance"/>, the one point at which bytes are actually written, rather than in
+/// <see cref="GetMemory"/>: a JSON writer asks for room ahead of what it writes — three bytes for every
+/// character of a string it might have to transcode, and never less than a few kilobytes — so refusing
+/// on the request would turn away an answer well inside the limit, and every answer within a few
+/// kilobytes of it. The room it asks for is handed out in full, since a writer must get at least what
+/// it asked for; what it then commits is what is held to the limit.
+/// </para>
+/// <para>
 /// The refusal is a <see cref="ScryValidationException"/>, since what it says is the client's to act
 /// on — ask for less. It is thrown once: the JSON writer above this flushes as it is disposed, and a
 /// second throw from there would replace the first with one that says nothing new. After the first,
-/// what is written goes to a scratch array and is dropped.
+/// what is committed is dropped, and the buffer holds what was accepted before it.
+/// </para>
 /// </remarks>
 sealed class BoundedBufferWriter(int limit) :
     IBufferWriter<byte>,
     IDisposable
 {
     PooledBufferWriter inner = new();
-    byte[]? scratch;
+    bool refused;
 
     public ReadOnlyMemory<byte> WrittenMemory => inner.WrittenMemory;
 
     public void Advance(int count)
     {
-        if (scratch is null)
+        if (refused)
         {
-            inner.Advance(count);
-        }
-    }
-
-    public Memory<byte> GetMemory(int sizeHint = 0)
-    {
-        if (Overflowing(sizeHint) is { } dropped)
-        {
-            return dropped;
+            return;
         }
 
-        // Sliced to what is left, so a writer handed more room than it asked for cannot advance past
-        // the limit without coming back here first.
-        var memory = inner.GetMemory(sizeHint);
-        return memory[..Math.Min(memory.Length, limit - inner.WrittenCount)];
+        if (inner.WrittenCount + count > limit)
+        {
+            refused = true;
+            throw new ScryValidationException(
+                $"The result is larger than a live query may hold ({limit} bytes). Ask for fewer rows or fewer members, or page it.");
+        }
+
+        inner.Advance(count);
     }
+
+    public Memory<byte> GetMemory(int sizeHint = 0) =>
+        inner.GetMemory(sizeHint);
 
     public Span<byte> GetSpan(int sizeHint = 0) =>
-        GetMemory(sizeHint).Span;
-
-    byte[]? Overflowing(int sizeHint)
-    {
-        var wanted = Math.Max(sizeHint, 1);
-        if (scratch is not null)
-        {
-            if (scratch.Length < wanted)
-            {
-                scratch = new byte[wanted];
-            }
-
-            return scratch;
-        }
-
-        if (inner.WrittenCount + wanted <= limit)
-        {
-            return null;
-        }
-
-        scratch = new byte[wanted];
-        throw new ScryValidationException(
-            $"The result is larger than a live query may hold ({limit} bytes). Ask for fewer rows or fewer members, or page it.");
-    }
+        inner.GetSpan(sizeHint);
 
     public void Dispose() =>
         inner.Dispose();

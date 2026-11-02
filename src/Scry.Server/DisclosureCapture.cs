@@ -810,7 +810,10 @@ sealed class DisclosureCapture(
 
     /// <summary>
     /// Records that the caller was refused because a row it may not read matched: nothing was sent,
-    /// and the caller learned that such a row exists. Whatever had been gathered is let go.
+    /// and the caller learned that such a row exists. Whatever had been gathered is let go. Accepted
+    /// and not yet released: the caller releases it once whatever has a say before the refusal is
+    /// said — the auditors — has had it, and disposes it unreleased where that failed, which
+    /// withdraws the denial.
     /// </summary>
     public async ValueTask DenyAsync(Cancel cancel)
     {
@@ -818,7 +821,6 @@ sealed class DisclosureCapture(
         await HandAsync(Batch(Ended(ScryDisclosureOutcome.Released, 0)), cancel);
         Accepted();
         closed = true;
-        released = true;
     }
 
     /// <summary>The same, blocking.</summary>
@@ -828,7 +830,6 @@ sealed class DisclosureCapture(
         Hand(Batch(Ended(ScryDisclosureOutcome.Released, 0)));
         Accepted();
         closed = true;
-        released = true;
     }
 
     void Denying()

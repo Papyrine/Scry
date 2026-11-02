@@ -153,6 +153,83 @@ public class DisclosureFailClosedTests
         }
     }
 
+    // A command's receipt goes the way an answer does: on record, then reported, then handed on. An
+    // auditor that throws fails the answer after the record was accepted, so the receipt never went,
+    // and the record is withdrawn rather than left saying the caller was handed it.
+    [Test]
+    public async Task AReceiptAnAuditorFailsIsWithdrawn()
+    {
+        var store = new ScryMemoryDisclosureStore();
+        var tap = new TappedSink(store);
+        await using var host = await CommandHost.Start(
+            "DisclosureReceiptWithdrawn",
+            _ => _.UseDisclosureAudit(tap),
+            _ => _.AddSingleton<IScryAuditor, ThrowingAuditor>());
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => host.Send("RenameShift", new {id = 1, name = "Night"}, caller: "alice"));
+
+        var withdrawn = (await store.Reconstruct(tap.Batches.Select(_ => _.EventId).Distinct().Single()))!;
+        using (Assert.Multiple())
+        {
+            // Closed as released once the sink held it whole, then as retracted once the auditor failed
+            // the answer: the close written last is the one that stands.
+            await Assert.That(tap.Batches.Select(_ => _.Close!.Outcome)).IsEquivalentTo(
+                [ScryDisclosureOutcome.Released, ScryDisclosureOutcome.Retracted],
+                CollectionOrdering.Matching);
+            await Assert.That(await Disclosures.Events(store)).IsEmpty();
+            await Assert.That(withdrawn.Close!.Outcome).IsEqualTo(ScryDisclosureOutcome.Retracted);
+            await Assert.That(withdrawn.Close.Units).IsEqualTo(0);
+            await Assert.That(withdrawn.Units).Count().IsEqualTo(1);
+
+            // The command was accepted and ran. What failed was telling the caller how it ended.
+            await Assert.That(host.ShiftName()).IsEqualTo("Night");
+        }
+    }
+
+    // A denial is recorded before it is said, and reported before the record says it was said: an
+    // auditor that throws fails the request instead, and the denial is withdrawn as an answer is.
+    [Test]
+    public async Task ADenialAnAuditorFailsIsWithdrawn()
+    {
+        var store = new ScryMemoryDisclosureStore();
+        var tap = new TappedSink(store);
+        var processor = Disclosures.Audited(
+            tap,
+            _ => _.AddPolicy<Employee, ActiveOnlyPolicy>(
+                new()
+                {
+                    RootList = DeniedRowMode.Error
+                }));
+        await using var services = Services(new ThrowingAuditor());
+        var everyone = Disclosures.From<Employee>("Employee")
+            .Select(_ => new
+            {
+                _.Name
+            })
+            .ToScryRequest();
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => Disclosures.Buffered(processor, everyone, services));
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => Disclosures.Direct(processor, everyone, services));
+
+        var ids = tap.Batches.Select(_ => _.EventId).Distinct().ToList();
+        await Assert.That(ids).Count().IsEqualTo(2);
+        await Assert.That(await Disclosures.Events(store)).IsEmpty();
+        foreach (var id in ids)
+        {
+            var withdrawn = (await store.Reconstruct(id))!;
+            using (Assert.Multiple())
+            {
+                await Assert.That(withdrawn.Event.Kind).IsEqualTo(ScryDisclosureKind.Denial);
+                await Assert.That(withdrawn.Close!.Outcome).IsEqualTo(ScryDisclosureOutcome.Retracted);
+                await Assert.That(withdrawn.Close.Units).IsEqualTo(0);
+                await Assert.That(withdrawn.Units).IsEmpty();
+            }
+        }
+    }
+
     [Test]
     public async Task AQueryThatIsRefusedOrFailsRecordsNothing()
     {

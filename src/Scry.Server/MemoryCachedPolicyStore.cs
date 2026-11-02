@@ -12,21 +12,18 @@ namespace Scry;
 public sealed class MemoryCachedPolicyStore :
     ICachedPolicyStore
 {
+    // A forgotten scope is kept as an empty one rather than removed, so its generation keeps moving;
+    // where the forgetting happened is kept in the value itself (Cleared), written in the same swap
+    // that empties it, so there is no instant at which a round can find the scope emptied and not
+    // know it was.
     ConcurrentDictionary<(string Policy, string Scope), CachedPolicyScope> scopes = new();
-
-    // The generation each scope was last forgotten at. A forgotten scope is kept as an empty one
-    // rather than removed, so its generation keeps moving; this remembers where the forgetting
-    // happened, which is what tells a round decided before it from one decided after.
-    ConcurrentDictionary<(string Policy, string Scope), long> cleared = new();
 
     public CachedPolicyScope? Get(string policy, string scope) =>
         scopes.GetValueOrDefault((policy, scope));
 
-    public void Apply(string policy, string scope, CachedPolicyUpdate update)
-    {
-        var key = (policy, scope);
+    public void Apply(string policy, string scope, CachedPolicyUpdate update) =>
         scopes.AddOrUpdate(
-            key,
+            (policy, scope),
             // Never read before, so the round can only have been decided against nothing: a
             // generation other than zero names a scope this store has since forgotten it ever held.
             _ =>
@@ -49,25 +46,26 @@ public sealed class MemoryCachedPolicyStore :
                 // describe rows it said to forget and are dropped whole; rows invalidated since, the
                 // decisions stand but resolve nothing, since what the host re-pended is among what
                 // this round claims to have answered. The next round decides those again.
-                if (cleared.TryGetValue(key, out var clearedAt) &&
-                    update.Generation < clearedAt)
+                if (update.Generation < current.Cleared)
                 {
                     return current;
                 }
 
                 return Merge(current, update, resolves: false);
             });
-    }
 
-    public void InvalidateScope(string policy, string scope)
-    {
-        var key = (policy, scope);
-        var forgotten = scopes.AddOrUpdate(
-            key,
-            _ => CachedPolicyScope.Empty with {Generation = 1},
-            (_, current) => CachedPolicyScope.Empty with {Generation = current.Generation + 1});
-        cleared[key] = forgotten.Generation;
-    }
+    // One swap: the scope is emptied and marked with where that happened together, so a stale round
+    // landing at any instant either sees the old scope or sees it forgotten, never a forgotten one
+    // it cannot tell from a cold one.
+    public void InvalidateScope(string policy, string scope) =>
+        scopes.AddOrUpdate(
+            (policy, scope),
+            _ => CachedPolicyScope.Empty with {Generation = 1, Cleared = 1},
+            (_, current) => CachedPolicyScope.Empty with
+            {
+                Generation = current.Generation + 1,
+                Cleared = current.Generation + 1
+            });
 
     public void InvalidateRows(string policy, IReadOnlyCollection<object> keys)
     {

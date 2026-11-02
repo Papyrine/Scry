@@ -106,11 +106,85 @@ public class NumericPromotionTests
     [Test]
     public async Task ComparisonPromotesToTheWiderOperand()
     {
-        // Quantity is uint and Id is int, so the pair widens to the unsigned type before comparing.
-        // Orders 1 and 2 have more items than their id; order 3 has fewer.
+        // Quantity is uint and Id is int: neither holds the other's range, so the pair widens to long
+        // before comparing, as C# widens it. Orders 1 and 2 have more items than their id; order 3
+        // has fewer.
         var ids = await Ids(_ => _.Quantity > _.Id);
 
         await Assert.That(ids).IsEquivalentTo([1, 2], CollectionOrdering.Matching);
+    }
+
+    // Over an in-memory source the promotion is the comparison: the pair is converted and compared as
+    // written, where a provider casts both sides itself. A uint beside an int once converted the signed
+    // side to uint, which wraps a negative into a large positive, so a balance below its limit read as
+    // above it.
+    [Test]
+    public async Task ASignedAndAnUnsignedOperandWidenToLongInMemory()
+    {
+        var (processor, data) = CompiledPoco.Start(
+            """
+            [QueryablePoco]
+            public class Ledger
+            {
+                public int Balance { get; set; }
+                public uint Limit { get; set; }
+
+                public static IEnumerable<Ledger> Rows() =>
+                [
+                    new Ledger { Balance = -1, Limit = 0 },
+                    new Ledger { Balance = 5, Limit = 3 }
+                ];
+            }
+            """,
+            "Ledger");
+        await using var _ = data;
+        var request = QueryRequest.Create(
+            "Ledger",
+            [new WhereOp(new BinaryNode(BinaryOp.LessThan, new MemberNode(["Balance"]), new MemberNode(["Limit"]))), new CountOp()]);
+
+        var response = processor.Execute(request, data);
+
+        await Assert.That(response.Payload.GetInt32()).IsEqualTo(1).Because("-1 is below 0; wrapped to a uint it would be above");
+    }
+
+    // A comparison against a literal written wider than the member: C# widened the member to meet it,
+    // and the client dropped that widening as it drops every comparison's. The constant was read at the
+    // member's type regardless, so a fraction against an unsigned member was refused as not one of its
+    // values; it is read at its own width now, and the member widened again. Quantities are 3, 7 and 1.
+    [Test]
+    public async Task AWiderLiteralWidensTheMember()
+    {
+        var ids = await Ids(_ => _.Quantity > 2.5);
+
+        await Assert.That(ids).IsEquivalentTo([1, 2], CollectionOrdering.Matching);
+    }
+
+    // The same for a value no uint holds. C# compares the pair as longs, so every quantity is above it.
+    // Held in a variable because the compiler folds a literal the member can never be below, which is
+    // the comparison this is about.
+    [Test]
+    public async Task ALiteralOutsideTheMembersRangeIsCompared()
+    {
+        var floor = -1;
+        var ids = await Ids(_ => _.Quantity > floor);
+
+        await Assert.That(ids).IsEquivalentTo([1, 2, 3], CollectionOrdering.Matching);
+    }
+
+    // A wider literal the member does hold is still read at the member's type: an integer that fits
+    // compares the same at either width, and reading it so leaves the column uncast for an index.
+    [Test]
+    public async Task AWiderLiteralThatFitsLeavesTheColumnUncast()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var request = client.Source<Order>("Order")
+            .Where(_ => _.Id == 2L)
+            .ToScryRequest();
+        var sql = SharedProcessor.Instance.ToQueryString(request, context, NoServices.Instance);
+
+        await Assert.That(sql[sql.IndexOf("WHERE", StringComparison.Ordinal)..]).DoesNotContain("CAST");
     }
 
     [Test]
@@ -301,12 +375,12 @@ public class NumericPromotionTests
                     Where(_ => _.Id == _.Quantity)))
             .Snapshot(
                 """
-                WHERE [o].[Quantity] > CAST([o].[Id] AS bigint)
+                WHERE CAST([o].[Quantity] AS bigint) > CAST([o].[Id] AS bigint)
                 WHERE [o].[Amount] > CAST([o].[Quantity] AS decimal(18,2))
                 WHERE CAST([o].[Id] AS decimal(18,2)) < [o].[Amount]
                 WHERE [o].[Discount] > CAST([o].[Id] AS decimal(18,2))
                 WHERE [o].[Sku] > CAST([o].[Quantity] AS decimal(20,0))
-                WHERE CAST([o].[Id] AS bigint) = [o].[Quantity]
+                WHERE CAST([o].[Id] AS bigint) = CAST([o].[Quantity] AS bigint)
                 """);
     }
 

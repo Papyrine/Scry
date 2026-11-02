@@ -178,7 +178,8 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
     }
 
     // What a command's whole answer says about it: its receipt, or why there was none. A missing
-    // target is an outcome of the command; not being found when asked for again is losing track of it.
+    // target is an outcome of the command; a refusal when asked for again — not found, or not answered
+    // for at all — is losing track of it, since the command was accepted before anything was asked.
     static void Answered(ScrySidecarCommand command, CommandIdentity identity, HttpResponseMessage response, byte[] body, string? error)
     {
         if (response.IsSuccessStatusCode)
@@ -187,15 +188,15 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
             return;
         }
 
-        if (response.StatusCode != HttpStatusCode.NotFound)
-        {
-            command.Saw(ScryCommandActivityKind.Refused, error);
-            return;
-        }
-
         if (identity.Reattach)
         {
             command.Saw(ScryCommandActivityKind.Unknown, error);
+            return;
+        }
+
+        if (response.StatusCode != HttpStatusCode.NotFound)
+        {
+            command.Saw(ScryCommandActivityKind.Refused, error);
             return;
         }
 

@@ -40,6 +40,30 @@ public class StartupRefusalTests
         "share the name 'Status'",
         DisplayName = "two enums with one name")]
     [Arguments(
+        "namespace Sales { [Queryable(Name = \"SalesOrder\")] public class Order { public int Id { get; set; } } } namespace Purchasing { [Queryable(Name = \"PurchaseOrder\")] public class Order { public int Id { get; set; } } }",
+        "The types 'Purchasing.Order' and 'Sales.Order' are both opted in and share the name 'Order'",
+        DisplayName = "two sources of one type name under distinct source names")]
+    [Arguments(
+        "namespace Billing { [QueryableComplex] public class Address { public string City { get; set; } = \"\"; } } namespace Shipping { [QueryableComplex] public class Address { public string Line { get; set; } = \"\"; } } [Queryable] public class A { public int Id { get; set; } public Billing.Address BillTo { get; set; } = new(); public Shipping.Address ShipTo { get; set; } = new(); }",
+        "The types 'Billing.Address' and 'Shipping.Address' are both opted in and share the name 'Address'",
+        DisplayName = "two complex types with one name")]
+    [Arguments(
+        "[Queryable] public class Asset { public int Id { get; set; } public int Code { get; set; } } [Queryable] public class Vehicle : Asset { public new string Code { get; set; } = \"\"; }",
+        "'Vehicle.Code' hides 'Asset.Code' with another type: 'string' over 'int'",
+        DisplayName = "a member hidden with new under another type below an opted-in base")]
+    [Arguments(
+        "[Command] public class client { public int Id { get; set; } }",
+        "The name 'client' would be generated twice: as the field the facade holds its client in and as the facade method for 'client'",
+        DisplayName = "a command named like the facade's client field")]
+    [Arguments(
+        "public enum @lock { A } [Queryable] public class A { public int Id { get; set; } public @lock Mode { get; set; } }",
+        "The enum 'lock' is reachable from the queryable surface, and its name cannot be written as a C# type name",
+        DisplayName = "an enum named with a keyword")]
+    [Arguments(
+        "public sealed class @lock { public int Count { get; set; } } [Command(Result = typeof(@lock))] public class Touch { public int Id { get; set; } }",
+        "The result class 'lock' of 'Touch' has a name that cannot be written as a C# type name",
+        DisplayName = "a result class named with a keyword")]
+    [Arguments(
         "[Queryable(Name = \"not valid\")] public class A { public int Id { get; set; } }",
         "not valid",
         DisplayName = "a source name that is not an identifier")]

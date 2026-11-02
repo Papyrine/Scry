@@ -188,6 +188,33 @@ public class SubscriptionHttpTests
         }
     }
 
+    // A scheme that tolerates clock skew authenticates a ticket for minutes past its expiry, and a
+    // client handed an answer before the end counts the connection a success and asks again at once —
+    // so a ticket already expired would have the query run in a tight loop for as long as the skew
+    // allows. It is ended before the query runs: nothing is delivered, and the client's own delay is
+    // what bounds the next ask.
+    [Test]
+    public async Task AStreamOpenedOnAnExpiredTicketEndsBeforeItsQueryRuns()
+    {
+        var audited = new CountingAuditor();
+        await using var server = await Server.Start(
+            database,
+            configure: null,
+            ticketExpiresIn: TimeSpan.FromMinutes(-1),
+            auditor: audited);
+        await using var live = await LiveStream.Open(server.Http, Amounts("North"));
+
+        var only = await live.Next();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(only.EventType).IsEqualTo(ScryLive.End);
+            await Assert.That(ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(only.Data)).Reason).IsEqualTo("expired");
+            await Assert.That(audited.Count).IsZero();
+        }
+        await Assert.That(await live.Ended()).IsTrue();
+    }
+
     // The first answer is made before the response is committed, so a refusal is still a status with
     // a body, exactly as the query endpoint gives it.
     [Test]
@@ -601,6 +628,18 @@ public class SubscriptionHttpTests
             delay;
     }
 
+    /// <summary>Counts runs by the audit entries they leave, which is one per run whether or not it spoke.</summary>
+    sealed class CountingAuditor :
+        IScryAuditor
+    {
+        int count;
+
+        public int Count => Volatile.Read(ref count);
+
+        public void Record(ScryAuditEntry entry) =>
+            Interlocked.Increment(ref count);
+    }
+
     // Only ever asked for a request, which is captured rather than sent.
     static readonly ScryQuery capture = new(ScryClient.ForHttp(new(), "/api/query"));
 
@@ -701,7 +740,8 @@ public class SubscriptionHttpTests
             Action<ScryOptions>? configure = null,
             TimeSpan? ticketExpiresIn = null,
             bool refuseEveryone = false,
-            int? port = null)
+            int? port = null,
+            IScryAuditor? auditor = null)
         {
             var builder = WebApplication.CreateBuilder();
             if (port is null)
@@ -732,6 +772,10 @@ public class SubscriptionHttpTests
                 options.SubscriptionPollInterval = null;
                 configure?.Invoke(options);
             });
+            if (auditor is not null)
+            {
+                builder.Services.AddSingleton(auditor);
+            }
 
             var authenticated = ticketExpiresIn is not null || refuseEveryone;
             if (authenticated)

@@ -342,7 +342,7 @@ A `DateTimeOffset` keeps its own offset: the offset is part of the value, and th
 
 A `DateTime` does **not** carry one. A `Local` kind is flattened to the wall clock it names, and the `Local`/`Unspecified` distinction is not on the wire. An offset would otherwise be read back against the *server's* zone — `DateTime.Parse(…, RoundtripKind)` resolves an offset-bearing text into local time — and the provider binds the resulting wall clock, so one request would name a different moment on two deployments. That is the same environment dependency [`DayOfWeek`](querying.md#functions) is composed by hand to avoid and the `LocalDateTime` reading of an offset is not carried for, and a constant may not smuggle it in. Flattened, what the client wrote as its wall clock reaches SQL as that wall clock, identically wherever the server runs.
 
-The same spellings encode a [paging cursor's](paging.md) ordering-key values, for the same reason: a key that travelled differently from the constant the same value becomes is a key the seek predicate compares against something else.
+The same spellings encode a [paging cursor's](paging.md) ordering-key values, for the same reason: a key that travelled differently from the constant the same value becomes is a key the seek predicate compares against something else. An enum key is the exception: a cursor spells it by its number, since a column can hold a value the enum does not declare — see [cursor format](paging.md#cursor-format).
 
 
 ### `binary` and `unary`
@@ -838,10 +838,10 @@ The rows between the markers are exactly the objects a `list` payload holds, so 
 **The closing marker is load-bearing.** A stream commits to a success status before its first row is written, so a failure past that point cannot become a `400` or a `500`. Without an explicit end, a truncated response — a dropped connection, a faulting provider, a killed server — would be indistinguishable from a complete one, and a reader would silently return a short answer. A reader must therefore require the marker and fail without it. A failure the server does notice closes the stream instead with:
 
 ```
-{"$scry":"error","error":"The query returned more than the maximum of 1000 streamed rows."}
+{"$scry":"error","error":"The query returned more than the maximum of 1000 streamed rows.","code":"Validation"}
 ```
 
-carrying a validation message, which is the client's own doing, or a generic one — the same rule a non-streamed `500` follows, so nothing internal leaks either way.
+carrying a validation message, which is the client's own doing, or a generic one — the same rule a non-streamed `500` follows, so nothing internal leaks either way — and the `code` the status would have carried had the failure come before the first row: `Validation` here, `ExecutionFailed` for a provider fault, `StaleClient` where the request's stamp says the client is behind. A reader surfaces the marker as the same failure that status does, so what catches a rejection or a stale client before the first row catches it after the tenth.
 
 
 ## Live queries
@@ -885,7 +885,7 @@ A failure is answered as the [`error` marker](#streamed-results) a stream closes
 {"$scry":"error","error":"Property 'Salary' is not allow-listed on 'Employee'.","code":"Validation"}
 ```
 
-It is the whole answer to a `Query` or a `Batch`, and the last item of a `Stream` or a `Subscribe`. `code` is omitted by the `…/stream` endpoint, where the only failure left to report is one the status could no longer say.
+It is the whole answer to a `Query` or a `Batch`, and the last item of a `Stream` or a `Subscribe`. It is the same marker, `code` included, that the `…/stream` endpoint closes with on a failure after its first row — the one failure left there that the status could no longer say — so a reader has one marker to read whichever transport carried it.
 
 
 ## Commands

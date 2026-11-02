@@ -168,6 +168,18 @@ public class CommandPipelineTests
         await Assert.That(exception!.Message).StartsWith("The payload of command 'CreateShift' is not valid at '$.perks");
     }
 
+    // And by its declared spelling: "gym" is not a name Perks declares, however a reader matching names
+    // whatever their case would have taken it. The wire has one spelling for a value, and so does a payload.
+    [Test]
+    public async Task AnEnumTravelsByItsDeclaredSpelling()
+    {
+        await using var host = await CommandHost.Start("CommandEnumByCase");
+
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => host.Send("CreateShift", new {name = "Late", day = "2026-03-05", perks = new[] {"gym"}}));
+
+        await Assert.That(exception!.Message).StartsWith("The payload of command 'CreateShift' is not valid at '$.perks");
+    }
+
     [Test]
     public async Task APayloadThatIsNotAnObjectIsRejected()
     {
@@ -188,6 +200,24 @@ public class CommandPipelineTests
         using (Assert.Multiple())
         {
             await Assert.That(exception!.Message).IsEqualTo(ScryPermissionException.CommandDeniedMessage);
+            await Assert.That(host.Script.Seen).IsEmpty();
+        }
+    }
+
+    // The policy is asked before the payload is read, as it says it is. A caller it refuses is told so
+    // and nothing else: not what the binder would have made of a payload it had no business sending,
+    // and the refusal is audited as the denial it is rather than as a payload gone wrong.
+    [Test]
+    public async Task ADeniedCallerIsRefusedBeforeItsPayloadIsRead()
+    {
+        await using var host = await CommandHost.Start("CommandDeniedBeforeBinding", register: _ => _.AddSingleton(new CommandGate {Open = false}));
+
+        var exception = await Assert.ThrowsExactlyAsync<ScryPermissionException>(() => host.Send("SealContract", new {contractId = 1, sealedBy = "mallory"}));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(exception!.Message).IsEqualTo(ScryPermissionException.CommandDeniedMessage);
+            await Assert.That(host.Audited.Single().Outcome).IsEqualTo(ScryQueryOutcome.Denied);
             await Assert.That(host.Script.Seen).IsEmpty();
         }
     }
@@ -325,11 +355,11 @@ public class CommandPipelineTests
         var id = Guid.NewGuid();
         await Assert.That((await FirstReceipt(host, "SealContract", new {contractId = 1}, "alice", id)).Status).IsEqualTo(CommandStatus.Pending);
 
-        var stranger = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => Receipts(host.Processor.Receipt(id, "bob")));
-        var unknown = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => Receipts(host.Processor.Receipt(Guid.NewGuid(), "alice")));
+        var stranger = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => Receipts(host.Processor.Receipt(id, host.Services, "bob")));
+        var unknown = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => Receipts(host.Processor.Receipt(Guid.NewGuid(), host.Services, "alice")));
 
         host.Script.Gate.SetResult();
-        var own = await Receipts(host.Processor.Receipt(id, "alice")).WaitAsync(patience);
+        var own = await Receipts(host.Processor.Receipt(id, host.Services, "alice")).WaitAsync(patience);
 
         using (Assert.Multiple())
         {
@@ -358,7 +388,7 @@ public class CommandPipelineTests
         }
 
         host.Script.Gate.SetResult();
-        var receipt = (await Receipts(host.Processor.Receipt(id)).WaitAsync(patience)).Last();
+        var receipt = (await Receipts(host.Processor.Receipt(id, host.Services)).WaitAsync(patience)).Last();
 
         using (Assert.Multiple())
         {
@@ -508,7 +538,7 @@ public class CommandPipelineTests
 
         host.Script.Gate.SetResult();
         await sending.WaitAsync(patience);
-        var receipt = (await Receipts(host.Processor.Receipt(id)).WaitAsync(patience)).Last();
+        var receipt = (await Receipts(host.Processor.Receipt(id, host.Services)).WaitAsync(patience)).Last();
         await WaitFor(() =>
         {
             lock (failures)

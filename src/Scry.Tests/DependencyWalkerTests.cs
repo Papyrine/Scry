@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+
 /// <summary>
 /// What a live query listens for is what its last run read — read off the query as it actually ran,
 /// so that a table only a policy names counts as much as one the client named. Too narrow and a change
@@ -127,6 +130,41 @@ public class DependencyWalkerTests
         await Assert.That(await Read(request)).IsNull();
     }
 
+    // A global query filter is applied as EF compiles the query, after the expression the walker reads
+    // was built, so it is read off the model instead. The shared model declares none; this one does, on
+    // both sides of a navigation, so a walk that followed filters blindly would never end.
+    [Test]
+    public async Task AQueryFilterReadsWhatItReaches()
+    {
+        await using var context = Filtered();
+        var model = context.Model;
+
+        var names = DependencyWalker.Read(model, [((IQueryable) context.Set<Posting>()).Expression]);
+
+        await Assert.That(names).IsEquivalentTo([Name<Posting>(model), Name<Journal>(model)]);
+    }
+
+    // The client never named Hold, and neither did the query: the filter did, by reading another of the
+    // context's sets — the shape a tenant or a soft-delete filter takes.
+    [Test]
+    public async Task AQueryFilterReadingAnotherSetReadsIt()
+    {
+        await using var context = Filtered();
+        var model = context.Model;
+
+        var names = DependencyWalker.Read(model, [((IQueryable) context.Set<Account>()).Expression]);
+
+        await Assert.That(names).IsEquivalentTo([Name<Account>(model), Name<Hold>(model)]);
+    }
+
+    static LedgerContext Filtered() =>
+        new(new DbContextOptionsBuilder<LedgerContext>()
+            .UseSqlServer("Server=(none)")
+            .Options);
+
+    static string Name<TEntity>(IModel model) =>
+        model.FindEntityType(typeof(TEntity))!.Name;
+
     static ScryClient Capture() =>
         new((_, _) => throw new("A captured request is never sent."));
 
@@ -154,6 +192,45 @@ public class DependencyWalkerTests
 
     static string[] Names<TFirst, TSecond>() =>
         [.. Names<TFirst>(), .. Names<TSecond>()];
+
+    // A posting is read only while its journal is open, a journal only while it has postings, and an
+    // account only while nothing holds it. Never connected: the model is all that is read.
+    sealed class LedgerContext(DbContextOptions<LedgerContext> options) :
+        DbContext(options)
+    {
+        public DbSet<Hold> Holds => Set<Hold>();
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            builder.Entity<Posting>().HasQueryFilter(_ => !_.Journal.Closed);
+            builder.Entity<Journal>().HasQueryFilter(_ => _.Postings.Count > 0);
+            builder.Entity<Account>().HasQueryFilter(_ => !Holds.Any(hold => hold.AccountId == _.Id));
+        }
+    }
+
+    sealed class Journal
+    {
+        public int Id { get; set; }
+        public bool Closed { get; set; }
+        public List<Posting> Postings { get; set; } = [];
+    }
+
+    sealed class Posting
+    {
+        public int Id { get; set; }
+        public Journal Journal { get; set; } = null!;
+    }
+
+    sealed class Account
+    {
+        public int Id { get; set; }
+    }
+
+    sealed class Hold
+    {
+        public int Id { get; set; }
+        public int AccountId { get; set; }
+    }
 }
 
 /// <summary>

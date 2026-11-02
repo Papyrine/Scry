@@ -64,6 +64,22 @@ public class ProjectionMemberEncodingTests
     public void ABlankMemberNameIsRefused() =>
         Assert.ThrowsExactly<ScryWireException>(() => Deserialize("[\" \"]"));
 
+    // The object spelling is held to the same rule: a member is named, or it is refused.
+    [Test]
+    public void ABlankObjectMemberNameIsRefused() =>
+        Assert.ThrowsExactly<ScryWireException>(() => Deserialize("""[{"name":" ","value":{"$type":"node","node":{"$type":"member","path":"Id"}}}]"""));
+
+    // Every name is camel-cased when a row is written, so two that differ only in their leading case
+    // would land on one key — a row the client's own reader refuses as carrying a name twice.
+    [Test]
+    public async Task TwoNamesARowWritesAsOneAreRefused()
+    {
+        var exception = Assert.ThrowsExactly<ScryWireException>(
+            () => Deserialize("""["Name",{"name":"NAME","value":{"$type":"node","node":{"$type":"member","path":"Id"}}}]"""));
+
+        await Assert.That(exception.Message).Contains("'Name' and 'NAME'");
+    }
+
     [Test]
     public void AMemberMissingItsValueIsRefused() =>
         Assert.ThrowsExactly<ScryWireException>(() => Deserialize("""[{"name":"Active"}]"""));

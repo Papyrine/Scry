@@ -164,7 +164,7 @@ The value being null is a *different* answer — `204`, meaning the row was read
 
 | Status | Meaning |
 | --- | --- |
-| `200` | The bytes, as `application/octet-stream`. |
+| `200` | The bytes, as the content type the member declares, or `application/octet-stream` where it declares none. |
 | `204` | The row was readable; the value is null. |
 | `404` | Refused, absent, or hidden — deliberately indistinguishable. |
 | `400` | A malformed request, an unknown source or member, the wrong number of key values, or one that does not parse. |

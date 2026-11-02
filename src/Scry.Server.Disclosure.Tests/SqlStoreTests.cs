@@ -574,6 +574,108 @@ public class SqlStoreTests
         }
     }
 
+    // A page of receipts ends where the page does, and what was sent in them is fewer where some were
+    // never handed on. A reviewer's showing older than the page's last receipt is not yet the page's to
+    // list: the receipts between it and the page's end have not been read, and a page taken up after
+    // the showing would pass them by. Every release and every showing is listed once, as the
+    // in-memory store lists them.
+    [Test]
+    public async Task APageCutAmongReceiptsNotHandedOnLosesNoRelease()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database, page: 3);
+        var sink = new Both(memory, kept);
+        var start = new DateTimeOffset(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
+        var answers = Enumerable.Range(0, 6).Select(_ => Sent(start.AddMinutes(_), _)).ToList();
+        foreach (var answer in answers)
+        {
+            await sink.AppendAsync(answer, Cancel.None);
+        }
+
+        // The newest, accepted whole and then withdrawn before anything of it left.
+        await sink.AppendAsync(
+            new()
+            {
+                EventId = answers[^1].EventId,
+                Sequence = 1,
+                Close = new(ScryDisclosureOutcome.Retracted, 0)
+            },
+            Cancel.None);
+
+        // A reviewer shown the second answer soon after it was given, before the later ones were.
+        var review = new ScryDisclosureReview(Guid.CreateVersion7(), start.AddMinutes(1).AddSeconds(30), ScryDisclosureQuestion.Event)
+        {
+            Reviewer = "records.officer",
+            Results = 1,
+            Events = [answers[1].EventId]
+        };
+        await sink.AppendAsync(
+            new()
+            {
+                EventId = review.Id,
+                Review = review
+            },
+            Cancel.None);
+        await kept.DrainAsync();
+
+        var listed = await kept.ReceiversOf("Patient", [1]).ToListAsync();
+        var told = await memory.ReceiversOf("Patient", [1]).ToListAsync();
+        using (Assert.Multiple())
+        {
+            await Assert.That(listed).Count().IsEqualTo(6);
+            await Assert.That(listed.Select(Shown)).IsEquivalentTo(told.Select(Shown), CollectionOrdering.Matching);
+        }
+    }
+
+    // One review may show the row at the same unit of several events — a row's answers are mostly
+    // single rows, at the first unit — and the time, the review and the unit then tell those showings
+    // apart no further. A page that ends among them is taken up at the event it ended on, so each is
+    // listed once.
+    [Test]
+    public async Task ShowingsOfOneReviewAtOneUnitAreAllListedAcrossPages()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database, page: 1);
+        var sink = new Both(memory, kept);
+        var start = new DateTimeOffset(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
+        var answers = Enumerable.Range(0, 3).Select(_ => Sent(start.AddMinutes(_), _)).ToList();
+        foreach (var answer in answers)
+        {
+            await sink.AppendAsync(answer, Cancel.None);
+        }
+
+        var review = new ScryDisclosureReview(Guid.CreateVersion7(), start.AddHours(1), ScryDisclosureQuestion.Row)
+        {
+            Reviewer = "records.officer",
+            Results = 3,
+            Events = [.. answers.Select(_ => _.EventId)]
+        };
+        await sink.AppendAsync(
+            new()
+            {
+                EventId = review.Id,
+                Review = review
+            },
+            Cancel.None);
+        await kept.DrainAsync();
+
+        var listed = await kept.ReceiversOf("Patient", [1]).ToListAsync();
+        var told = await memory.ReceiversOf("Patient", [1]).ToListAsync();
+        using (Assert.Multiple())
+        {
+            await Assert.That(listed).Count().IsEqualTo(6);
+            await Assert.That(listed.Where(_ => _.Review is not null).Select(_ => _.Event.Id)).IsEquivalentTo(answers.Select(_ => _.EventId));
+            await Assert.That(listed.Select(Shown).Order()).IsEquivalentTo(told.Select(Shown).Order(), CollectionOrdering.Matching);
+        }
+    }
+
+    // One listed receiver, by what tells it from the rest: the event, and the review where a reviewer
+    // was shown it.
+    static string Shown(ScryRowDisclosure row) =>
+        $"{row.Event.Id} #{row.Ordinal} shown {row.Review?.Id}";
+
     // A receipt is how who received a row is found, so one taken away is a change the chain check
     // sees, as one taken from the rows a unit was read from is.
     [Test]

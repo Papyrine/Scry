@@ -414,11 +414,16 @@ sealed class DisclosureStaging(DisclosureTables sql)
 
         // Held nowhere: never seen, seen by digest alone, or erased since. Erased and now sent again
         // is a new disclosure, and is kept as one.
+        // Unbounded as the round's other statements are: a probe of the whole content table takes as
+        // long as the table is, and this is the mover, not an answer's wait.
         var lacking = new List<ScryDisclosureAddress>();
         await using (var lacked = new SqlCommand(
                          $"SELECT s.[Address] FROM #content s WHERE NOT EXISTS (SELECT 1 FROM {sql.Content} c WHERE c.[Address] = s.[Address] AND (c.[Bytes] IS NOT NULL OR c.[Elsewhere] = 1));",
                          connection,
-                         transaction))
+                         transaction)
+                     {
+                         CommandTimeout = 0
+                     })
         await using (var reader = await lacked.ExecuteReaderAsync(cancel))
         {
             while (await reader.ReadAsync(cancel))

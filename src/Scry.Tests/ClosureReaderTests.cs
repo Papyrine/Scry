@@ -46,10 +46,15 @@ public class ClosureReaderTests
             _ => [Priority.Low, Priority.High]
         };
 
+    // The narrower integers and char are here for what the reader declines rather than answers: the
+    // compiler promotes them to int before any operator, so a node over one is a hand-built tree —
+    // F#'s converter builds them — which the reader has to leave to the fallback. It once passed them
+    // through CanRead and then threw at the width it had no spelling for.
     static Type[] operandTypes =
     [
         typeof(bool), typeof(int), typeof(uint), typeof(long), typeof(ulong),
-        typeof(float), typeof(double), typeof(Priority)
+        typeof(float), typeof(double), typeof(Priority),
+        typeof(sbyte), typeof(byte), typeof(short), typeof(ushort), typeof(char)
     ];
 
     // Every operator over every operand type, at every interesting pair of values. What the factory

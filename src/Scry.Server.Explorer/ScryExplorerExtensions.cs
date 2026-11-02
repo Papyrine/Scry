@@ -28,8 +28,9 @@ public static class ScryExplorerExtensions
                     "a package or local build without it is incomplete.");
             }
 
-            // Built here rather than per request: everything about the page is fixed by the route.
-            var page = Render(options, basePath, assets);
+            // Built once per prefix the host is reached under rather than per request: everything else
+            // about the page is fixed by the route, and the prefix is known only from a request.
+            var pages = new ServedPages<ExplorerPage>(_ => Render(options, _ + basePath, assets));
 
             var group = endpoints.MapGroup(basePath);
             // Schema introspection the UI reads on load (literal route wins over the asset catch-all).
@@ -39,9 +40,9 @@ public static class ScryExplorerExtensions
                 Sql(context, options, processor));
             // The cast forces the RouteHandler (Delegate) overload; a bare HttpContext=>IResult lambda
             // would otherwise bind to the RequestDelegate overload and fail to compile.
-            group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, page)));
+            group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, pages)));
             group.MapGet("/{**path}", (HttpContext context, string path) =>
-                Serve(context, path, options, assets, page));
+                Serve(context, path, options, assets, pages));
             return group;
         }
     }
@@ -94,7 +95,7 @@ public static class ScryExplorerExtensions
         string? path,
         ScryExplorerOptions options,
         ExplorerAssets assets,
-        ExplorerPage page)
+        ServedPages<ExplorerPage> pages)
     {
         if (!options.EnableGuard(context))
         {
@@ -107,14 +108,14 @@ public static class ScryExplorerExtensions
         // A path without a file extension is a client-side route (or the root) — serve the SPA host.
         if (path.Length == 0 || Path.GetExtension(path).Length == 0)
         {
-            return Index(context, page);
+            return Index(context, pages.For(context.Request.PathBase.Value));
         }
 
         // The page by its file name is the page: served from the assets it would go out with its
         // placeholders unfilled and no content security policy.
         if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
         {
-            return Index(context, page);
+            return Index(context, pages.For(context.Request.PathBase.Value));
         }
 
         if (assets.TryOpen(path, out var stream, out var contentType, out var tag))
@@ -264,9 +265,10 @@ public static class ScryExplorerExtensions
     }
 
     /// <summary>
-    /// The host page as it is served, built once per mapping. Everything about it is fixed by the
-    /// route: the page is the embedded one with its base href written in, the policy names the hashes
-    /// of the inline scripts <em>that</em> text holds, and the tag is of those same bytes.
+    /// The host page as it is served, built once per mapping and prefix. Everything about it is fixed
+    /// by the route and the prefix the host is reached under: the page is the embedded one with its
+    /// base href written in, the policy names the hashes of the inline scripts <em>that</em> text
+    /// holds, and the tag is of those same bytes.
     /// </summary>
     static ExplorerPage Render(ScryExplorerOptions options, string basePath, ExplorerAssets assets) =>
         Build(assets.ReadText("index.html"), basePath, options);

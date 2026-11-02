@@ -32,11 +32,19 @@ readonly record struct SensitiveUse(bool InConstant, bool InProjection);
 static class SensitiveWalk
 {
     /// <summary>
+    /// The segment that ends a path to ask about the type it reaches rather than a member of it: the
+    /// element of the collection a query flattened into and then returned whole. Never a member's
+    /// name, so no path a client writes can collide with it.
+    /// </summary>
+    public const string AnyMember = "*";
+
+    /// <summary>
     /// Inspects a request. <paramref name="sensitive"/> is asked whether a member path off a source is
     /// marked; an <b>empty path</b> asks whether the source has anything marked at all, which is what
-    /// a query with no <c>Select</c> returns. A <b>null source</b> means the walk lost track of which
-    /// row a path is read off — after a flatten, a narrow, a group, or a join — and the resolver is
-    /// expected to answer conservatively rather than guess.
+    /// a query with no <c>Select</c> returns, and a path ending in <see cref="AnyMember"/> asks the
+    /// same of the type the segments before it reach. A <b>null source</b> means the walk lost track
+    /// of which row a path is read off — after a flatten, a narrow, a group, or a join — and the
+    /// resolver is expected to answer conservatively rather than guess.
     /// </summary>
     public static SensitiveUse Inspect(QueryRequest request, Func<string?, IReadOnlyList<string>, bool> sensitive)
     {
@@ -60,20 +68,44 @@ static class SensitiveWalk
 
         public void Pipeline(IReadOnlyList<QueryOp> pipeline, string? root)
         {
-            // A query that never says what to return is answered with the source's own members, every
-            // one of them — so a source with anything marked returns it whether the query named it or
-            // not. Terminals that fold rows to a scalar return nothing of the row, and are excluded.
+            // A query that never says what to return is answered with the row's own members, every one
+            // of them — so a row with anything marked returns it whether the query named it or not.
+            // Terminals that fold rows to a scalar return nothing of the row, and are excluded.
             var projects = !pipeline.Any(_ => _ is SelectOp or JoinOp or SetOp or GroupByOp) &&
                            !pipeline.Any(_ => _ is CountOp or LongCountOp or AnyOp or AllOp or AggregateOp);
-            if (projects && sensitive(root, []))
+
+            // The last flatten, where the row is the element of a collection: a source of no name of
+            // its own, which the resolver is asked about through the collection's path.
+            (string? Root, IReadOnlyList<string> Path)? flattened = null;
+            foreach (var op in pipeline)
+            {
+                if (op is SelectManyOp selectMany)
+                {
+                    flattened = (root, selectMany.Path);
+                }
+
+                root = Operator(op, root);
+            }
+
+            // Decided against the row the pipeline ends on rather than the one it started from: a narrow
+            // changes it to the derived type, and a flatten to the collection's element, and either may
+            // mark a member the root does not.
+            if (projects && Returned(root, flattened))
             {
                 InProjection = true;
             }
+        }
 
-            foreach (var op in pipeline)
+        bool Returned(string? root, (string? Root, IReadOnlyList<string> Path)? flattened)
+        {
+            if (root is not null ||
+                flattened is null)
             {
-                root = Operator(op, root);
+                return sensitive(root, []);
             }
+
+            var (flattenedRoot, path) = flattened.Value;
+            return sensitive(flattenedRoot, [.. path, AnyMember]);
         }
 
         // Returns the source later operators read off, which most operators leave alone. The ones that
@@ -92,7 +124,7 @@ static class SensitiveWalk
                 FirstOp first => Read(first.Predicate, root),
                 SingleOp single => Read(single.Predicate, root),
                 LastOp last => Read(last.Predicate, root),
-                AggregateOp aggregate => Read(aggregate.Selector, root),
+                AggregateOp aggregate => Read(aggregate.Selector, root, Returns(aggregate.Function)),
                 SelectOp select => Projected(select.Projection, root),
                 GroupByOp groupBy => Grouped(groupBy, root),
 
@@ -110,11 +142,20 @@ static class SensitiveWalk
             };
 
         // Reads one expression off the row, which the operator leaves as it was.
-        string? Read(Node? node, string? root)
+        string? Read(Node? node, string? root, bool projected = false)
         {
-            Expression(node, root);
+            Expression(node, root, projected);
             return root;
         }
+
+        // Whether a fold hands back a value the rows held. A smallest, a largest and a concatenation are
+        // the member's own values, so returning one returns the member; a sum, an average or a count is
+        // a number of the fold's own.
+        static bool Returns(AggregateFn function) =>
+            function is AggregateFn.Min or AggregateFn.Max or AggregateFn.Join;
+
+        static bool Returns(SubqueryFn function) =>
+            function is SubqueryFn.Min or SubqueryFn.Max;
 
         string? Projected(Projection projection, string? root)
         {
@@ -168,7 +209,8 @@ static class SensitiveWalk
                 Member(member.Path, side, projected: true);
                 if (member.Aggregate is { } folded)
                 {
-                    Expression(folded, op.Root);
+                    // In the result, so the fold decides whether what it returns is the member's own.
+                    Expression(folded, op.Root, projected: true);
                 }
             }
 
@@ -285,20 +327,23 @@ static class SensitiveWalk
 
                     return;
                 case AggregateNode aggregate:
-                    // Folded from many rows to one value, so what it returns is not the member itself —
-                    // but a constant reaching it still shares the expression with one.
-                    Visit(aggregate.Selector, root, projected: false, found);
+                    // Folded from many rows to one value. A fold that returns one of the values returns
+                    // the member wherever the node is in the result; one that returns a number of its
+                    // own does not — but a constant reaching either still shares the expression with
+                    // the member.
+                    Visit(aggregate.Selector, root, projected && Returns(aggregate.Function), found);
                     Visit(aggregate.Predicate, root, projected: false, found);
                     return;
                 case SubqueryNode subquery:
                     // The collection member is read off this row; what is inside is read off its
                     // elements, which both resolvers reach by following the collection's path one
-                    // segment further. A subquery cannot nest, so one prefix is the most there is.
+                    // segment further. A subquery cannot nest, so one prefix is the most there is. The
+                    // selector is projected as an aggregate's is: where the fold returns a value.
                     Member(subquery.Path, root);
                     var outer = prefix;
                     prefix = [.. outer ?? [], .. subquery.Path];
                     Visit(subquery.Predicate, root, projected: false, found);
-                    Visit(subquery.Selector, root, projected: false, found);
+                    Visit(subquery.Selector, root, projected && Returns(subquery.Function), found);
                     prefix = outer;
                     return;
                 case InSourceNode inSource:
@@ -308,8 +353,11 @@ static class SensitiveWalk
                     return;
                 case GroupKeyNode groupKey:
                     // Reads the key's value, so it answers as the key's expression did — and a marked
-                    // key in the Select is a marked member in the result.
-                    if (groupKey.Index < groupKeys.Count &&
+                    // key in the Select is a marked member in the result. An index the grouping does
+                    // not have, below as well as above, is the validator's to refuse: this runs before
+                    // it, and must not fail on what it will reject.
+                    if (groupKey.Index >= 0 &&
+                        groupKey.Index < groupKeys.Count &&
                         groupKeys[groupKey.Index])
                     {
                         found.Sensitive = true;

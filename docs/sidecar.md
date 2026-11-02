@@ -155,7 +155,7 @@ A [live query](live-queries.md) is not an exchange but a session, and its row sa
 
 
 
-Expand the row and its connections are listed under it, newest first, each with what it resumed from and how it finished — `end` with the server's own reason, or `cut` where it stopped without saying anything. Select one and its event timeline is shown: every `result` with the identifier the next connection will send back and its size, every `ping` and `unchanged` heartbeat, and the closing event. Select a `result` and the answer itself is shown, for the recent ones still kept.
+Expand the row and its connections are listed under it, newest first, each with what it resumed from and how it finished — `end` with the server's own reason, `closed` where the app ended it, or `cut` where it stopped without saying anything. Select one and its event timeline is shown: every `result` with the identifier the next connection will send back and its size, every `ping` and `unchanged` heartbeat, and the closing event. Select a `result` and the answer itself is shown, for the recent ones still kept.
 
 Reading the body cannot be allowed to hold the consumer up, so nothing is buffered: each read is handed straight back and a copy is framed on the way past. What the consumer has not asked for is not read, so the panel shows what the app saw rather than what the socket held.
 

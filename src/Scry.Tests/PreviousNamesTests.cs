@@ -169,4 +169,40 @@ public class PreviousNamesTests
 
         await Assert.That(exception.Message).Contains("'Surname' is not allow-listed");
     }
+
+    // A source's previous names are its own. A derived type opted in under it has a wire name of its
+    // own and claims none of them — read inheritably, it would claim each one the base does, and the
+    // server would refuse the model as naming one previous name twice — so the old name still resolves
+    // to the base and nothing else. Compiled, since this assembly's renamed source has no subclass.
+    [Test]
+    public async Task APreviousNameOnABaseIsNotInheritedByADerivedSource()
+    {
+        var (assembly, _) = CompiledModel.Compile(
+            """
+            public sealed class Context : DbContext;
+
+            [Queryable]
+            [PreviousNames("Fixture")]
+            public class Asset
+            {
+                public int Id { get; set; }
+            }
+
+            [Queryable]
+            public class Vehicle : Asset
+            {
+                public int Wheels { get; set; }
+            }
+            """);
+
+        var schema = Schema.Build(new(assembly.GetType("Context")!));
+        var resolved = schema.TryGetSource("Fixture", out var source);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(resolved).IsTrue();
+            await Assert.That(source?.ClrType.Name).IsEqualTo("Asset");
+            await Assert.That(schema.TryGetSource("Vehicle", out _)).IsTrue();
+        }
+    }
 }

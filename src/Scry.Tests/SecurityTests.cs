@@ -573,6 +573,21 @@ public class SecurityTests
         await Assert.That(exception.Message).Contains("'Name' is named more than once");
     }
 
+    // A row writes every name camel-cased, so two names that differ only in their leading case are one
+    // key in every row — which the client's own reader refuses as a name carried twice.
+    [Test]
+    public async Task RejectsAProjectionNamingAMemberTwiceInAnotherCase()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"]))), new("NAME", new NodeValue(new MemberNode(["Id"])))]))]);
+
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+
+        await Assert.That(exception.Message).Contains("'NAME' is named more than once");
+    }
+
     [Test]
     public async Task RejectsAJoinResultNamingAMemberTwice()
     {
@@ -595,10 +610,13 @@ public class SecurityTests
     }
 
     // Enum.Parse accepts any integer, and an undefined one would match nothing — or, for a flags
-    // enum, match by bits nobody named. A constant is held to the values the enum defines.
+    // enum, match by bits nobody named. A constant is held to the values the enum defines. One past
+    // the underlying type's range is refused the same way, where Enum.Parse overflows before the
+    // definedness check can see it — once a fault rather than a rejection.
     [Test]
     [Arguments("999")]
     [Arguments("-1")]
+    [Arguments("99999999999")]
     public async Task RejectsAnEnumConstantSpelledAsAnUndefinedInteger(string value)
     {
         await using var context = TestContext.CreateSeeded();

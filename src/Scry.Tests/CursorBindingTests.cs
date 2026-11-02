@@ -231,6 +231,61 @@ public class CursorBindingTests
         await Assert.That(() => second.Execute(QueryRequest.Create("Employee", [byName, new PageOp(Size: 1, cursor)]), context)).ThrowsNothing();
     }
 
+    // A column can hold a value its enum does not declare — a status code nobody named. A cursor once
+    // spelled such a key as Enum.ToString does, which for an undeclared value is its number, and the
+    // resume refused the number as it refuses one in a client's constant: a 400 for the server's own
+    // cursor. Both are spelled by number now, and a cursor reads either spelling back.
+    [Test]
+    public async Task ResumesPastAnUndeclaredEnumValue()
+    {
+        await using var database = await TestContext.CreateIsolated("UndeclaredEnumCursor");
+        await using (var writing = database.NewDbContext())
+        {
+            writing.Callbacks.AddRange(
+                new()
+                {
+                    Url = "https://example.com/first",
+                    Status = HttpStatusCode.OK
+                },
+                new()
+                {
+                    Url = "https://example.com/second",
+                    Status = (HttpStatusCode) 299
+                },
+                new()
+                {
+                    Url = "https://example.com/third",
+                    Status = (HttpStatusCode) 399
+                });
+            await writing.SaveChangesAsync();
+        }
+
+        await using var context = database.NewDbContext();
+        var urls = new List<string>();
+        string? cursor = null;
+        do
+        {
+            var page = SharedProcessor.Instance.Execute(
+                QueryRequest.Create(
+                    "Callback",
+                    [
+                        new OrderByOp(new MemberNode(["Status"]), Descending: false),
+                        new SelectOp(new([new("Url", new NodeValue(new MemberNode(["Url"])))])),
+                        new PageOp(Size: 1, cursor)
+                    ]),
+                context).Payload;
+            urls.AddRange(page.GetProperty("items").EnumerateArray().Select(_ => _.GetProperty("url").GetString()!));
+            cursor = null;
+            if (page.TryGetProperty("cursor", out var next))
+            {
+                cursor = next.GetString();
+            }
+        }
+        while (cursor is not null);
+
+        await Assert.That(urls).IsEquivalentTo(["https://example.com/first", "https://example.com/second", "https://example.com/third"], CollectionOrdering.Matching);
+    }
+
     // A first page small enough to leave more behind, so the response carries a cursor to resume with.
     static async Task<string> CursorFor(TestContext context, string root, params QueryOp[] pipeline)
     {

@@ -65,7 +65,18 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             return Refuse(StatusCodes.Status403Forbidden, "The disclosure record is only read from its own page.");
         }
 
-        return await answer(context);
+        try
+        {
+            return await answer(context);
+        }
+        catch (Exception)
+            when (!context.RequestAborted.IsCancellationRequested)
+        {
+            // The rule the query endpoints follow: nothing internal leaves the server. A store that
+            // fails to read is a refusal the page can show, in place of the host's own error page —
+            // which in development is a stack trace naming the store's tables.
+            return Refuse(StatusCodes.Status500InternalServerError, "The record could not be read.");
+        }
     }
 
     async Task<IResult> Catalog(HttpContext context)
@@ -107,37 +118,38 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             return Refuse(StatusCodes.Status400BadRequest, "A row is asked about by its source and its key.");
         }
 
-        if (!DisclosureKeys.TryRead(question.Key, out var key))
+        if (!DisclosureKeys.TryRead(question.Key, out var spellings))
         {
             return Refuse(StatusCodes.Status400BadRequest, DisclosureKeys.Help);
         }
 
         var cancel = context.RequestAborted;
         var reader = Reader(context);
+        var row = new SpelledRow(reader, question.Source, spellings);
         var (listed, more) = await Page(
-            reader.ReceiversOf(question.Source, key, question.From, question.To, Mark(question.After), cancel),
+            row.ReceiversOf(question.From, question.To, Mark(question.After), cancel),
             question.Take,
             cancel);
 
         var shapes = new Dictionary<ScryDisclosureAddress, IReadOnlyList<MemberLine>>();
         var lines = new List<RowLine>(listed.Count);
-        foreach (var row in listed)
+        foreach (var release in listed)
         {
             ReviewLine? review = null;
-            if (row.Review is { } shown)
+            if (release.Review is { } shown)
             {
                 review = Line(shown);
             }
 
             lines.Add(
                 new(
-                    Line(row.Event, row.Close),
-                    row.Ordinal,
-                    row.Content.ToString(),
-                    row.Via,
-                    await Left(reader, row.Event.Shape, shapes, cancel),
+                    Line(release.Event, release.Close),
+                    release.Ordinal,
+                    release.Content.ToString(),
+                    release.Via,
+                    await Left(reader, release.Event.Shape, shapes, cancel),
                     review,
-                    row.Version));
+                    release.Version));
         }
 
         PageMark? next = null;
@@ -146,7 +158,7 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             next = Mark(ScryDisclosureCursor.After(listed[^1]));
         }
 
-        var answer = new RowAnswer(ScryDisclosureEntity.KeyOf(key), lines, next);
+        var answer = new RowAnswer(row.ReadAs, lines, next);
         return await Answer(context, ScryDisclosureQuestion.Row, question, DisclosureJson.Default.RowQuestion, answer, DisclosureJson.Default.RowAnswer, lines.Count);
     }
 
@@ -378,13 +390,13 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
         }
 
         if (string.IsNullOrWhiteSpace(question.Source) ||
-            !DisclosureKeys.TryRead(question.Key, out var key))
+            !DisclosureKeys.TryRead(question.Key, out var spellings))
         {
             return Refuse(StatusCodes.Status400BadRequest, DisclosureKeys.Help);
         }
 
         if (!DisclosureKeys.TryRead(question.Confirm, out var again) ||
-            ScryDisclosureEntity.KeyOf(again) != ScryDisclosureEntity.KeyOf(key))
+            !DisclosureKeys.Same(spellings, again))
         {
             return Refuse(StatusCodes.Status400BadRequest, "The key typed again is not the key. Nothing was erased.");
         }
@@ -395,8 +407,26 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             return unrecorded;
         }
 
-        var erasure = await eraser.EraseAsync(question.Source, key, options.Reviewer(context), context.RequestAborted);
-        return Results.Json(Line(erasure), DisclosureJson.Default.ErasureLine);
+        // Erased under each spelling the record holds the row under, so a key typed one way and held
+        // another is erased rather than missed — and under the key as typed where it is held under
+        // none, so that the asking is among the erasures all the same.
+        var cancel = context.RequestAborted;
+        var by = options.Reviewer(context);
+        var erasures = new List<ScryDisclosureErasure>();
+        foreach (var spelling in await new SpelledRow(Reader(context), question.Source, spellings).Held(cancel))
+        {
+            erasures.Add(await eraser.EraseAsync(question.Source, spelling, by, cancel));
+        }
+
+        return Results.Json(Erased(erasures), DisclosureJson.Default.ErasureLine);
+    }
+
+    // One line for an erasure made under however many spellings of the key: the first's, counting
+    // every piece removed under any of them.
+    static ErasureLine Erased(List<ScryDisclosureErasure> erasures)
+    {
+        var first = erasures[0];
+        return new(first.At, first.By, first.Source, first.Key, erasures.Sum(_ => _.Units));
     }
 
     // A question asked again for all of its answer, with the content, as a file. Everything it is
@@ -487,7 +517,7 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
         if (question.Row is { } row)
         {
             if (string.IsNullOrWhiteSpace(row.Source) ||
-                !DisclosureKeys.TryRead(row.Key, out var key))
+                !DisclosureKeys.TryRead(row.Key, out var spellings))
             {
                 return null;
             }
@@ -495,7 +525,8 @@ sealed class DisclosureApi(ScryDisclosureExplorerOptions options)
             // Only the units that carried the row, of each event that released it. The reviewers
             // since shown one of those events are part of who received the row, not of what it was.
             var units = new Dictionary<Guid, HashSet<int>>();
-            await foreach (var release in reader.ReceiversOf(row.Source, key, row.From, row.To, cancel: cancel))
+            var spelled = new SpelledRow(reader, row.Source, spellings);
+            await foreach (var release in spelled.ReceiversOf(row.From, row.To, after: null, cancel))
             {
                 if (release.Review is not null)
                 {

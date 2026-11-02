@@ -97,6 +97,58 @@ public sealed partial class ScryClient
         }
     }
 
+    // The hub adapter's. Its stream arrives as the lines the stream endpoint writes, markers included,
+    // and reading those is the client's business rather than the adapter's: the opening marker carries
+    // the server's stamp, which only the client can record, and the enum aliases every row after it is
+    // read with. A static adapter that consumed the markers itself dropped both, so a drifted client's
+    // rows threw over the hub where they read over HTTP. Internal because StreamedRow is.
+    internal ScryClient(
+        Func<QueryRequest, Cancel, Task<QueryResponse>> transport,
+        Func<QueryRequest, Cancel, IAsyncEnumerable<string>> lineTransport,
+        Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>> batchTransport,
+        Func<QueryRequest, Cancel, IAsyncEnumerable<QueryResponse>> subscribeTransport,
+        Func<CommandRequest, Cancel, IAsyncEnumerable<CommandReceipt>> commandTransport,
+        Func<Guid, Cancel, IAsyncEnumerable<CommandReceipt>> receiptTransport,
+        Func<Cancel, Task<CommandCapabilities>> capabilitiesTransport) :
+        this(transport, streamTransport: null, batchTransport, subscribeTransport, commandTransport, receiptTransport, capabilitiesTransport) =>
+        streamTransport = (request, call, cancel) =>
+        {
+            RefuseHeaders(call);
+            return ReadLines(lineTransport(request, cancel), cancel);
+        };
+
+    /// <summary>
+    /// Reads the lines the stream endpoint writes when they arrive without a body of their own — over
+    /// a hub, a string each. The markers are consumed exactly as the HTTP reader consumes them: the
+    /// opening one records the server's stamp and hands its enum aliases to every row, a failure
+    /// surfaces as the failure its code names, and the closing one is required.
+    /// </summary>
+    internal async IAsyncEnumerable<StreamedRow> ReadLines(
+        IAsyncEnumerable<string> lines,
+        [EnumeratorCancellation] Cancel cancel)
+    {
+        var ended = false;
+        IReadOnlyList<EnumAlias>? aliases = null;
+        await foreach (var line in lines.WithCancellation(cancel))
+        {
+            var utf8 = Encoding.UTF8.GetBytes(line);
+            if (!IsMarker(utf8))
+            {
+                yield return StreamedRow.FromUtf8(utf8) with {Aliases = aliases};
+                continue;
+            }
+
+            (var closed, aliases) = HandleMarker(utf8, aliases);
+            ended |= closed;
+        }
+
+        if (!ended)
+        {
+            throw new ScryWireException(
+                "The result stream ended without its closing marker, so the rows received are incomplete.");
+        }
+    }
+
     // The HTTP transport is an instance method so each response can record the server's advertised
     // schema stamp; a static one could not reach the client it belongs to.
     ScryClient(HttpClient http, string endpoint)
@@ -634,8 +686,20 @@ public sealed partial class ScryClient
             return await Read(response, call, cancel);
         }
 
-        static async Task<bool> IsRequiresBody(HttpResponseMessage response, Cancel cancel) =>
-            ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync(cancel)) is {RequiresBody: true};
+        static async Task<bool> IsRequiresBody(HttpResponseMessage response, Cancel cancel)
+        {
+            try
+            {
+                return ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync(cancel)) is {RequiresBody: true};
+            }
+            catch
+            {
+                // The one read of a response before the using below owns it: a cancellation or a cut
+                // connection here would otherwise leave the response open.
+                response.Dispose();
+                throw;
+            }
+        }
 
         async Task<HttpResponseMessage> Send(bool url)
         {

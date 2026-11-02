@@ -53,6 +53,15 @@ sealed class SseTee(
         {
             read = await inner.ReadAsync(buffer, cancel);
         }
+        catch (OperationCanceledException)
+            when (cancel.IsCancellationRequested)
+        {
+            // The consumer stopped reading: a live query disposed while its pump waited for the next
+            // event, which is how a live query ordinarily ends. Nothing failed and nothing is asked
+            // for again, so the connection is closed rather than cut.
+            Close("closed", error: null, reconnect: false);
+            throw;
+        }
         catch (Exception exception)
         {
             Cut(exception);

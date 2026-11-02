@@ -39,8 +39,8 @@ dotnet_analyzer_diagnostic.category-Scry.severity = error
 
 The analyzer reads the chain as written, and holds precision above recall — reporting working code is the worse failure, since everything it misses is caught twice downstream.
 
-- **Chains it cannot follow.** A query composed across statements is followed through the locals holding it; one assembled through a helper method, a conditional, or a reassigned local is not.
-- **Sequences in a query lambda.** `Select`, `Count` and `Contains` all mean something else inside one — a membership test against another source, a correlated subquery over a collection navigation, an aggregate over a group — so anything called on a sequence is left to the translator. What is checked is calls that read the row itself: members of a string, a date, or `Math` against the callable set, and everything else as client-side code. A value that comes from closure state is evaluated into a constant before it reaches the wire and is left alone.
+- **Chains it cannot follow.** A query composed across statements is followed through the locals holding it; one assembled through a helper method, a conditional, or a reassigned local is not. What follows the terminal makes no difference: a chain is read whether its task is awaited bare, through `ConfigureAwait` or `WaitAsync`, or blocked on, and whether the query is assigned or handed straight to a method as an argument.
+- **Sequences in a query lambda.** `Select`, `Count` and `Contains` all mean something else inside one — a membership test against another source, a correlated subquery over a collection navigation, an aggregate over a group — so anything called on a sequence is left to the translator. What is checked is calls that read the row itself: members of a string, a date, or `Math` against the callable set, and everything else as client-side code. A value that comes from closure state is evaluated into a constant before it reaches the wire and is left alone. A query lambda is one a Scry operator was handed, or one carried as an expression tree; a lambda given to plain LINQ over a plain collection runs on the client, and a chain written inside it is read like any other.
 - **Values known only when the query runs.** `Take` against `MaxPageSize`, the size of a `Contains` set, and whether the other side of a join is a Scry source at all.
 - **Whether the provider can translate it.** Reaching the wire is necessary but not sufficient, [as above](#computed-projection-members).
 
@@ -120,7 +120,7 @@ var sum = await client.Source<Order>("Order")
     .Where(_ => _.Region == "North")
     .SumAsync(_ => _.Amount);
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L178-L182' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAggregateTerminal' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L201-L205' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAggregateTerminal' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The other two positions EF Core allows an aggregate in are both reachable as well:

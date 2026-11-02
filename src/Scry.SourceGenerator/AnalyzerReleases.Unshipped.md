@@ -14,6 +14,7 @@ SCRY006 | Scry | Error | [Attachment] cannot combine with [BinaryTransfer]
 SCRY007 | Scry | Error | Attachment keys are not derivable
 SCRY008 | Scry | Error | A type opts in more than once
 SCRY018 | Scry | Error | A generic type opts in
+SCRY019 | Scry | Error | A generated type name cannot be a C# type name
 SCRY100 | Scry | Warning | LINQ operator is not supported by Scry
 SCRY101 | Scry | Warning | Cast is not supported by Scry
 SCRY102 | Scry | Warning | SelectMany with a result selector is not supported by Scry

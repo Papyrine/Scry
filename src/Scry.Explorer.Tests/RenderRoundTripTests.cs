@@ -19,12 +19,14 @@ public class RenderRoundTripTests
         Gym
     }
 
-    [ScryModel("Order", "Id", "Total", "CustomerName")]
+    [ScryModel("Order", "Id", "Total", "CustomerName", "Quantity", "Sku")]
     public class OrderQueryModel
     {
         public int Id { get; init; }
         public decimal Total { get; init; }
         public string CustomerName { get; init; } = null!;
+        public uint Quantity { get; init; }
+        public ulong Sku { get; init; }
     }
 
     [ScryModel("Department", "Id", "Name", "Code", "Active")]
@@ -155,7 +157,9 @@ public class RenderRoundTripTests
             [
                 new("Id", "int", NeedsNullDefault: false, IsNavigation: false),
                 new("Total", "decimal", NeedsNullDefault: false, IsNavigation: false),
-                new("CustomerName", "string", NeedsNullDefault: true, IsNavigation: false)
+                new("CustomerName", "string", NeedsNullDefault: true, IsNavigation: false),
+                new("Quantity", "uint", NeedsNullDefault: false, IsNavigation: false),
+                new("Sku", "ulong", NeedsNullDefault: false, IsNavigation: false)
             ]),
             new("DepartmentQueryModel",
             [
@@ -393,6 +397,26 @@ public class RenderRoundTripTests
     public Task LongAndDoubleSuffixes() =>
         RoundTrip(Employee.Where(_ => _.Offset.ToUnixTimeSeconds() > 100L && _.Rating >= 100d).ToScryRequest());
 
+    // uint and ulong have no tag of their own and travel as text under the String tag. Spelled back as
+    // a string the snippet would not compile against the member, so they are spelled as the literals
+    // that capture to the same text — including a Sku above long.MaxValue.
+    [Test]
+    public async Task UnsignedConstants()
+    {
+        var code = await RoundTrip(Order.Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxValue).ToScryRequest());
+        await Assert.That(code).Contains("7u");
+        await Assert.That(code).Contains("18446744073709551615UL");
+        await Assert.That(code).DoesNotContain("\"7\"");
+    }
+
+    [Test]
+    public async Task InUnsigned()
+    {
+        var quantities = new[] {1u, 2u};
+        var code = await RoundTrip(Order.Where(_ => quantities.Contains(_.Quantity)).ToScryRequest());
+        await Assert.That(code).Contains("1u, 2u");
+    }
+
     [Test]
     public Task DoubleSpecials() =>
         RoundTrip(Employee.Where(_ => _.Rating == double.NaN || _.Rating == double.PositiveInfinity || _.Rating > 4.5).ToScryRequest());
@@ -492,6 +516,28 @@ public class RenderRoundTripTests
     [Test]
     public Task NumericParse() =>
         RoundTrip(Employee.Where(_ => int.Parse(_.Name) > 5 && double.Parse(_.Name) < 9.5).ToScryRequest());
+
+    // A parse over a string function's result is still a parse: the function says it is text where the
+    // model cannot.
+    [Test]
+    public Task NumericParseOverAStringFunction() =>
+        RoundTrip(Employee.Where(_ => int.Parse(_.Name.Trim()) > 5).ToScryRequest());
+
+    // Over a number the same call is the widening cast the client wrote, spelled back as one.
+    [Test]
+    public async Task WideningCastProjection()
+    {
+        var code = await RoundTrip(Employee.Select(_ => new {Wide = (long) _.Id, Ratio = (double?) _.Age}).ToScryRequest());
+        await Assert.That(code).Contains("(long)_.Id");
+        await Assert.That(code).Contains("(double?)_.Age");
+    }
+
+    // A cast over an expression the renderer cannot type — a coalesce — has no faithful spelling: as a
+    // Parse over a number it would not compile, and as a cast it would need a type to cast to. It once
+    // rendered double.Parse((_.Age ?? 0)).
+    [Test]
+    public Task RefusesCastOverAnUntypedExpression() =>
+        AssertRefused(Employee.Select(_ => new {Ratio = (double) (_.Age ?? 0)}).ToScryRequest(), RenderRefusal.UnsupportedShape);
 
     // Dates and times.
     [Test]

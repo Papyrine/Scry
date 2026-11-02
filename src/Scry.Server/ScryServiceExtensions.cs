@@ -368,13 +368,23 @@ public static partial class ScryServiceExtensions
         {
             // The status is long since sent, so this is the only channel left to say the rows are not
             // the whole answer. A validation message is the client's own doing and is safe to repeat;
-            // anything else would leak internals, exactly as it would on a non-streamed response.
+            // anything else would leak internals, exactly as it would on a non-streamed response. The
+            // code is the one that response would have carried, as the hub puts it on its marker, so a
+            // reader surfaces the failure as the same exception whether it came before the first row
+            // or after the tenth — and a drifted client's fault as the stale client it most likely is.
+            var (error, code) = exception switch
+            {
+                ScryValidationException validation => (validation.Message, ErrorCodes.Classify(validation)),
+                ScryPermissionException permission => (permission.Message, ScryErrorCode.Forbidden),
+                _ => ("Query execution failed.", ErrorCodes.Failed(drifted))
+            };
             await WriteLine(
                 context,
                 new ScryStreamMarker
                 {
                     Kind = ScryStream.Error,
-                    Error = exception is ScryValidationException ? exception.Message : "Query execution failed."
+                    Error = error,
+                    Code = code
                 });
             if (multipart is not null)
             {

@@ -2047,7 +2047,7 @@ sequenceDiagram
 4. `SnippetExecutor` compiles the same snippet against the models — compiled once for the schema, so a run compiles only the snippet itself — runs it against a capturing client to build the LINQ expression tree, and calls the production `ToScryRequest` — so the wire request shown is produced by exactly the same translation the real client performs.
 5. The request is sent to `QueryEndpoint` — [as a URL](wire-format.md#the-url-form) where it fits in one, as a body where it does not, the same choice `ScryClient` makes — and validated like any other.
 
-A trailing terminal (`.ToListAsync()`, `.FirstAsync()`, `.CountAsync()`, or a plain `.ToList()`) is recognised and folded into the wire request as its terminal operator.
+A trailing terminal (`.ToListAsync()`, `.FirstAsync()`, `.CountAsync()`, `.ToPageAsync()`, or a plain `.ToList()`) is recognised and folded into the wire request as its terminal operator. One the client unfolds into other operators is unfolded the same way: `.MaxByAsync(…)` is the ordering and a `First`, `.ElementAtAsync(…)` a `Skip` and a `First`, and `.ToAsyncEnumerable()` the list's own request. A snippet that does not parse is refused rather than run as the part of it that did.
 
 Only validated requests reach the server. The explorer is a convenience over the same endpoint, not a bypass of it — it cannot query anything a normal client could not.
 

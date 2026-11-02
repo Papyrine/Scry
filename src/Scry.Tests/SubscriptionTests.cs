@@ -348,6 +348,21 @@ public class SubscriptionTests
         await Assert.That(await Next(answers)).IsEquivalentTo(["North", "South", "West"], CollectionOrdering.Matching);
     }
 
+    // The probe is asked from a service scope of its own, which only a container can make. A provider
+    // that cannot — the overload with none — is refused, naming the one to use, rather than served
+    // without the probe the host configured.
+    [Test]
+    public async Task AProbeRefusesAProviderThatCannotMakeScopes()
+    {
+        await using var reading = TestContext.CreateSeeded();
+        var processor = Live(options => options.ChangeProbe = (_, _) => new("1"));
+        await using var answers = processor.Subscribe(Regions(), reading).GetAsyncEnumerator();
+
+        var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () => await answers.MoveNextAsync());
+
+        await Assert.That(exception!.Message).Contains("IServiceProvider");
+    }
+
     // A probe that fails every interval would otherwise be a query storm of its own making.
     [Test]
     public async Task AProbeThatThrowsRunsNothing()

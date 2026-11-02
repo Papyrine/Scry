@@ -69,8 +69,8 @@ public sealed class ScryLinqAnalyzer :
     {
         var invocation = (IInvocationOperation) context.Operation;
 
-        // A chain is walked once, from its outermost call.
-        if (QueryChain.IsInner(invocation))
+        // A chain is walked once, from its outermost link.
+        if (QueryChain.IsInner(invocation, known))
         {
             return;
         }

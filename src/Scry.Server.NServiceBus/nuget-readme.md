@@ -32,7 +32,7 @@ builder.Services.AddScry<SampleContext>(
     });
 ```
 
-What each incoming message's handlers saved is published once, after they are done, through that message's own context. So the event leaves with the rest of what the handler sent, and only if the handler's work was kept: with the outbox, after its transaction commits. A handler that throws publishes nothing, and one that is retried publishes once.
+What each incoming message's handlers saved is published once, after they are done, through that message's own context. So the event leaves with the rest of what the handler sent, and only if the handler's work was kept: with the outbox, after its transaction commits. That holds for a save inside the outbox's own transaction, handed to the context with `UseTransaction`: the interceptor reports it at the save, the report is held with the message's other outgoing operations, and the outbox dispatches them together once the transaction has committed. A handler that throws publishes nothing, and one that is retried publishes once.
 
 NServiceBus delivers an event to one instance of each logical endpoint, since instances compete for the endpoint's queue. A worker's changes therefore reach every Scry server only where each server is an endpoint of its own. Scaled-out web nodes that share an endpoint name can leave the fan-out between themselves to the database's change marker — `Scry.Server.Delta`'s `UseDeltaChanges` — and use this for the worker's writes. A send-only endpoint receives nothing, so a server that is to hear changes cannot be one.
 

@@ -156,43 +156,53 @@ public sealed partial class ScryProcessor
 
     // A caller refused because a row it may not read matched has been told that such a row exists.
     // That is recorded before it is said, like everything else: with no content, since none was sent.
-    // A sink that will not take it turns the refusal into a failure, which says nothing.
+    // A sink that will not take it turns the refusal into a failure, which says nothing. The auditors
+    // have their say before the record says the caller was told: one that throws fails the request,
+    // and the capture, disposed unreleased, withdraws the denial rather than leaving it standing.
     static void Denied(DisclosureCapture? capture, QueryRecorder recorder, ScryPermissionException exception)
     {
-        if (capture is not null)
+        if (capture is null)
         {
-            try
-            {
-                capture.Deny();
-                recorder.Disclosure = capture.Event;
-            }
-            catch (Exception refused)
-            {
-                recorder.Failed(refused);
-                throw;
-            }
+            recorder.Denied(exception);
+            return;
+        }
+
+        try
+        {
+            capture.Deny();
+            recorder.Disclosure = capture.Event;
+        }
+        catch (Exception refused)
+        {
+            recorder.Failed(refused);
+            throw;
         }
 
         recorder.Denied(exception);
+        capture.Released();
     }
 
     static async ValueTask DeniedAsync(DisclosureCapture? capture, QueryRecorder recorder, ScryPermissionException exception, Cancel cancel)
     {
-        if (capture is not null)
+        if (capture is null)
         {
-            try
-            {
-                await capture.DenyAsync(cancel);
-                recorder.Disclosure = capture.Event;
-            }
-            catch (Exception refused)
-            {
-                recorder.Failed(refused);
-                throw;
-            }
+            recorder.Denied(exception);
+            return;
+        }
+
+        try
+        {
+            await capture.DenyAsync(cancel);
+            recorder.Disclosure = capture.Event;
+        }
+        catch (Exception refused)
+        {
+            recorder.Failed(refused);
+            throw;
         }
 
         recorder.Denied(exception);
+        capture.Released();
     }
 
     /// <summary>
@@ -262,13 +272,16 @@ public sealed partial class ScryProcessor
         return review;
     }
 
-    // One receipt, recorded before it is handed on: where a command stood, what it answered with,
-    // and the row it was sent against.
-    async ValueTask DiscloseReceipt(CommandRecord record, CommandReceipt receipt, string? caller, IServiceProvider services, Cancel cancel)
+    // One receipt, put on record before it is handed on: where a command stood, what it answered with,
+    // and the row it was sent against. Answers with the capture, accepted and not yet released, so that
+    // whatever else has a say before the caller is handed the receipt — the auditors — has it first.
+    // Null where there is nothing to record. The caller releases it, or disposes it unreleased and the
+    // record is withdrawn: it says what really happened, not what was about to.
+    async ValueTask<DisclosureCapture?> DiscloseReceipt(CommandRecord record, CommandReceipt receipt, string? caller, IServiceProvider services, Cancel cancel)
     {
         if (disclosure is null)
         {
-            return;
+            return null;
         }
 
         var source = "";
@@ -278,22 +291,38 @@ public sealed partial class ScryProcessor
             // host left out of the record is not one anybody is asked after.
             if (disclosure.Settings.Excludes(target.ClrType))
             {
-                return;
+                return null;
             }
 
             source = DisclosurePlanner.SourceName(schema, target.ClrType);
         }
 
-        await using var capture = disclosure.Begin(record.Request, source, caller, services);
-        capture.Begin(ScryDisclosureKind.CommandReceipt);
-        if (record.DisclosureKey is { } key)
+        var capture = disclosure.Begin(record.Request, source, caller, services);
+        try
         {
-            capture.AddEntity(slot: 0, source, key, via: "target");
+            capture.Begin(ScryDisclosureKind.CommandReceipt);
+            if (record.DisclosureKey is { } key)
+            {
+                capture.AddEntity(slot: 0, source, key, via: "target");
+            }
+
+            capture.AddUnit(ScryDisclosureContentKind.Receipt, ScryJson.SerializeToUtf8(receipt));
+            await capture.CommitAsync(cancel);
+        }
+        catch
+        {
+            await capture.DisposeAsync();
+            throw;
         }
 
-        capture.AddUnit(ScryDisclosureContentKind.Receipt, ScryJson.SerializeToUtf8(receipt));
-        await capture.CommitAsync(cancel);
-        capture.Released();
+        return capture;
+    }
+
+    // A receipt nothing else has a say in before it is handed on: on record, then released at once.
+    async ValueTask TellReceipt(CommandRecord record, CommandReceipt receipt, string? caller, IServiceProvider services, Cancel cancel)
+    {
+        await using var capture = await DiscloseReceipt(record, receipt, caller, services, cancel);
+        capture?.Released();
     }
 
     // What becomes of one run of a live query, once it is known whether its answer is to be sent.

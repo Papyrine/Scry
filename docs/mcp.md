@@ -222,7 +222,7 @@ Ask the agent something the data answers, such as *"Which active employees are i
 
 | Tool | Access | Does |
 | --- | --- | --- |
-| `describe_schema` | `Read` | Answers the [introspection](explorer.md#introspection) document: sources, types and members, enums and, under `ReadWrite`, commands. Under `Read` the commands are left out, so an agent that may not write is not told what writing would look like. |
+| `describe_schema` | `Read` | Answers the [introspection](explorer.md#introspection) document: sources, types and members, enums and, under `ReadWrite`, commands. Under `Read` the command payloads are left out, so an agent that may not write is not told what writing would look like; the `Can{Command}` capability members stay on their targets, since a reading agent may query them as it queries any other member. |
 | `query` | `Read` | Takes `root` (a source name) and `pipeline` (the operators, as the [wire format](wire-format.md) spells them). Answers the query's response: `kind`, `payload`, `stamp`. |
 | `send_command` | `ReadWrite` | Takes `command` and `payload`. Answers the command's receipt: `Completed` with its `result`, `Failed` with its `error`, or `Pending` with the `id` to ask about. |
 | `command_receipt` | `ReadWrite` | Takes that `id`. Answers the receipt as it stands. Only the caller that sent the command gets an answer. |

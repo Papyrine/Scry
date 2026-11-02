@@ -51,8 +51,12 @@ public static class ScryDisclosureExplorerExtensions
 
             Require(endpoints.ServiceProvider);
 
-            // Built here rather than per request: everything about the page is fixed by the route.
-            var page = Build(assets.ReadText("index.html"), basePath);
+            // Built once per prefix the host is reached under rather than per request: everything else
+            // about the page is fixed by the route, and the prefix is known only from a request. The
+            // redirect below already sends the page to an address under the prefix; the page's base
+            // has to agree with it.
+            var html = assets.ReadText("index.html");
+            var pages = new ServedPages<DisclosurePage>(_ => Build(html, _ + basePath));
 
             var group = endpoints.MapGroup(basePath);
 
@@ -60,9 +64,9 @@ public static class ScryDisclosureExplorerExtensions
             new DisclosureApi(options).Map(group.MapGroup("/api"));
 
             // The cast forces the RouteHandler (Delegate) overload, as in MapScryExplorer.
-            group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, page)));
+            group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, pages)));
             group.MapGet("/{**path}", (HttpContext context, string path) =>
-                Serve(context, path, options, assets, page));
+                Serve(context, path, options, assets, pages));
             return group;
         }
     }
@@ -116,7 +120,7 @@ public static class ScryDisclosureExplorerExtensions
         string? path,
         ScryDisclosureExplorerOptions options,
         ExplorerAssets assets,
-        DisclosurePage page)
+        ServedPages<DisclosurePage> pages)
     {
         if (!options.EnableGuard(context))
         {
@@ -145,14 +149,14 @@ public static class ScryDisclosureExplorerExtensions
                 return Results.Redirect($"{context.Request.PathBase}{asked}/{context.Request.QueryString}");
             }
 
-            return Index(context, page);
+            return Index(context, pages.For(context.Request.PathBase.Value));
         }
 
         // The page by its file name is the page: served from the assets it would go out with its
         // placeholders unfilled and no content security policy.
         if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
         {
-            return Index(context, page);
+            return Index(context, pages.For(context.Request.PathBase.Value));
         }
 
         if (assets.TryOpen(path, out var stream, out var contentType, out var tag))
@@ -202,8 +206,9 @@ public static class ScryDisclosureExplorerExtensions
 
     /// <summary>
     /// The page, its policy and its tag from the embedded page's text: the page with its base href
-    /// written in, the policy naming the hashes of the inline scripts that text holds, and the tag of
-    /// those same bytes. Reachable so the three can be asserted against a page of a test's own.
+    /// written in — the host's prefix ahead of the route, where it has one — the policy naming the
+    /// hashes of the inline scripts that text holds, and the tag of those same bytes. Reachable so the
+    /// three can be asserted against a page of a test's own.
     /// </summary>
     internal static DisclosurePage Build(string html, string basePath)
     {

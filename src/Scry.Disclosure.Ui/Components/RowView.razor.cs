@@ -57,7 +57,7 @@ public partial class RowView
         source = link["source"] ?? Default();
         key = link["key"] ?? "";
         from = Show.Typed(link["from"]);
-        to = Show.Typed(link["to"]);
+        to = Show.TypedTo(link["to"]);
         Clear();
         if (Asked)
         {
@@ -67,6 +67,10 @@ public partial class RowView
 
     void Clear()
     {
+        // The turn moves on with what is shown, so a reply still in flight for the question before is
+        // dropped rather than shown as this one's.
+        turn++;
+        loading = false;
         rows = [];
         readAs = null;
         next = null;
@@ -122,7 +126,7 @@ public partial class RowView
             ("source", source),
             ("key", key.Trim()),
             ("from", Show.Stamp(from)),
-            ("to", Show.Stamp(to)));
+            ("to", Show.StampTo(to)));
         if (asked.ToString() != Address)
         {
             Session.Go(asked);
@@ -147,16 +151,23 @@ public partial class RowView
 
     async Task Export(string format)
     {
+        var mine = turn;
         note = null;
         var reply = await Client.Export(new(format, Row: Question(after: null)));
         if (reply.Value is not { } file)
         {
-            note = reply.Refusal;
+            // Said of the question it was asked of, not under one the page has moved to since.
+            if (mine == turn)
+            {
+                note = reply.Refusal;
+            }
+
             return;
         }
 
         await Js.InvokeVoidAsync("disclosure.download", file.Name, file.Type, file.Bytes);
-        if (file.Cut)
+        if (file.Cut &&
+            mine == turn)
         {
             note = "That file holds only the newest answers: there were more than one export writes.";
         }
@@ -164,11 +175,19 @@ public partial class RowView
 
     async Task Erase()
     {
+        var mine = turn;
         erasing = true;
         erased = null;
         eraseFailure = null;
         var reply = await Client.Erase(new(link["source"]!, link["key"]!, confirm));
         erasing = false;
+
+        // Said of the row it was asked of: moved on, the page shows another row's form.
+        if (mine != turn)
+        {
+            return;
+        }
+
         if (reply.Value is not { } erasure)
         {
             eraseFailure = reply.Refusal;

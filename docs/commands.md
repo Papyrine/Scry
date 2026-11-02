@@ -179,7 +179,7 @@ What comes back is a `ScryCommandOutcome`:
 | `Completed` | Handled. `Result` holds what the handler answered with, typed on `ScryCommandOutcome<TResult>.Value`. |
 | `Failed` | Accepted and then not done — the handler refused or failed, or the target was gone by the time the command arrived — with the reason on `Error`. |
 | `Pending` | Still being handled when the client stopped waiting. `Completion` finishes with the outcome, and meanwhile the command is listed in `PendingWork`. |
-| `Unknown` | The connection the command was answered on ended, and the server no longer holds its outcome. It may have run. |
+| `Unknown` | The connection the command was answered on ended, and the server no longer holds its outcome — or would not answer for it when asked again, say under a token that had expired. It may have run. |
 
 A refusal is not an outcome. A command the server would not accept — malformed, denied outright, one too many — never ran, so sending it throws, as a query the server refuses does: `ScryRequestException` with a code, `ScryPermissionException`, or `ScryStaleClientException`. Where the refusal was about the moment (`CommandLimit`), sending it again is safe.
 
@@ -483,7 +483,7 @@ The outcome and the live answer arrive in no set order. Over HTTP the outcome us
 
 The server waits `CommandSyncWindow` for a command's outcome. One decided within it is answered as JSON, in one response. One that is not is answered `200 text/event-stream`: a `result` event carrying the `Pending` receipt at once, then one carrying the outcome when it lands, then the end of the stream — the framing a live query's answers use, heartbeats and a lifetime included.
 
-The client waits `CommandWait` — three seconds unless set — before answering `Pending` and listing the command in `ScryClient.PendingWork`, whose `Completion` the same stream then finishes. A stream that is cut, or ended by the server to bound its life, is asked for again by the command's id, under `ScryClient.Reconnect`. Asked for again and not found — pruned after `CommandRetention`, or asked of a node that never held it — it ends `Unknown`.
+The client waits `CommandWait` — three seconds unless set — before answering `Pending` and listing the command in `ScryClient.PendingWork`, whose `Completion` the same stream then finishes. A stream that is cut, or ended by the server to bound its life, is asked for again by the command's id, under `ScryClient.Reconnect`. Asked for again and not found — pruned after `CommandRetention`, or asked of a node that never held it — it ends `Unknown`. So does one refused when asked for again, by a gateway's `401` or a denial: the command was accepted before, so the refusal is of the asking, and only a receipt can say the handler did not do the work.
 
 A Blazor app renders the pending-work panel once, beside the router:
 

@@ -323,6 +323,121 @@ public class SqlStoreSegmentTests
         }
     }
 
+    // A row erased and then sent again is a new disclosure, kept where it was sent. The content is the
+    // same bytes under the same address, so the earlier answers that sent it read whole again — from
+    // the segment that holds the bytes now, where the one they are in was rolled away from before and
+    // keeps only that they were erased.
+    [Test]
+    public async Task ARowSentAgainAfterARollReadsWholeFromTheEarlierAnswer()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var processor = Processor(new Both(memory, kept), new());
+
+        processor.Execute(Clinic.Names(), database.Context);
+        await kept.DrainAsync();
+        var first = (await kept.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync()).Single().Event.Id;
+        await kept.EraseAsync("Patient", [1], by: "records.officer");
+        await memory.EraseAsync("Patient", [1], by: "records.officer");
+        var erased = (await kept.Reconstruct(first))!.Units[0];
+        await kept.RollAsync();
+        processor.Execute(Clinic.Names(), database.Context);
+        await kept.DrainAsync();
+
+        var whole = (await kept.Reconstruct(first))!.Units[0];
+        using (Assert.Multiple())
+        {
+            await Assert.That(erased.Erased).IsTrue();
+            await Assert.That(whole.Erased).IsFalse();
+            await Assert.That(Encoding.UTF8.GetString(whole.Content.Bytes.Span)).IsEqualTo("{\"name\":\"Ada\"}");
+
+            // The segment the earlier answer is in still says the piece was erased there.
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000001].[DisclosureContent] WHERE [Erased] = 1")).IsEqualTo(1);
+            await Assert.That(await Told(kept)).IsEqualTo(await Told(memory));
+        }
+    }
+
+    // The same for a binary value recorded by its digest: the bytes a later answer carried, after the
+    // record rolled on, are what the earlier answer reads with.
+    [Test]
+    public async Task ContentKnownByDigestTakesBytesThatArriveAfterARoll()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var both = new Both(memory, kept);
+        var photo = Clinic.Content(ScryDisclosureContentKind.Bytes, "not really a photograph");
+        var digest = photo with
+        {
+            Bytes = default
+        };
+        var first = Attachment(1);
+        var second = Attachment(2);
+
+        await both.AppendAsync(Clinic.Part(first.Id, 0, first, close: new(ScryDisclosureOutcome.Released, 1), rows: [(0, digest, "Patient", "[1]")]), Cancel.None);
+        await kept.DrainAsync();
+        await kept.RollAsync();
+        await both.AppendAsync(Clinic.Part(second.Id, 0, second, close: new(ScryDisclosureOutcome.Released, 1), rows: [(0, photo, "Patient", "[1]")]), Cancel.None);
+        await kept.DrainAsync();
+
+        var rebuilt = (await kept.Reconstruct(first.Id))!.Units.Single();
+        using (Assert.Multiple())
+        {
+            await Assert.That(rebuilt.Content.Held).IsTrue();
+            await Assert.That(Encoding.UTF8.GetString(rebuilt.Content.Bytes.Span)).IsEqualTo("not really a photograph");
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000001].[DisclosureContent] WHERE [Bytes] IS NULL")).IsEqualTo(1);
+            await Assert.That(await Told(kept)).IsEqualTo(await Told(memory));
+        }
+    }
+
+    static ScryDisclosureEvent Attachment(int minute) =>
+        new(Guid.CreateVersion7(), new DateTimeOffset(2026, 3, 1, 9, 0, 0, TimeSpan.Zero).AddMinutes(minute), ScryDisclosureKind.Attachment, "Patient")
+        {
+            Caller = "dr.osei",
+            Node = "ward-1"
+        };
+
+    // A caller told its copy of an answer still stands is recorded as told, with the shape of the
+    // answer it holds and no shape of its own: the shape is the earlier answer's, kept by address.
+    // Recorded after the record rolled on from that answer, the confirmation is in a segment that never
+    // held the shape, and still reads with it.
+    [Test]
+    public async Task AConfirmationRecordedAfterARollReadsWithItsShape()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var both = new Both(memory, kept);
+        var processor = Processor(both, new());
+
+        processor.Execute(Clinic.Names(), database.Context);
+        await kept.DrainAsync();
+        var answered = (await kept.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync()).Single().Event;
+        await kept.RollAsync();
+        var confirmed = new ScryDisclosureEvent(Guid.CreateVersion7(), answered.At.AddMinutes(1), answered.Kind, answered.Source)
+        {
+            Caller = answered.Caller,
+            Delivery = ScryDisclosureDelivery.Confirmed,
+            Request = answered.Request,
+            Shape = answered.Shape,
+            Node = answered.Node
+        };
+        await both.AppendAsync(Clinic.Part(confirmed.Id, 0, confirmed), Cancel.None);
+        await both.AppendAsync(Clinic.Part(confirmed.Id, 1, close: new(ScryDisclosureOutcome.Released, 0)), Cancel.None);
+        await kept.DrainAsync();
+
+        var rebuilt = (await kept.Reconstruct(confirmed.Id))!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000002].[DisclosureField]")).IsEqualTo(0);
+            await Assert.That(rebuilt.Shape).IsNotNull();
+            await Assert.That(rebuilt.Shape!.Address).IsEqualTo(answered.Shape!.Value);
+            await Assert.That(rebuilt.Shape.Fields.Select(_ => _.Member).Distinct()).IsEquivalentTo(["Name"]);
+            await Assert.That(await Told(kept)).IsEqualTo(await Told(memory));
+        }
+    }
+
     // A question about a span of time is asked only of the segments that cover any of it, and is
     // answered as it would be asked of all of them: whatever the span, the answer is the in-memory
     // store's, which has no segments to leave out.
@@ -515,6 +630,62 @@ public class SqlStoreSegmentTests
             await Assert.That((await kept.SegmentsAsync()).Count(_ => _.Retired is null)).IsEqualTo(1);
             await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000002].[DisclosureReceipt]")).IsEqualTo(1);
             await Assert.That(check.Intact).IsTrue();
+        }
+    }
+
+    // A segment being retired takes nothing more, so a later part of an answer begun in it goes to the
+    // segment being written to, under when it was accepted. Where the retirement failed and the
+    // segment is still kept, the answer is still there to be asked about, and is answered whole: the
+    // part is among its row's receivers with the answer's close, the answer is listed as it ended, and
+    // the event rebuilds with the part and the close, as the in-memory store has them.
+    [Test]
+    public async Task APartOfAnAnswerWhoseSegmentIsBeingRetiredIsStillRead()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(
+            database,
+            _ =>
+            {
+                _.Keep = 1;
+                _.Retire = (_, _) => throw new IOException("The archive is not there.");
+            });
+        var both = new Both(memory, kept);
+        var ada = Clinic.Content(ScryDisclosureContentKind.Row, "{\"name\":\"Ada\"}");
+        var brook = Clinic.Content(ScryDisclosureContentKind.Row, "{\"name\":\"Brook\"}");
+        var names = Clinic.Shape(new ScryDisclosureField("Patient", "Name", ScryDisclosureFieldUse.Returned, false));
+        var id = Guid.CreateVersion7();
+        var begin = new ScryDisclosureEvent(id, DateTimeOffset.UtcNow, ScryDisclosureKind.Stream, "Patient")
+        {
+            Caller = "dr.osei",
+            Shape = names.Address,
+            Node = "ward-1"
+        };
+
+        await both.AppendAsync(Clinic.Part(id, 0, begin, names, rows: [(0, ada, "Patient", "[1]")]), Cancel.None);
+        await kept.DrainAsync();
+        await Assert.ThrowsAsync<IOException>(() => kept.RollAsync());
+        await both.AppendAsync(Clinic.Part(id, 1, rows: [(1, brook, "Patient", "[2]")]), Cancel.None);
+        await both.AppendAsync(Clinic.Part(id, 2, close: new(ScryDisclosureOutcome.Released, 2)), Cancel.None);
+
+        // Moved on, and then the retirement tried again and refused again.
+        await Assert.ThrowsAsync<IOException>(() => kept.DrainAsync());
+
+        var segments = await kept.SegmentsAsync();
+        var received = await kept.ReceiversOf("Patient", [2]).ToListAsync();
+        var rebuilt = (await kept.Reconstruct(id))!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(segments[0].Retiring).IsTrue();
+            await Assert.That(segments[0].Retired).IsNull();
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000002].[DisclosureReceipt]")).IsEqualTo(1);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry_000002].[DisclosureEvent]")).IsEqualTo(0);
+            await Assert.That(received.Select(_ => (_.Event.Id, _.Ordinal))).IsEquivalentTo([(id, 1)]);
+            await Assert.That(received[0].Close!.Units).IsEqualTo(2);
+            await Assert.That(rebuilt.Units.Select(_ => _.Ordinal)).IsEquivalentTo([0, 1], CollectionOrdering.Matching);
+            await Assert.That(rebuilt.Close!.Outcome).IsEqualTo(ScryDisclosureOutcome.Released);
+            await Assert.That((await kept.VerifyWholeChainAsync()).Intact).IsTrue();
+            await Assert.That(await Told(kept, "dr.osei")).IsEqualTo(await Told(memory, "dr.osei"));
         }
     }
 

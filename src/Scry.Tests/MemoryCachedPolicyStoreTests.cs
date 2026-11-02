@@ -75,6 +75,83 @@ public class MemoryCachedPolicyStoreTests
     }
 
     [Test]
+    public async Task AScopeForgottenAndThenPendedStillDropsTheRound()
+    {
+        var store = new MemoryCachedPolicyStore();
+        store.Apply(policy, scope, new([(1, true), (2, true)], 2, []));
+        var read = store.Get(policy, scope)!;
+
+        // The host forgets the scope while the round is deciding row 3, and then pends a row. The
+        // forgetting is no longer the last thing it said, so the scope's generation is past where it
+        // happened — and the round, decided against a generation before it, still describes rows the
+        // host said to forget. Only a store carrying where the forgetting happened can tell.
+        store.InvalidateScope(policy, scope);
+        store.InvalidateRows(policy, [1]);
+        store.Apply(policy, scope, new([(3, true)], 3, []) {Generation = read.Generation});
+
+        var scoped = store.Get(policy, scope)!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(read.Generation).IsLessThan(scoped.Cleared);
+            await Assert.That(scoped.AllowedKeys).IsEmpty();
+            await Assert.That(scoped.Watermark).IsNull();
+            await Assert.That(scoped.PendingKeys).IsEquivalentTo(new object[] {1}, CollectionOrdering.Matching);
+        }
+    }
+
+    [Test]
+    public async Task AScopeForgottenAndThenPrimedStillDropsTheRound()
+    {
+        var store = new MemoryCachedPolicyStore();
+        store.Apply(policy, scope, new([(1, true), (2, true)], 2, []));
+        var read = store.Get(policy, scope)!;
+
+        // Priming is a round of its own against the forgotten scope's generation: no watermark, and
+        // only the rows it was handed. It stands, and the round decided before the forgetting does
+        // not — seeding the scope with its watermark would leave rows 1 and 2 never read again.
+        store.InvalidateScope(policy, scope);
+        var primed = store.Get(policy, scope)!;
+        store.Apply(policy, scope, new([(4, true)], null, []) {Generation = primed.Generation});
+        store.Apply(policy, scope, new([(1, true), (2, true), (3, true)], 3, []) {Generation = read.Generation});
+
+        var scoped = store.Get(policy, scope)!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(scoped.AllowedKeys).IsEquivalentTo(new object[] {4}, CollectionOrdering.Matching);
+            await Assert.That(scoped.Watermark).IsNull();
+            await Assert.That(scoped.Cleared).IsEqualTo(primed.Cleared);
+        }
+    }
+
+    [Test]
+    public async Task ForgettingIsKeptInTheScopeAndOnlyForgettingMovesIt()
+    {
+        var store = new MemoryCachedPolicyStore();
+        store.Apply(policy, scope, new([(1, true)], 1, []));
+        var decided = store.Get(policy, scope)!;
+        store.InvalidateScope(policy, scope);
+        var forgotten = store.Get(policy, scope)!;
+        store.InvalidateRows(policy, [1]);
+        var pended = store.Get(policy, scope)!;
+        store.Apply(policy, scope, new([(1, false)], 1, pended.PendingKeys) {Generation = pended.Generation});
+        var resolved = store.Get(policy, scope)!;
+
+        // Where the forgetting happened is the generation it moved to, and stays there through the
+        // invalidations and rounds after it, each of which moves or keeps the generation as before.
+        using (Assert.Multiple())
+        {
+            await Assert.That(decided.Cleared).IsZero();
+            await Assert.That(forgotten.Cleared).IsEqualTo(forgotten.Generation);
+            await Assert.That(forgotten.Cleared).IsGreaterThan(decided.Generation);
+            await Assert.That(pended.Generation).IsGreaterThan(forgotten.Generation);
+            await Assert.That(pended.Cleared).IsEqualTo(forgotten.Cleared);
+            await Assert.That(resolved.Generation).IsEqualTo(pended.Generation);
+            await Assert.That(resolved.Cleared).IsEqualTo(forgotten.Cleared);
+            await Assert.That(resolved.PendingKeys).IsEmpty();
+        }
+    }
+
+    [Test]
     public async Task AForgottenScopeIsDecidedAgainFromNothing()
     {
         var store = new MemoryCachedPolicyStore();

@@ -56,6 +56,18 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
+    // The same id on the other axis: a query model is named for its type, not its source, so two types
+    // of one simple name — in two namespaces, or nested in two types — would be generated as one class
+    // whatever each is named on the wire. Said apart from the source-name clash because the fix differs,
+    // and the one that clash names cannot fix this.
+    static DiagnosticDescriptor duplicateModel = new(
+        "SCRY002",
+        "Duplicate Scry query model name",
+        "Two queryable types named '{0}' would both be generated as '{1}'. A query model is named for its type rather than its source, so [Queryable(Name = \"...\")] cannot tell them apart: rename one of the types.",
+        "Scry",
+        DiagnosticSeverity.Error,
+        true);
+
     static DiagnosticDescriptor invalidSourceName = new(
         "SCRY003",
         "Scry source name cannot be a C# property name",
@@ -108,6 +120,14 @@ public class ScryGenerator :
         "SCRY018",
         "A generic type opts in",
         "{0} but is generic. A client is generated with a query model per opted-in type, and an open generic type has no members a client could name until its type parameters are filled in. Opt in the types deriving from it instead: a generic base in the model assembly gives each of them its members, with its parameters filled in.",
+        "Scry",
+        DiagnosticSeverity.Error,
+        true);
+
+    static DiagnosticDescriptor invalidTypeName = new(
+        "SCRY019",
+        "A generated type name cannot be a C# type name",
+        "The {0} '{1}' is emitted as a type of its own name, which cannot be written as a C# type name, so nothing can be generated for it. Rename it to a plain identifier that is not a reserved keyword.",
         "Scry",
         DiagnosticSeverity.Error,
         true);
@@ -180,15 +200,16 @@ public class ScryGenerator :
             return;
         }
 
-        // Both checks below catch a model that would emit code the user cannot see to fix, and both
-        // are refused at startup by the server too. Emitting duplicates would surface as a CS0102;
-        // emitting a source name that is not an identifier would not parse at all. Nothing is emitted
-        // when either fires, so the consumer sees the reported cause rather than its consequences.
+        // The checks below catch a model that would emit code the user cannot see to fix, and each is
+        // refused at startup by the server too. Emitting duplicates would surface as a CS0102; emitting
+        // a name that is not an identifier would not parse at all. Nothing is emitted when any fires,
+        // so the consumer sees the reported cause rather than its consequences.
         //
         // Duplicates clash on two axes independently: the generated model class name (all types, incl.
         // complex) and the entry-point property name (sources only — complex types emit no entry
-        // point). The identifier rule likewise applies to source names only, since a model name is
-        // derived from the CLR type name and a complex type has no entry point to name.
+        // point). The identifier rule applies to source names, since a model name is derived from the
+        // CLR type name and a complex type has no entry point to name, and to the enum and result
+        // classes, which are emitted under the model's own type names.
         var seenModels = new HashSet<string>(StringComparer.Ordinal);
         var seenSources = new HashSet<string>(StringComparer.Ordinal);
         // The members ScryQuery declares beside the entry points, and its own name, which a member
@@ -204,10 +225,13 @@ public class ScryGenerator :
         {
             invalid |= ValidateAttachments(context, source, extract);
 
+            // A clash of type names is reported on its own: the source names may well differ, and
+            // reporting those too would name a fix that cannot work.
             if (!seenModels.Add(source.ModelName))
             {
-                context.ReportDiagnostic(Diagnostic.Create(duplicateSource, Location.None, source.SourceName));
+                context.ReportDiagnostic(Diagnostic.Create(duplicateModel, Location.None, source.ClrName, source.ModelName));
                 invalid = true;
+                continue;
             }
 
             if (source.Kind == SourceKind.Complex)
@@ -225,6 +249,28 @@ public class ScryGenerator :
                 taken.Contains(source.SourceName))
             {
                 context.ReportDiagnostic(Diagnostic.Create(invalidSourceName, Location.None, source.SourceName));
+                invalid = true;
+            }
+        }
+
+        // An enum or a result class is emitted as a type named exactly as the model names it, and a
+        // reserved keyword cannot be written as one. Refused rather than escaped, as a source name is:
+        // every member typed as the enum spells its name, on both sides, and an '@' the server's
+        // description does not carry would move the stamp.
+        foreach (var enumeration in extract.Enums)
+        {
+            if (!CSharpIdentifier.IsValid(enumeration.Name))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(invalidTypeName, Location.None, "enum", enumeration.Name));
+                invalid = true;
+            }
+        }
+
+        foreach (var result in extract.Results)
+        {
+            if (!CSharpIdentifier.IsValid(result.Name))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(invalidTypeName, Location.None, "result class", result.Name));
                 invalid = true;
             }
         }
@@ -314,7 +360,12 @@ public class ScryGenerator :
             Declare(types, result.Name, "a result class");
         }
 
-        var members = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Seeded with the one member the facade declares beside the methods and capabilities: the field
+        // every method sends through, which a method of the same name would shadow.
+        var members = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["client"] = "the facade's client field"
+        };
         foreach (var command in extract.Commands)
         {
             Declare(types, command.Name, $"the command '{command.ClrName}'");

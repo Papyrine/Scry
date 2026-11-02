@@ -1720,12 +1720,15 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     }
 
     // A name carried twice would shape a row whose later value overwrote the earlier one, silently:
-    // one spelling per name, so what a projection asks for is what its row carries.
+    // one spelling per name, so what a projection asks for is what its row carries. Compared as a row
+    // writes them — camel-cased — since two names that differ only in their leading case are one key in
+    // every row, which the client's own reader then refuses.
     static void EnsureUniqueName(HashSet<string> names, string name)
     {
-        if (!names.Add(name))
+        var written = JsonNamingPolicy.CamelCase.ConvertName(name);
+        if (!names.Add(written))
         {
-            throw Reject($"Projection member '{name}' is named more than once.");
+            throw Reject($"Projection member '{name}' is named more than once (a row writes it as '{written}').");
         }
     }
 

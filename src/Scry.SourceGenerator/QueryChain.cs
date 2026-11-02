@@ -151,10 +151,12 @@ static class QueryChain
     }
 
     /// <summary>
-    /// Whether some enclosing call carries this one as its source, in which case that call is the one
-    /// to analyse — a chain is walked once, from its outermost link.
+    /// Whether some enclosing link carries this one as its source, in which case that link is the one
+    /// to analyse — a chain is walked once, from its outermost link. Only a link counts: a call on the
+    /// task a terminal returned (<c>ConfigureAwait</c>, <c>WaitAsync</c>, <c>GetAwaiter</c>) or a method
+    /// the query is handed to would not walk the chain, so the chain is walked from here.
     /// </summary>
-    public static bool IsInner(IInvocationOperation invocation)
+    public static bool IsInner(IInvocationOperation invocation, KnownTypes known)
     {
         var parent = invocation.Parent;
         while (parent is IConversionOperation or IParenthesizedOperation or IArgumentOperation)
@@ -163,6 +165,7 @@ static class QueryChain
         }
 
         return parent is IInvocationOperation call &&
+               IsLink(call, known) &&
                ReferenceEquals(Unwrap(Source(call)), invocation);
     }
 
@@ -172,6 +175,12 @@ static class QueryChain
     /// collection navigation — and the rules for what it may carry are different ones. Left to the
     /// translator rather than guessed at here.
     /// </summary>
+    /// <remarks>
+    /// A query operator, not any operator: a lambda handed to <c>Enumerable.Select</c> over a plain list
+    /// runs on the client, and a chain written inside it is as much a query as one written anywhere
+    /// else. So the enclosing link has to continue a Scry chain, or take the lambda as an expression —
+    /// which is what reaches the wire, however the chain under it was composed.
+    /// </remarks>
     public static bool InsideQueryLambda(IOperation operation, KnownTypes known)
     {
         for (var current = operation.Parent; current is not null; current = current.Parent)
@@ -181,13 +190,31 @@ static class QueryChain
                 continue;
             }
 
+            IArgumentOperation? argument = null;
             var parent = current.Parent;
             while (parent is IConversionOperation or IDelegateCreationOperation or IArgumentOperation)
             {
+                if (parent is IArgumentOperation handed)
+                {
+                    argument = handed;
+                }
+
                 parent = parent.Parent;
             }
 
-            if (parent is IInvocationOperation call && IsLink(call, known))
+            if (parent is not IInvocationOperation call ||
+                !IsLink(call, known))
+            {
+                continue;
+            }
+
+            if (argument?.Parameter is { } parameter &&
+                ExpressionRules.IsExpression(parameter.Type))
+            {
+                return true;
+            }
+
+            if (Of(call, known, out _) is not null)
             {
                 return true;
             }

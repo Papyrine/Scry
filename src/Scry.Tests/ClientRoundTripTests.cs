@@ -150,6 +150,55 @@
                 """);
     }
 
+    // ulong.MaxValue read as a long is negative, so (long)_.Sku < 0 names the row the seed holds — and
+    // sent as Sku < 0, parsed as the member's own ulong, it was the one row the filter lost; projected,
+    // it was a value the client's long could not read. A cast across the sign at one width is refused
+    // as the narrowing it is, in a filter and in a projection alike.
+    [Test]
+    public async Task ASignChangingCastIsRefused()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var filtered = await Assert.ThrowsExactlyAsync<NotSupportedException>(
+            async () => await client.Source<Order>("Order")
+                .Where(_ => (long) _.Sku < 0)
+                .Select(_ => new OrderRow(_.Region, _.Quantity, _.Sku))
+                .ToListAsync());
+        var projected = await Assert.ThrowsExactlyAsync<NotSupportedException>(
+            async () => await client.Source<Order>("Order")
+                .Select(_ => new {Sku = (long) _.Sku})
+                .ToListAsync());
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(filtered!.Message).Contains("'(Int64)' narrows a 'UInt64'");
+            await Assert.That(projected!.Message).Contains("'(Int64)' narrows a 'UInt64'");
+        }
+    }
+
+    // A batched terminal's token cannot take the query back out of the batch, which is one request,
+    // but it still ends the wait: a caller that stopped before the batch was sent is not left awaiting
+    // a task nothing may ever complete.
+    [Test]
+    public async Task ABatchedTerminalObservesItsToken()
+    {
+        var client = new ScryClient(
+            (_, _) => throw new NotSupportedException(),
+            batchTransport: (_, _) => throw new NotSupportedException());
+        var batch = client.Batch();
+        using var stopping = new CancelSource();
+
+        var waiting = client.Source<Order>("Order")
+            .Select(_ => new OrderRow(_.Region, _.Quantity, _.Sku))
+            .InBatch(batch)
+            .ToListAsync(stopping.Token);
+        await stopping.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => waiting);
+        await Assert.That(batch.Count).IsEqualTo(1);
+    }
+
     [Test]
     public async Task UnsignedMemberOrdering()
     {

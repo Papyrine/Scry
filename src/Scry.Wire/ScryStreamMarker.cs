@@ -17,8 +17,9 @@ public sealed record ScryStreamMarker
 
     /// <summary>
     /// Which of the endpoint's answers <see cref="Error"/> is, where whoever wrote the marker said.
-    /// The HTTP endpoints have a status line to say it with and leave this out; a transport with
-    /// nothing but the stream — a hub — has only the marker, and says it here.
+    /// Written by the hub on every failure, and by the stream endpoint on a failure after its first
+    /// row — the one place its status could no longer say it — so a reader surfaces the marker as the
+    /// failure that status would have been.
     /// </summary>
     public ScryErrorCode? Code { get; init; }
 

@@ -22,6 +22,8 @@ public class ExpandedOperatorTests
 
     record HolidayRow(string Name, Date Date);
 
+    record YearRow(int Year);
+
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
@@ -108,6 +110,27 @@ public class ExpandedOperatorTests
         // Alice manages Aaron and Bob; Alice and Carol have no manager.
         var count = await client.Source<Employee>("Employee")
             .Where(_ => managers.Contains(_.ManagerId))
+            .CountAsync();
+
+        await Assert.That(count).IsEqualTo(4);
+    }
+
+    // The same over optional text: a reference is null without being lifted, and only a lifted type
+    // once kept the null candidate, so a null badge matched nothing.
+    [Test]
+    public async Task ANullCandidateOverAnOptionalTextMemberMatchesItsNull()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        var badges = new List<string?>
+        {
+            "X",
+            null
+        };
+
+        // Nobody in the seed has a badge: two have a workstation without one, two have no workstation.
+        var count = await client.Source<Employee>("Employee")
+            .Where(_ => badges.Contains(_.Workstation!.Value.Badge))
             .CountAsync();
 
         await Assert.That(count).IsEqualTo(4);
@@ -748,6 +771,71 @@ public class ExpandedOperatorTests
             .ToListAsync();
 
         await Assert.That(rows).IsEmpty();
+    }
+
+    // A terminal after a grouped projection counts the groups. It once folded the rows that fed them:
+    // the grouping, its filter and the projection were built only for a list, so the count was of
+    // orders rather than regions.
+    [Test]
+    public async Task CountingAGroupedQueryCountsTheGroups()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        IQueryable<RegionRow> Regions() =>
+            client.Source<Order>("Order")
+                .GroupBy(_ => _.Region)
+                .Select(_ => new RegionRow(_.Key));
+
+        var count = await Regions().CountAsync();
+        var longCount = await Regions().LongCountAsync();
+        var any = await Regions().AnyAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(count).IsEqualTo(2).Because("three orders fall into two regions");
+            await Assert.That(longCount).IsEqualTo(2L);
+            await Assert.That(any).IsTrue();
+        }
+    }
+
+    // A filter written over the groups never ran under a terminal, which answered for the rows.
+    [Test]
+    public async Task AFilterOverTheGroupsRunsUnderATerminal()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        IQueryable<RegionRow> RegionsWithAtLeast(int orders) =>
+            client.Source<Order>("Order")
+                .GroupBy(_ => _.Region)
+                .Where(_ => _.Count() >= orders)
+                .Select(_ => new RegionRow(_.Key));
+
+        // Only North has two orders, and no region has five.
+        var count = await RegionsWithAtLeast(2).CountAsync();
+        var any = await RegionsWithAtLeast(5).AnyAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(count).IsEqualTo(1);
+            await Assert.That(any).IsFalse();
+        }
+    }
+
+    [Test]
+    public async Task CountingAGroupedQueryOverAnInMemorySourceCountsTheGroups()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Three holidays, all in one year.
+        var count = await client.Source<Holiday>("Holiday")
+            .GroupBy(_ => _.Date.Year)
+            .Select(_ => new YearRow(_.Key))
+            .CountAsync();
+
+        await Assert.That(count).IsEqualTo(1);
     }
 
     [Test]

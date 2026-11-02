@@ -21,6 +21,10 @@ sealed class SensitiveSchema(Schema schema)
         .Select(_ => _.Name)
         .ToHashSet(StringComparer.Ordinal);
 
+    /// <summary>The walk, driven by this: what the processor asks of a request before validating it.</summary>
+    public SensitiveUse Inspect(QueryRequest request) =>
+        SensitiveWalk.Inspect(request, IsSensitive);
+
     public bool IsSensitive(string? source, IReadOnlyList<string> path)
     {
         if (source is null ||
@@ -33,7 +37,7 @@ sealed class SensitiveSchema(Schema schema)
         // An empty path asks about the source itself: what a query with no Select returns.
         if (path.Count == 0)
         {
-            return meta.Sensitive || meta.Members.Values.Any(_ => _.Sensitive);
+            return Marked(meta);
         }
 
         foreach (var segment in path)
@@ -41,6 +45,13 @@ sealed class SensitiveSchema(Schema schema)
             if (meta.Sensitive)
             {
                 return true;
+            }
+
+            // The type the path has reached, returned whole: the element of a collection the query
+            // flattened into and never projected. The same question an empty path asks of a source.
+            if (segment == SensitiveWalk.AnyMember)
+            {
+                return Marked(meta);
             }
 
             if (!meta.TryGetMember(segment, out var member))
@@ -67,6 +78,18 @@ sealed class SensitiveSchema(Schema schema)
         return meta.Sensitive;
     }
 
-    bool Unresolved(IReadOnlyList<string> path) =>
-        path.Any(anyName.Contains);
+    static bool Marked(TypeMeta meta) =>
+        meta.Sensitive || meta.Members.Values.Any(_ => _.Sensitive);
+
+    bool Unresolved(IReadOnlyList<string> path)
+    {
+        // A row returned whole off a type this cannot name holds every member of some type. If any
+        // type marks one, it is assumed to be among them.
+        if (path.Contains(SensitiveWalk.AnyMember))
+        {
+            return anyName.Count > 0;
+        }
+
+        return path.Any(anyName.Contains);
+    }
 }

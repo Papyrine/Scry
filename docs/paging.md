@@ -163,7 +163,7 @@ The cursor's shape is internal to the server and **not** part of the wire contra
 { "keys": [ { "value": "Alice", "tag": "String" }, { "value": "42", "tag": "Int32" } ], "order": "k3nQ8yF2pXsA9vLm" }
 ```
 
-Values use the same invariant-culture string + `ClrTypeTag` form the wire uses for constants, so decoding a cursor produces exactly the `ConstNode`s the seek predicate rebinds against each key's real type. `order` is a truncated SHA-256 over the source name and every ordering key's path and direction — see [Cursor invalidation](#cursor-invalidation). The authentication tag is checked on decode; a token that does not decrypt, or is malformed, is a `400`. A fresh nonce per cursor means two cursors for one row never share bytes.
+Values use the same invariant-culture string + `ClrTypeTag` form the wire uses for constants, so decoding a cursor produces exactly the `ConstNode`s the seek predicate rebinds against each key's real type. An enum key is the one exception: a constant spells one by name, a cursor by its underlying number, since a column can hold a value the enum does not declare, and the seek side reads either spelling back from a cursor. `order` is a truncated SHA-256 over the source name and every ordering key's path and direction — see [Cursor invalidation](#cursor-invalidation). The authentication tag is checked on decode; a token that does not decrypt, or is malformed, is a `400`. A fresh nonce per cursor means two cursors for one row never share bytes.
 
 
 ## Security

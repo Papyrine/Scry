@@ -207,6 +207,127 @@ public class RoslynLayerTests
         }
     }
 
+    // A terminal the client unfolds into other operators — MaxBy into an ordering and a First,
+    // ElementAt into a Skip and a First, a stream into the list's request — is unfolded the same way
+    // here, so the request is the one the client sends, and not a Task the runner cannot translate.
+    [Test]
+    [Arguments("Query.Employee.MaxByAsync(_ => _.Name)", "Query.Employee.OrderByDescending(_ => _.Name).FirstAsync()")]
+    [Arguments("Query.Employee.MaxByOrDefaultAsync(_ => _.Name)", "Query.Employee.OrderByDescending(_ => _.Name).FirstOrDefaultAsync()")]
+    [Arguments("Query.Employee.MinByAsync(_ => _.Name)", "Query.Employee.OrderBy(_ => _.Name).FirstAsync()")]
+    [Arguments("Query.Employee.MinByOrDefaultAsync(_ => _.Name)", "Query.Employee.OrderBy(_ => _.Name).FirstOrDefaultAsync()")]
+    [Arguments("Query.Employee.Where(_ => _.Active).MaxBy(_ => _.Name)", "Query.Employee.Where(_ => _.Active).OrderByDescending(_ => _.Name).First()")]
+    [Arguments("await Query.Employee.ElementAtAsync(2)", "Query.Employee.Skip(2).FirstAsync()")]
+    [Arguments("Query.Employee.ElementAtOrDefaultAsync(2)", "Query.Employee.Skip(2).FirstOrDefaultAsync()")]
+    [Arguments("Query.Employee.ElementAt(2)", "Query.Employee.Skip(2).First()")]
+    [Arguments("Query.Employee.Where(_ => _.Active).ToAsyncEnumerable()", "Query.Employee.Where(_ => _.Active).ToListAsync()")]
+    public async Task UnfoldsATerminalAsTheClientDoes(string written, string unfolded)
+    {
+        var request = ScryJson.Serialize(executor.Translate(written));
+
+        await Assert.That(request).IsEqualTo(ScryJson.Serialize(executor.Translate(unfolded)));
+    }
+
+    // The same, against the client itself: the request a real client sends for the terminal, read at
+    // its transport, is byte for byte what the explorer shows for the same snippet.
+    [Test]
+    public async Task AnUnfoldedTerminalIsTheRequestTheClientSends()
+    {
+        var maxBy = await Sent(employees => employees.Where(_ => _.Active).MaxByAsync(_ => _.Name));
+        var elementAt = await Sent(employees => employees.ElementAtOrDefaultAsync(3));
+        var page = await Sent(employees => employees.OrderBy(_ => _.Name).ToPageAsync(10, "c3VyZQ"));
+
+        // Without the stamp: the explorer stamps its request with the schema it was synthesized from,
+        // as a generated client stamps with its model's, and the probe client here has none.
+        using (Assert.Multiple())
+        {
+            await Assert.That(ScryJson.Serialize(executor.Translate("Query.Employee.Where(_ => _.Active).MaxByAsync(_ => _.Name)") with {Stamp = null})).IsEqualTo(ScryJson.Serialize(maxBy));
+            await Assert.That(ScryJson.Serialize(executor.Translate("Query.Employee.ElementAtOrDefaultAsync(3)") with {Stamp = null})).IsEqualTo(ScryJson.Serialize(elementAt));
+            await Assert.That(ScryJson.Serialize(executor.Translate("Query.Employee.OrderBy(_ => _.Name).ToPageAsync(10, \"c3VyZQ\")") with {Stamp = null})).IsEqualTo(ScryJson.Serialize(page));
+        }
+    }
+
+    // A page is its own wire operator, carrying the size and the cursor the call was written with —
+    // each of the three overloads — after the default projection the client adds for a page.
+    [Test]
+    public async Task FoldsAPageTerminalWithItsSizeAndCursor()
+    {
+        var sized = executor.Translate("Query.Employee.ToPageAsync(10)");
+        var resumed = executor.Translate("Query.Employee.ToPageAsync(10, \"c3VyZQ\")");
+        var plain = (PageOp) executor.Translate("Query.Employee.ToPageAsync()").Pipeline[^1];
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(sized.Pipeline[^1]).IsEqualTo(new PageOp(10));
+            await Assert.That(sized.Pipeline[^2]).IsTypeOf<SelectOp>();
+            await Assert.That(resumed.Pipeline[^1]).IsEqualTo(new PageOp(10, "c3VyZQ"));
+            await Assert.That(plain.Size).IsNull();
+            await Assert.That(plain.Cursor).IsNull();
+        }
+    }
+
+    // A terminal the explorer knows and cannot unfold as written is refused by name, rather than
+    // compiled against the real client into a Task the runner then cannot translate.
+    [Test]
+    public async Task RefusesATerminalItCannotUnfoldByName()
+    {
+        var maxBy = Assert.ThrowsExactly<Exception>(() => executor.Translate("Query.Employee.MaxByAsync()"));
+        var page = Assert.ThrowsExactly<Exception>(() => executor.Translate("Query.Employee.ToPageAsync(1, \"a\", 3)"));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(maxBy.Message).StartsWith("Could not compile the query: MaxByAsync takes");
+            await Assert.That(page.Message).StartsWith("Could not compile the query: ToPageAsync takes");
+        }
+    }
+
+    // The parser reads as far as it can and keeps the rest as trivia, so a snippet with a parenthesis
+    // too many used to run as the prefix that parsed — the active employees, as if nothing were wrong
+    // with what was written. Refused instead, as the printer and the builder refuse the same text.
+    [Test]
+    public async Task RefusesASnippetThatDoesNotParseRatherThanRunningItsPrefix()
+    {
+        var exception = Assert.ThrowsExactly<Exception>(
+            () => executor.Translate("Query.Employee.Where(_ => _.Active))"));
+
+        await Assert.That(exception.Message).StartsWith("Could not compile the query: ");
+    }
+
+    // The request a real client sends for a terminal, read at its transport, over a source that
+    // projects the same members the synthesized Employee does.
+    static async Task<QueryRequest> Sent(Func<IQueryable<Probe>, Task> terminal)
+    {
+        QueryRequest? sent = null;
+        var client = new ScryClient(
+            (request, _) =>
+            {
+                sent = request;
+                return Task.FromException<QueryResponse>(new Captured());
+            });
+
+        try
+        {
+            await terminal(client.Source<Probe>("Employee", ["Name", "Active", "Status"]));
+        }
+        catch (Captured)
+        {
+            // The request is what was wanted; there is no answer to read.
+        }
+
+        return sent!;
+    }
+
+    sealed class Probe
+    {
+        public string Name { get; init; } = "";
+
+        public bool Active { get; init; }
+
+        public string Status { get; init; } = "";
+    }
+
+    sealed class Captured :
+        Exception;
+
     // A query with no Select projects its members as the generated client does, in the order the model
     // declares them. The description lists members by name, so the order comes from what the server
     // says it is; without it, the request would differ from the client's for the same query.

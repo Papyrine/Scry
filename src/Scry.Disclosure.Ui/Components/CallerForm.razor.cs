@@ -28,7 +28,7 @@ public partial class CallerForm
         caller = link["caller"] ?? "";
         nobody = link["nobody"] is not null;
         from = Show.Typed(link["from"]);
-        to = Show.Typed(link["to"]);
+        to = Show.TypedTo(link["to"]);
     }
 
     bool Unaskable =>
@@ -59,7 +59,7 @@ public partial class CallerForm
                 ("caller", Named()),
                 ("nobody", Anonymous()),
                 ("from", Show.Stamp(from)),
-                ("to", Show.Stamp(to))));
+                ("to", Show.StampTo(to))));
 
     string? Named()
     {

@@ -32,14 +32,31 @@ public static partial class ScryServiceExtensions
     /// <param name="options">Supplies the heartbeat interval, and the lifetime after which the hold ends.</param>
     /// <param name="pending">The item being waited for: true once one is ready to be delivered.</param>
     /// <param name="deliver">Writes the item that arrived. False to stop holding.</param>
-    static async Task Hold(HttpContext context, ScryOptions options, Func<Task<bool>> pending, Func<Task<bool>> deliver)
+    static Task Hold(HttpContext context, ScryOptions options, Func<Task<bool>> pending, Func<Task<bool>> deliver) =>
+        Hold(context, options, Deadline(context, options), pending, deliver);
+
+    /// <summary>
+    /// <see cref="Hold(HttpContext, ScryOptions, Func{Task{bool}}, Func{Task{bool}})"/> with the deadline
+    /// already decided — by a caller that had to know it before committing the response.
+    /// </summary>
+    /// <param name="context">The request being answered. Its abort ends the hold.</param>
+    /// <param name="options">Supplies the heartbeat interval.</param>
+    /// <param name="deadline">When the hold ends whatever happens on it, and the reason the end names.</param>
+    /// <param name="pending">The item being waited for: true once one is ready to be delivered.</param>
+    /// <param name="deliver">Writes the item that arrived. False to stop holding.</param>
+    static async Task Hold(
+        HttpContext context,
+        ScryOptions options,
+        (DateTimeOffset? At, string Reason) deadline,
+        Func<Task<bool>> pending,
+        Func<Task<bool>> deliver)
     {
         var stopping = context.RequestServices.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? Cancel.None;
-        var (deadline, reason) = Deadline(context, options);
+        var (due, reason) = deadline;
         var nextPing = DateTimeOffset.UtcNow + options.SubscriptionHeartbeat;
         while (!context.RequestAborted.IsCancellationRequested)
         {
-            var wake = deadline is { } at && at < nextPing ? at : nextPing;
+            var wake = due is { } at && at < nextPing ? at : nextPing;
             if (await Arrives(pending(), wake, context.RequestAborted, stopping))
             {
                 if (!await deliver())
@@ -63,8 +80,7 @@ public static partial class ScryServiceExtensions
                 return;
             }
 
-            if (deadline is { } due &&
-                DateTimeOffset.UtcNow >= due)
+            if (Passed(due))
             {
                 await End(context, reason);
                 return;
@@ -123,9 +139,14 @@ public static partial class ScryServiceExtensions
                     Reason = reason
                 }));
 
+    static bool Passed(DateTimeOffset? deadline) =>
+        deadline is { } due &&
+        DateTimeOffset.UtcNow >= due;
+
     /// <summary>
     /// When this connection has to end whatever happens on it: the configured lifetime, or the moment
-    /// the ticket that authenticated it stops being valid, whichever comes first.
+    /// the ticket that authenticated it stops being valid, whichever comes first. A ticket already past
+    /// it gives a deadline already passed, which a caller checks before doing any work on its behalf.
     /// </summary>
     /// <remarks>
     /// Read off the feature the authentication middleware leaves rather than by authenticating again:

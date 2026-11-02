@@ -80,6 +80,15 @@ sealed partial class Schema
             if (attribute.Result is { } result)
             {
                 resultProperties = ResultProperties(type, result, assembly);
+
+                // Emitted under its own name, as an enum is: the generator refuses one C# cannot write
+                // as SCRY019, and so does this. After the shape is read, so a generic one is refused as
+                // generic rather than for the name reflection gives it.
+                if (!CSharpIdentifier.IsValid(result.Name))
+                {
+                    throw new($"The result class '{result.FullName}' of '{type.Name}' has a name that cannot be written as a C# type name, so no client can be generated for it. Rename it to a plain identifier that is not a reserved keyword.");
+                }
+
                 if (results.TryGetValue(result.Name, out var existing) &&
                     existing != result)
                 {
@@ -152,7 +161,11 @@ sealed partial class Schema
     internal static List<PropertyInfo> CommandPayload(Type type, Assembly assembly)
     {
         var payload = new List<PropertyInfo>();
-        foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+
+        // Visible rather than every property reflection reports: a property hidden with `new` under
+        // another type comes back beside the one hiding it, and the generator describes only the
+        // nearest declaration, as a query model's reader does.
+        foreach (var property in Visible(type))
         {
             if (property.GetMethod is not {IsPublic: true} ||
                 property.SetMethod is not {IsPublic: true} ||
@@ -204,7 +217,9 @@ sealed partial class Schema
         }
 
         var properties = new List<PropertyInfo>();
-        foreach (var property in result.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+
+        // Visible, for the reason the payload's are.
+        foreach (var property in Visible(result))
         {
             if (property.GetMethod is not {IsPublic: true} ||
                 property.GetIndexParameters().Length > 0)
@@ -331,8 +346,8 @@ sealed partial class Schema
     /// <summary>
     /// Refuses a name the generated client would declare twice — every command, result class, query
     /// model and enum is a class in one namespace, and the facade declares a method and a <c>Can</c>
-    /// property per command. Mirrors the generator's SCRY011, and checks nothing for a model with no
-    /// commands, which it declares nothing new for.
+    /// property per command beside the field it holds its client in. Mirrors the generator's SCRY011,
+    /// and checks nothing for a model with no commands, which it declares nothing new for.
     /// </summary>
     static void EnsureGeneratedNamesDistinct(Schema schema, IEnumerable<string> results)
     {
@@ -345,6 +360,13 @@ sealed partial class Schema
         {
             ["ScryQuery"] = "the query entry point",
             ["ScryCommands"] = "the command facade"
+        };
+
+        // The facade's own members, which a command's method would be declared beside: the field the
+        // generated class holds its client in, named as the generator names it.
+        var members = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["client"] = "the field the facade holds its client in"
         };
         foreach (var meta in schema.types.Values)
         {
@@ -362,7 +384,6 @@ sealed partial class Schema
             Declare(types, result, "a result class");
         }
 
-        var members = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var command in schema.commands.Values)
         {
             Declare(types, command.Name, $"the command '{command.ClrType.Name}'");

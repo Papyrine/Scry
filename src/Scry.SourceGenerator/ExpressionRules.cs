@@ -72,7 +72,8 @@ static class ExpressionRules
         }
     }
 
-    static bool IsExpression(ITypeSymbol type) =>
+    /// <summary>Whether a parameter takes an expression tree, which is what carries a lambda to the wire.</summary>
+    public static bool IsExpression(ITypeSymbol type) =>
         type is INamedTypeSymbol {IsGenericType: true, Name: "Expression"} named &&
         named.ContainingNamespace.ToDisplayString() == "System.Linq.Expressions";
 

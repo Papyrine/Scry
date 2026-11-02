@@ -86,9 +86,10 @@ public sealed partial class ScryProcessor
         // On record before it is handed on, like every answer. The command has been accepted and
         // runs to its end whatever happens here: what a sink that refuses costs is being told how it
         // stood, and the caller can ask again by id.
+        DisclosureCapture? capture;
         try
         {
-            await DiscloseReceipt(record, first, caller, services, cancel);
+            capture = await DiscloseReceipt(record, first, caller, services, cancel);
         }
         catch (Exception exception)
         {
@@ -97,8 +98,22 @@ public sealed partial class ScryProcessor
             throw;
         }
 
-        CommandRecorder.Answered(activity, request.Command, outcome, Stopwatch.GetElapsedTime(started), first.Error);
-        Audit(services, request, first.Status == CommandStatus.Failed ? ScryQueryOutcome.Failed : ScryQueryOutcome.Success, first.Status, Stopwatch.GetElapsedTime(started), Error(record, first), staleClient: false);
+        // Reported, and only then released, as a query's answer is: an auditor that throws fails the
+        // answer, and the capture, disposed unreleased, withdraws the record — which would otherwise
+        // say the caller was handed a receipt it never got.
+        try
+        {
+            CommandRecorder.Answered(activity, request.Command, outcome, Stopwatch.GetElapsedTime(started), first.Error);
+            Audit(services, request, first.Status == CommandStatus.Failed ? ScryQueryOutcome.Failed : ScryQueryOutcome.Success, first.Status, Stopwatch.GetElapsedTime(started), Error(record, first), staleClient: false);
+            capture?.Released();
+        }
+        finally
+        {
+            if (capture is not null)
+            {
+                await capture.DisposeAsync();
+            }
+        }
 
         yield return first;
         if (first.Status != CommandStatus.Pending)
@@ -107,7 +122,7 @@ public sealed partial class ScryProcessor
         }
 
         var landed = await record.Completion.WaitAsync(cancel);
-        await DiscloseReceipt(record, landed, caller, services, cancel);
+        await TellReceipt(record, landed, caller, services, cancel);
         yield return landed;
     }
 
@@ -116,20 +131,28 @@ public sealed partial class ScryProcessor
     /// lifetime. Answers as <see cref="SendCommand(CommandRequest, DbContext, IServiceProvider, IHeaderDictionary, string?, Cancel)"/>
     /// does: the final receipt alone, or a pending one and then the final one.
     /// </summary>
+    /// <param name="id">The id the command was sent with.</param>
+    /// <param name="services">
+    /// The request's services: what the disclosure audit resolves who is asking, and on whose behalf,
+    /// from, where <paramref name="caller"/> does not say.
+    /// </param>
+    /// <param name="caller">Who is asking, as the transport authenticated them. Only the caller that sent the command is answered.</param>
+    /// <param name="cancel">Stops waiting. Never stops the command.</param>
     /// <remarks>
     /// Only for the caller that sent it: anyone else — and an id this node does not hold, whether it never
     /// was, was pruned, or was sent to another node — is answered alike, with
     /// <see cref="ScryCommandNotFoundException"/>.
     /// </remarks>
-    public async IAsyncEnumerable<CommandReceipt> Receipt(Guid id, string? caller = null, [EnumeratorCancellation] Cancel cancel = default)
+    public async IAsyncEnumerable<CommandReceipt> Receipt(Guid id, IServiceProvider services, string? caller = null, [EnumeratorCancellation] Cancel cancel = default)
     {
         var record = tracker.Find(id, caller) ??
                      throw new ScryCommandNotFoundException(ScryCommandNotFoundException.CommandMessage);
         var current = record.Current;
 
-        // Asked for again is told again, and each telling is one more time the caller was sent it.
-        // There are no services to say who is asking here, so it is whoever the transport named.
-        await DiscloseReceipt(record, current, caller, EmptyServiceProvider.Instance, cancel);
+        // Asked for again is told again, and each telling is one more time the caller was sent it,
+        // recorded under whoever the transport named — or, where it named nobody, whoever the request's
+        // services say is asking, as the first telling was.
+        await TellReceipt(record, current, caller, services, cancel);
         yield return current;
         if (current.Status != CommandStatus.Pending)
         {
@@ -137,7 +160,7 @@ public sealed partial class ScryProcessor
         }
 
         var landed = await record.Completion.WaitAsync(cancel);
-        await DiscloseReceipt(record, landed, caller, EmptyServiceProvider.Instance, cancel);
+        await TellReceipt(record, landed, caller, services, cancel);
         yield return landed;
     }
 
@@ -253,7 +276,10 @@ public sealed partial class ScryProcessor
             }
 
             tracker.EnsureRoom(caller);
-            var command = binder.Bind(meta, request.Payload);
+
+            // The policy is asked before the payload is read, as it says it is: a caller it refuses is
+            // told so and nothing else — not what the binder would have made of its payload, which a
+            // denied caller has no business learning, and which would cost a bind per attempt.
             var context = new ScryPolicyContext(services, data, requestHeaders, new HeaderDictionary());
             if (meta.Policy is { } policy &&
                 !CommandPolicy.Allow(policy, meta.ClrType, context))
@@ -261,6 +287,7 @@ public sealed partial class ScryProcessor
                 throw new ScryPermissionException(ScryPermissionException.CommandDeniedMessage);
             }
 
+            var command = binder.Bind(meta, request.Payload);
             IReadOnlyList<object> keys = [];
             if (meta.Target is not null)
             {

@@ -71,8 +71,12 @@ sealed class ExpressionBuilder(
     /// A boolean read through a policied navigation arrives widened to <c>bool?</c>: a row the policy
     /// hides reads as SQL NULL, and a projection's shaper has to be able to carry that. A condition
     /// shapes nothing, so it reads the boolean through the widening — exactly what it reads off an
-    /// optional navigation the row does not have. Only that widening is read through: a member that is
-    /// itself a <c>bool?</c> is no condition, and is refused as one.
+    /// optional navigation the row does not have. A value that is itself a <c>bool?</c> — an optional
+    /// member, a conditional over one — is read as true where it is true. The one C# that sends such a
+    /// member as a bare condition is <c>.Value</c>, which the client drops as it drops every unwrapping
+    /// of an optional, and which EF translates to the column itself; comparing the value against true
+    /// says the same thing on both sides, as the column against 1 in SQL and, in memory, as false
+    /// where the value is absent rather than a fault on the unwrap.
     /// </remarks>
     Expression BuildCondition(Node node, Expression row)
     {
@@ -82,6 +86,13 @@ sealed class ExpressionBuilder(
             read.Type == typeof(bool))
         {
             return read;
+        }
+
+        // A bare null constant is no condition, and stays refused as one.
+        if (built.Type == typeof(bool?) &&
+            built is not ConstantExpression)
+        {
+            return Expression.Equal(built, Expression.Constant(true, typeof(bool?)));
         }
 
         return built;
@@ -354,7 +365,7 @@ sealed class ExpressionBuilder(
     BinaryExpression CompareKey(Node keyNode, ConstNode value, ParameterExpression parameter, bool? strictGreater, bool descending)
     {
         var left = Build(keyNode, parameter, null);
-        var right = BuildConstant(value, left.Type);
+        var right = BuildCursorConstant(value, left.Type);
         Coerce(ref left, ref right);
 
         if (strictGreater is null)
@@ -407,6 +418,44 @@ sealed class ExpressionBuilder(
         }
 
         return Expression.LessThan(left, right);
+    }
+
+    /// <summary>
+    /// Builds a cursor's value against the key it seeks past. A wire constant's build, except for an
+    /// enum: a cursor spells one by its number — the column can hold a value the enum does not
+    /// declare, whose name is its number anyway — and that number is read back here, where
+    /// <see cref="ParseValue"/> refuses one.
+    /// </summary>
+    /// <remarks>
+    /// The wire rule stands for a client's constants, and is not weakened by this: an undefined number
+    /// there would match nothing, or match a flags member by bits nobody named. A cursor is minted by
+    /// this server and sealed under its key, so the number is one the server itself read off a row,
+    /// which a client can neither write nor alter. A name is still read, for a cursor minted before
+    /// enum keys were spelled this way.
+    /// </remarks>
+    Expression BuildCursorConstant(ConstNode value, Type key)
+    {
+        var underlying = Nullable.GetUnderlyingType(key) ?? key;
+        if (value.Value is not { } text ||
+            value.Tag == ClrTypeTag.Null ||
+            !underlying.IsEnum)
+        {
+            return BuildConstant(value, key);
+        }
+
+        object parsed;
+        try
+        {
+            parsed = Enum.Parse(underlying, schema.ResolveEnumValue(underlying, text));
+        }
+        // A name the model no longer declares: a cursor minted under another model by a server
+        // sharing this one's key. Refused as the same text in a predicate would be.
+        catch (Exception exception) when (exception is ArgumentException or OverflowException)
+        {
+            throw new ScryValidationException($"'{text}' is not a value of enum '{underlying.Name}'.");
+        }
+
+        return Parameterization.Parameterize(parsed, underlying);
     }
 
     /// <summary>
@@ -773,9 +822,11 @@ sealed class ExpressionBuilder(
 
     /// <summary>
     /// Builds a grouped selector <c>IGrouping&lt;TKey,TElement&gt; =&gt; object[]</c> over a single key,
-    /// supporting the group key and aggregate members.
+    /// supporting the group key and aggregate members. <c>folded</c> says the projection is counted
+    /// or probed rather than returned: nothing of it is sent then, so the disclosure audit is not told
+    /// it was read — the grouping and the filter over it were, where they were built.
     /// </summary>
-    public ProjectionPlan BuildGroupProjection(Projection projection, Type element, Type key)
+    public ProjectionPlan BuildGroupProjection(Projection projection, Type element, Type key, bool folded = false)
     {
         var groupingType = QueryComposition.Close(typeof(IGrouping<,>), key, element);
         var parameter = Expression.Parameter(groupingType, "g");
@@ -783,6 +834,7 @@ sealed class ExpressionBuilder(
         var shape = new List<IReadOnlyList<string>>(projection.Members.Count);
         var leftOut = new List<bool>(projection.Members.Count);
 
+        var unasked = Unasked(folded);
         foreach (var member in projection.Members)
         {
             if (member.Value is not NodeValue value)
@@ -799,6 +851,7 @@ sealed class ExpressionBuilder(
             shape.Add([member.Name]);
         }
 
+        Asked(unasked);
         var selector = Expression.Lambda(Expression.NewArrayInit(typeof(object), leaves), parameter);
         return new(selector, shape, builtLeftOut: Normalize(leftOut));
     }
@@ -1238,7 +1291,11 @@ sealed class ExpressionBuilder(
         }
 
         var outer = Enter(use);
-        var body = Build(node, parameter, expected);
+        // A predicate over the elements is read as a condition, as the row's own is: a bool? member of
+        // an element reads as true where it is true.
+        var body = expected == typeof(bool)
+            ? BuildCondition(node, parameter)
+            : Build(node, parameter, expected);
         Leave(outer);
         return Expression.Lambda(body, parameter);
     }
@@ -1502,9 +1559,10 @@ sealed class ExpressionBuilder(
         }
 
         // Arithmetic promotes its operands to a common type; a comparison instead reads its constant at
-        // the other side's type, which is what makes '_.Amount > 100' compare decimals. Inferring the
-        // type that way for arithmetic too would compute in the member's type rather than the one C#
-        // would have: '_.Quantity / 2d' over an integer member would answer 0.
+        // the other side's type, which is what makes '_.Amount > 100' compare decimals — unless the
+        // constant was written wider than a numeric member and does not fit it, which BuildComparand
+        // explains. Inferring the type that way for arithmetic too would compute in the member's type
+        // rather than the one C# would have: '_.Quantity / 2d' over an integer member would answer 0.
         var arithmetic = binary.Op is
             BinaryOp.Add or BinaryOp.Subtract or BinaryOp.Multiply or BinaryOp.Divide or BinaryOp.Modulo;
 
@@ -1525,10 +1583,15 @@ sealed class ExpressionBuilder(
 
             Promote(ref left, ref right);
         }
-        else if (binary is {Left: ConstNode, Right: not ConstNode})
+        else if (binary is {Left: ConstNode leftConstant, Right: not ConstNode})
         {
             right = Build(binary.Right, row, null);
-            left = Build(binary.Left, row, right.Type);
+            left = BuildComparand(leftConstant, right.Type);
+        }
+        else if (binary is {Left: not ConstNode, Right: ConstNode rightConstant})
+        {
+            left = Build(binary.Left, row, null);
+            right = BuildComparand(rightConstant, left.Type);
         }
         else
         {
@@ -1574,6 +1637,74 @@ sealed class ExpressionBuilder(
             throw new ScryValidationException($"'{binary.Op}' is not defined for '{left.Type.Name}' and '{right.Type.Name}': {exception.Message}");
         }
     }
+
+    /// <summary>
+    /// Builds the constant a comparison reads against the other operand. It is read at that operand's
+    /// type — what makes <c>_.Amount &gt; 100</c> compare decimals, and the only way a value whose type
+    /// the wire has no tag for can be parsed at all — unless the operand is a number, the constant was
+    /// a value the member's type does not hold: <c>_.Quantity &gt; 2.5</c>, whose fraction no integer
+    /// holds, a value past the member's range, or a negative against an unsigned member. C# promoted
+    /// both sides to meet such a constant and the client dropped the promotion with every other
+    /// comparison's, so the constant is read at its own tag's type and <c>PromoteNumeric</c>
+    /// meets the two again as C# did — <c>long</c> for an <c>int</c> against a <c>uint</c>.
+    /// </summary>
+    /// <remarks>
+    /// A constant whose value an integral member does hold is read at the member's type whatever its
+    /// tag: an integer that fits compares the same at either width, and reading it so leaves the column
+    /// uncast in the SQL — <c>_.Id == 2L</c> seeks the index where a cast on the column would not. A
+    /// floating member against a wider literal is widened whatever the value, since a float read as a
+    /// double is not the double the literal spelled. The CLR type is the tag's from the closed set,
+    /// never the text's, and a tag that is not a number's is read at the member's type as before.
+    /// </remarks>
+    Expression BuildComparand(ConstNode constant, Type other)
+    {
+        var value = Nullable.GetUnderlyingType(other) ?? other;
+        var own = TagToType(constant.Tag);
+        if (!IsNumeric(value) ||
+            !IsNumeric(own))
+        {
+            return BuildConstant(constant, other);
+        }
+
+        if (IsIntegral(value)
+                ? Fits(constant.Value, value)
+                : Widest(other, constant) == other)
+        {
+            return BuildConstant(constant, other);
+        }
+
+        return BuildConstant(constant, own);
+    }
+
+    // Whether a constant's text reads as the integral type without loss: a fraction does not, nor a
+    // value past the type's range, and nothing but an integral type is asked.
+    static bool Fits(string? text, Type integral)
+    {
+        if (text is null ||
+            !IsIntegral(integral))
+        {
+            return false;
+        }
+
+        try
+        {
+            ParseScalar(text, integral);
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is
+                FormatException or
+                OverflowException or
+                InvalidCastException)
+        {
+            return false;
+        }
+    }
+
+    static bool IsIntegral(Type type) =>
+        !type.IsEnum &&
+        Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte or TypeCode.Int16 or TypeCode.UInt16 or
+            TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64;
 
     UnaryExpression BuildUnary(UnaryNode unary, Expression row)
     {
@@ -1668,17 +1799,17 @@ sealed class ExpressionBuilder(
                 KnownFunction.DateAddMilliseconds => TemporalAdd(call, target, "AddMilliseconds", row),
 
                 KnownFunction.StringConcat => BuildConcat(target, Build(call.Arguments[0], row, null)),
-                KnownFunction.StringFrom => BuildStringFrom(target),
+                KnownFunction.StringFrom => BuildStringFrom(target, InMemory(row)),
                 KnownFunction.EnumHasFlag => BuildHasFlag(call, target, row),
 
-                KnownFunction.Int32From => BuildFromText(call.Function, target, convertToInt32),
-                KnownFunction.Int64From => BuildFromText(call.Function, target, convertToInt64),
-                KnownFunction.DecimalFrom => BuildFromText(call.Function, target, convertToDecimal),
-                KnownFunction.DoubleFrom => BuildFromText(call.Function, target, convertToDouble),
-                KnownFunction.BooleanFrom => BuildFromText(call.Function, target, convertToBoolean),
-                KnownFunction.ByteFrom => BuildFromText(call.Function, target, convertToByte),
-                KnownFunction.Int16From => BuildFromText(call.Function, target, convertToInt16),
-                KnownFunction.SingleFrom => BuildFromText(call.Function, target, singleParse),
+                KnownFunction.Int32From => BuildFromText(call.Function, target, convertToInt32, InMemory(row)),
+                KnownFunction.Int64From => BuildFromText(call.Function, target, convertToInt64, InMemory(row)),
+                KnownFunction.DecimalFrom => BuildFromText(call.Function, target, convertToDecimal, InMemory(row)),
+                KnownFunction.DoubleFrom => BuildFromText(call.Function, target, convertToDouble, InMemory(row)),
+                KnownFunction.BooleanFrom => BuildFromText(call.Function, target, convertToBoolean, InMemory(row)),
+                KnownFunction.ByteFrom => BuildFromText(call.Function, target, convertToByte, InMemory(row)),
+                KnownFunction.Int16From => BuildFromText(call.Function, target, convertToInt16, InMemory(row)),
+                KnownFunction.SingleFrom => BuildFromText(call.Function, target, singleParse, InMemory(row)),
 
                 KnownFunction.MathAbs => MathCall("Abs", target),
                 KnownFunction.MathCeiling => MathCall("Ceiling", target),
@@ -1855,11 +1986,13 @@ sealed class ExpressionBuilder(
 
     static ConcurrentDictionary<Type, PropertyInfo> nullableValues = new();
 
-    // The Key of a closed IGrouping<TKey, TElement>, found once per closing for the same reason.
+    // The Key of a closed IGrouping<TKey, TElement>, found once per closing for the same reason. A
+    // composite key closes the grouping over a DistinctRow of whatever member types a request groups
+    // by, so the closings are the request's to choose, and the cache is bounded as the row readers' is.
     internal static PropertyInfo GroupingKey(Type grouping) =>
         groupingKeys.GetOrAdd(grouping, _ => _.GetProperty(nameof(IGrouping<,>.Key))!);
 
-    static ConcurrentDictionary<Type, PropertyInfo> groupingKeys = new();
+    static BoundedTypeCache<PropertyInfo> groupingKeys = new(1024);
 
     /// <summary>
     /// Builds the sign of a value as -1, 0, or 1, from comparisons rather than from SQL's own
@@ -2084,20 +2217,50 @@ sealed class ExpressionBuilder(
         return Expression.Call(method, value);
     }
 
+    /// <summary>
+    /// Builds <c>Math.Round</c>. SQL's ROUND rounds a midpoint away from zero and the client drops the
+    /// mode that says so, while the CLR's default rounds a midpoint to even — so over an in-memory
+    /// source the mode is bound back in, and a row's 2.5 rounds to 3 there as a column's does.
+    /// </summary>
     MethodCallExpression BuildRound(CallNode call, Expression target, Expression row)
     {
+        var inMemory = InMemory(row);
         if (call.Arguments.Count == 0)
         {
-            return MathCall("Round", target);
+            if (!inMemory)
+            {
+                return MathCall("Round", target);
+            }
+
+            var whole = NonNullable(target);
+            var awayWhole = Method(typeof(Math), "Round", whole.Type, typeof(MidpointRounding)) ??
+                            throw new ScryValidationException($"Math.Round is not defined for '{whole.Type.Name}'.");
+            return Expression.Call(awayWhole, whole, awayFromZero);
         }
 
         var value = NonNullable(target);
         var digits = ConvertTo(Build(call.Arguments[0], row, typeof(int)), typeof(int));
 
+        if (inMemory)
+        {
+            var awayToDigits = RoundAwayFromZero(value.Type) ??
+                               throw new ScryValidationException($"Math.Round is not defined for '{value.Type.Name}'.");
+            return Expression.Call(awayToDigits, value, digits, awayFromZero);
+        }
+
         var method = Method(typeof(Math), "Round", value.Type, typeof(int)) ??
                      throw new ScryValidationException($"Math.Round is not defined for '{value.Type.Name}'.");
         return Expression.Call(method, value, digits);
     }
+
+    static Expression awayFromZero = Expression.Constant(MidpointRounding.AwayFromZero);
+
+    // The three-argument overload, out of reach of the two-type lookup. Keyed by a member's type, so
+    // bounded by the schema.
+    static MethodInfo? RoundAwayFromZero(Type value) =>
+        roundsAwayFromZero.GetOrAdd(value, _ => typeof(Math).GetMethod("Round", [_, typeof(int), typeof(MidpointRounding)]));
+
+    static ConcurrentDictionary<Type, MethodInfo?> roundsAwayFromZero = new();
 
     MethodCallExpression BuildSubstring(CallNode call, Expression target, Expression row)
     {
@@ -2133,13 +2296,15 @@ sealed class ExpressionBuilder(
             {
                 values.Add(ParseValue(constant.Value, underlying ?? elementType));
             }
-            else if (underlying is not null)
+            else if (underlying is not null ||
+                     !elementType.IsValueType)
             {
-                // A null candidate matches the member's own null, as Contains over a list would.
+                // A null candidate matches the member's own null, as Contains over a list would: an
+                // optional value's, or a reference's — text, bytes — which is null without being lifted.
                 values.Add(null);
             }
 
-            // Over a required member a null is in no set: C# lifts the member to compare it — which
+            // Over a required value a null is in no set: C# lifts the member to compare it — which
             // the client drops as lifting — and a lifted required value is never null. Left in the
             // array it would read as the type's default and match key 0, or false.
         }
@@ -2188,13 +2353,22 @@ sealed class ExpressionBuilder(
         right = ConvertTo(right, target);
     }
 
-    // Widest wins, in the order C# itself prefers.
+    // Widest wins, in the order C# itself prefers — except where neither side holds the other's range.
+    // A uint beside a signed operand no wider than int is promoted to long, as C# promotes it:
+    // converting the signed side to uint wraps a negative into a large positive, which an in-memory
+    // source then compares as written.
     static Type? NumericTarget(Type left, Type right)
     {
         if (!IsNumeric(left) ||
             !IsNumeric(right))
         {
             return null;
+        }
+
+        if (MixesUnsignedWithSigned(left, right) ||
+            MixesUnsignedWithSigned(right, left))
+        {
+            return typeof(long);
         }
 
         foreach (var candidate in numericWidths)
@@ -2220,6 +2394,11 @@ sealed class ExpressionBuilder(
         typeof(int)
     ];
 
+    // uint against sbyte, short or int: the one pair of numeric widths C# widens to neither side.
+    static bool MixesUnsignedWithSigned(Type unsigned, Type signed) =>
+        unsigned == typeof(uint) &&
+        Type.GetTypeCode(signed) is TypeCode.SByte or TypeCode.Int16 or TypeCode.Int32;
+
     static bool IsNumeric(Type type) =>
         !type.IsEnum &&
         Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte or TypeCode.Int16 or TypeCode.UInt16 or
@@ -2243,11 +2422,20 @@ sealed class ExpressionBuilder(
     /// SQL's numeric-to-numeric conversions truncate where the CLR's round, so a narrowing one would
     /// answer differently per source and is refused, as the client already refuses to send it.
     /// </summary>
-    static Expression BuildFromText(KnownFunction function, Expression target, MethodInfo method)
+    static Expression BuildFromText(KnownFunction function, Expression target, MethodInfo method, bool invariant)
     {
         var value = NonNullable(target);
         if (value.Type == typeof(string))
         {
+            // In memory a parse reads the current culture — a separator, a sign — which request
+            // localization sets per request, where the provider's CONVERT reads none. Bound to the
+            // invariant overload there, so the same text parses the same whatever Accept-Language said.
+            if (invariant &&
+                Method(method.DeclaringType!, method.Name, typeof(string), typeof(IFormatProvider)) is { } cultured)
+            {
+                return Expression.Call(cultured, value, invariantCulture);
+            }
+
             return Expression.Call(method, value);
         }
 
@@ -2273,7 +2461,7 @@ sealed class ExpressionBuilder(
         return Expression.Convert(target, result);
     }
 
-    static Expression BuildStringFrom(Expression target)
+    static Expression BuildStringFrom(Expression target, bool invariant)
     {
         var value = NonNullable(target);
         if (value.Type == typeof(string))
@@ -2292,8 +2480,19 @@ sealed class ExpressionBuilder(
             throw new ScryValidationException($"ToString is not supported over '{value.Type.Name}'.");
         }
 
+        // In memory ToString reads the current culture — a decimal's separator, a date's order — where
+        // the provider's CONVERT reads none. Bound to the invariant overload there, where the type has
+        // one; a type without one spells itself the same under every culture.
+        if (invariant &&
+            Method(value.Type, "ToString", typeof(IFormatProvider)) is { } cultured)
+        {
+            return Expression.Call(value, cultured, invariantCulture);
+        }
+
         return Expression.Call(value, Method(value.Type, "ToString")!);
     }
+
+    static Expression invariantCulture = Expression.Constant(CultureInfo.InvariantCulture, typeof(IFormatProvider));
 
     // The scalar shapes a relational provider can render as text. Deliberately a list rather than
     // "anything with a ToString": every CLR type has one, and almost none of them mean anything in SQL.
@@ -2581,7 +2780,8 @@ sealed class ExpressionBuilder(
 
     /// <summary>
     /// The type to read a constant at when it sits opposite <paramref name="other"/> in an arithmetic
-    /// expression: its own, when that is wider, and otherwise the type it is being combined with.
+    /// expression — or, through <see cref="BuildComparand"/>, a comparison: its own, when that is
+    /// wider, and otherwise the type it is being combined with.
     /// </summary>
     /// <remarks>
     /// Reading it at the other operand's type is what makes a bare literal take the member's type
@@ -2787,9 +2987,10 @@ sealed class ExpressionBuilder(
     /// <summary>
     /// Whether the row is one of an in-memory source, where a string member runs under LINQ to Objects
     /// rather than as SQL. The culture-sensitive members — a prefix, a suffix, a search, a casing, a
-    /// three-way comparison — are bound to their ordinal or invariant forms there: a relational
-    /// provider answers by the column's collation whatever the request's culture, and the same wire
-    /// request over an in-memory source should be as steady, not answer per Accept-Language.
+    /// three-way comparison, the conversions between text and a value — are bound to their ordinal or
+    /// invariant forms there: a relational provider answers by the column's collation whatever the
+    /// request's culture, and the same wire request over an in-memory source should be as steady, not
+    /// answer per Accept-Language. The same source rounds a midpoint as the provider does, too.
     /// </summary>
     bool InMemory(Expression row)
     {
@@ -2849,11 +3050,12 @@ sealed class ExpressionBuilder(
             {
                 parsed = Enum.Parse(underlying, resolved);
             }
-            catch (ArgumentException)
+            // A value the client knows and the server does not — a stale client after the value was
+            // renamed (without a [PreviousNames] entry) or removed — or a number past the underlying
+            // type's range, which Enum.Parse reads as a number before the check below can refuse it.
+            // Each is a rejected query rather than a server fault.
+            catch (Exception exception) when (exception is ArgumentException or OverflowException)
             {
-                // A value the client knows and the server does not — a stale client after the value was
-                // renamed (without a [PreviousNames] entry) or removed. Report it as a rejected query
-                // rather than letting it surface as a server fault.
                 throw new ScryValidationException($"'{value}' is not a value of enum '{underlying.Name}'.");
             }
 

@@ -292,6 +292,67 @@ public class CachedPolicyTests
         await Assert.That(policy.Decisions).IsEqualTo(6);
     }
 
+    // Between a forgetting and the next read, the host can say more: pend a row, or prime one. The
+    // scope read then is not empty, but every row in it was still forgotten, and the rows this
+    // adapter remembers deciding above the watermark were forgotten with them. Skipping those as
+    // already decided would leave them out of a set that no longer holds them — the caller sees
+    // only the row the host pended, and once the watermark passes the others they are never read
+    // again.
+    [Test]
+    public async Task ForgettingAScopeAndThenPendingARowDecidesEveryRowAgain()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var policy = new CountingRegionPolicy();
+        var processor = Cached();
+        var client = ClientFor(context, processor, policy);
+
+        await client.Source<Order>("Order").CountAsync();
+        await Assert.That(policy.Decisions).IsEqualTo(3);
+
+        var southId = context.Orders.Single(_ => _.Region == "South").Id;
+        processor.PolicyCache.InvalidateScope<Order>(CountingRegionPolicy.Scope);
+        processor.PolicyCache.InvalidateRows<Order>([southId]);
+
+        var rows = await client.Source<Order>("Order")
+            .Select(_ => new {_.Region})
+            .ToListAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(policy.Decisions).IsEqualTo(6);
+            await Assert.That(rows.Select(_ => _.Region)).IsEquivalentTo(["North", "North"], CollectionOrdering.Matching);
+        }
+    }
+
+    [Test]
+    public async Task ForgettingAScopeAndThenPrimingARowDecidesEveryRowAgain()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var policy = new CountingRegionPolicy();
+        var processor = Cached();
+        var client = ClientFor(context, processor, policy);
+
+        await client.Source<Order>("Order").CountAsync();
+        await Assert.That(policy.Decisions).IsEqualTo(3);
+
+        // One allowed row primed into the forgotten scope, so the scope read next has a key in it.
+        // The other north row is owed a decision as much as it was before the priming.
+        var primed = context.Orders.First(_ => _.Region == "North");
+        processor.PolicyCache.InvalidateScope<Order>(CountingRegionPolicy.Scope);
+        processor.PolicyCache.Prime(CountingRegionPolicy.Scope, [primed], Context(context, policy));
+        await Assert.That(policy.Decisions).IsEqualTo(4);
+
+        var rows = await client.Source<Order>("Order")
+            .Select(_ => new {_.Region})
+            .ToListAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(policy.Decisions).IsEqualTo(7);
+            await Assert.That(rows.Select(_ => _.Region)).IsEquivalentTo(["North", "North"], CollectionOrdering.Matching);
+        }
+    }
+
     [Test]
     public async Task AnswersAreKeptApartByScope()
     {
@@ -546,4 +607,153 @@ public sealed class HolidayPolicy :
     public string ScopeKey(ScryPolicyContext context) => "";
 
     public bool Allow(Holiday row, string scopeKey, ScryPolicyContext context) => true;
+}
+
+/// <summary>
+/// The registrations <c>Schema.Build</c>, and the startup check against the real model, refuse — each
+/// over a model compiled for it (<see cref="CompiledModel"/>), since a shape that refuses to start
+/// cannot live in this assembly's model.
+/// </summary>
+public class CachedPolicyRegistrationTests
+{
+    // Answers are filed in the store under the policy type's name, so one type registered against two
+    // entities — legal, the interface being contravariant — would file both under one record, with one
+    // entity's allowed keys and watermark standing for the other's.
+    [Test]
+    public async Task OnePolicyTypeCannotServeTwoEntities()
+    {
+        var (assembly, _) = CompiledModel.Compile(
+            """
+            public sealed class Context : DbContext;
+
+            [Queryable]
+            public class Asset
+            {
+                public int Id { get; set; }
+                public long Revision { get; set; }
+            }
+
+            [Queryable]
+            public class Vehicle : Asset
+            {
+                public int Wheels { get; set; }
+            }
+
+            public class RegionPolicy :
+                ICachedRowPolicy<Asset>
+            {
+                public string ScopeKey(ScryPolicyContext context) => "";
+
+                public bool Allow(Asset row, string scopeKey, ScryPolicyContext context) => true;
+            }
+            """);
+        var options = new ScryOptions(assembly.GetType("Context")!);
+        Register(options, assembly.GetType("Asset")!, assembly.GetType("RegionPolicy")!);
+        Register(options, assembly.GetType("Vehicle")!, assembly.GetType("RegionPolicy")!);
+
+        var exception = Assert.ThrowsExactly<Exception>(() => Schema.Build(options));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(exception.Message).Contains("Cached row policy 'RegionPolicy' is registered against both 'Asset' and 'Vehicle'");
+            await Assert.That(exception.Message).Contains("sealed class VehicleRegionPolicy : RegionPolicy");
+        }
+    }
+
+    // Answers are filed per row under a primary key, and the rows owed one are read back from the
+    // context's set: a POCO has no table for that, and a keyless view no key. Refused at startup rather
+    // than faulting on the first query to read the source.
+    [Test]
+    [Arguments("[QueryablePoco]", "poco")]
+    [Arguments("[Queryable] [Keyless]", "view")]
+    public async Task ASourceWithNoTableOrNoKeyIsRefused(string optIn, string kind)
+    {
+        var (assembly, _) = CompiledModel.Compile(
+            $$"""
+              public sealed class Context : DbContext;
+
+              {{optIn}}
+              public class Closure
+              {
+                  public int Id { get; set; }
+                  public long Revision { get; set; }
+              }
+
+              public sealed class ClosurePolicy :
+                  ICachedRowPolicy<Closure>
+              {
+                  public string ScopeKey(ScryPolicyContext context) => "";
+
+                  public bool Allow(Closure row, string scopeKey, ScryPolicyContext context) => true;
+              }
+              """);
+        var options = new ScryOptions(assembly.GetType("Context")!);
+        Register(options, assembly.GetType("Closure")!, assembly.GetType("ClosurePolicy")!);
+
+        var exception = Assert.ThrowsExactly<Exception>(() => Schema.Build(options));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(exception.Message).Contains($"Cached row policy 'ClosurePolicy' is registered against 'Closure', a {kind} source");
+            await Assert.That(exception.Message).Contains("Attach it to a [Queryable] entity");
+        }
+    }
+
+    // The key is derived from [Key] and the naming conventions, as a client's is, so one the context
+    // configures fluently is not the one the answers would be filed under. Refused where the real model
+    // is first in hand, naming the member to mark.
+    [Test]
+    public async Task AKeyTheContextConfiguresDifferentlyIsRefused()
+    {
+        var (assembly, _) = CompiledModel.Compile(
+            """
+            public sealed class Context(DbContextOptions options) :
+                DbContext(options)
+            {
+                public DbSet<Order> Orders => Set<Order>();
+
+                protected override void OnModelCreating(ModelBuilder builder) =>
+                    builder.Entity<Order>().HasKey(_ => _.Code);
+            }
+
+            [Queryable]
+            public class Order
+            {
+                public int Id { get; set; }
+                public int Code { get; set; }
+                public long Revision { get; set; }
+            }
+
+            public sealed class OrderPolicy :
+                ICachedRowPolicy<Order>
+            {
+                public string ScopeKey(ScryPolicyContext context) => "";
+
+                public bool Allow(Order row, string scopeKey, ScryPolicyContext context) => true;
+            }
+            """);
+        var contextType = assembly.GetType("Context")!;
+        var options = new ScryOptions(contextType);
+        Register(options, assembly.GetType("Order")!, assembly.GetType("OrderPolicy")!);
+        var schema = Schema.Build(options);
+
+        // Spelled out rather than imported: EF's query extensions share names with Scry's. No server is
+        // reached — the model is built from the provider alone.
+        var contextOptions = Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions
+            .UseSqlServer(new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder(), "Server=(none)")
+            .Options;
+        await using var context = (Microsoft.EntityFrameworkCore.DbContext) Activator.CreateInstance(contextType, contextOptions)!;
+
+        var exception = Assert.ThrowsExactly<Exception>(() => schema.ValidateAgainstModel(context.Model, contextType));
+
+        await Assert.That(exception.Message).Contains("Cached row policy 'OrderPolicy' files its answers for 'Order' under a key derived as 'Id', but Context gives 'Order' a primary key of (Code)");
+    }
+
+    // What AddCachedPolicy<TEntity, TVersion, TPolicy> records, for types that exist only once compiled.
+    static void Register(ScryOptions options, Type entity, Type policy)
+    {
+        var parameter = Expression.Parameter(entity, "_");
+        var version = Expression.Lambda(Expression.Property(parameter, "Revision"), parameter);
+        options.CachedPolicies[entity] = (policy, version, DeniedRowHandling.Default);
+    }
 }

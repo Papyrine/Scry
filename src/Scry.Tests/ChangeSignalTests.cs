@@ -1,4 +1,5 @@
 using System.Transactions;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
@@ -138,6 +139,63 @@ public class ChangeSignalTests
         }
 
         await Assert.That(reported).IsEmpty();
+    }
+
+    // EF says a savepoint failed with the same event it says a commit failed with. The transaction is
+    // still open after the first, and what was saved in it still lands with the commit — so it must
+    // still be reported then.
+    [Test]
+    public async Task AFailedSavepointDoesNotDiscardWhatTheTransactionHolds()
+    {
+        await using var database = await TestContext.CreateIsolated("ChangeSignalSavepoint");
+        var (changes, reported) = Listening();
+        await using var context = Writing(database, changes);
+
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        context.Add(
+            new Department
+            {
+                Name = "Legal"
+            });
+        await context.SaveChangesAsync();
+
+        // No savepoint of that name, which the database refuses without ending the transaction.
+        await Assert.ThrowsAsync<SqlException>(() => transaction.RollbackToSavepointAsync("never"));
+        await Assert.That(reported).IsEmpty();
+
+        await transaction.CommitAsync();
+
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Department>(context)], CollectionOrdering.Matching);
+    }
+
+    // Handed a transaction it did not begin, the context is never told how it ended. What is saved in
+    // it is reported at the save — early, which costs a run, rather than never — which in a message
+    // handler lands where the outbox carries it out after the commit.
+    [Test]
+    public async Task ASaveInATransactionHandedToTheContextIsReportedAtTheSave()
+    {
+        await using var database = await TestContext.CreateIsolated("ChangeSignalHanded");
+        var (changes, reported) = Listening();
+        await using var connection = new SqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var owned = await connection.BeginTransactionAsync();
+        await using var context = new TestContext(
+            new DbContextOptionsBuilder<TestContext>()
+                .UseSqlServer(connection)
+                .AddInterceptors(new ScryChangeInterceptor(changes))
+                .Options);
+        await context.Database.UseTransactionAsync(owned);
+
+        context.Add(
+            new Department
+            {
+                Name = "Legal"
+            });
+        await context.SaveChangesAsync();
+
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Department>(context)], CollectionOrdering.Matching);
+
+        await owned.CommitAsync();
     }
 
     [Test]

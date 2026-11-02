@@ -344,7 +344,73 @@ public class CompiledLockstepTests
             }
             """);
 
-    static async Task Agree(string model)
+    // A payload or result property hiding another with 'new' under a different type: reflection reports
+    // both the derived and the hidden declaration, and the one a client sends or reads back is the
+    // nearest, which is all the generator describes — so the server describes it once too.
+    [Test]
+    public async Task ACommandMemberHidingAnotherWithAnotherType()
+    {
+        var described = await Agree(
+            """
+            [Queryable]
+            public class Document
+            {
+                public int Id { get; set; }
+            }
+
+            public abstract class Stamped
+            {
+                public int By { get; set; }
+            }
+
+            public abstract class Totalled
+            {
+                public int Total { get; set; }
+            }
+
+            public class Receipt : Totalled
+            {
+                public new string Total { get; set; } = "";
+            }
+
+            [Command(Result = typeof(Receipt))]
+            public class Note : Stamped
+            {
+                public int Id { get; set; }
+                public new string By { get; set; } = "";
+            }
+            """);
+
+        var note = described.Commands.Single();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(note.Properties.Single(_ => _.Name == "By").TypeDisplay).IsEqualTo("string");
+            await Assert.That(note.Result!.Properties.Single(_ => _.Name == "Total").TypeDisplay).IsEqualTo("string");
+        }
+    }
+
+    // nint and nuint are primitive to reflection and to nothing else here: the generator has no keyword
+    // to spell a value as wide as the machine's word with, and the server leaves such a member out too,
+    // so a model carrying one still agrees on both sides.
+    [Test]
+    public async Task ANativeIntegerMemberIsExposedByNeitherSide()
+    {
+        var described = await Agree(
+            """
+            [Queryable]
+            public class Handle
+            {
+                public int Id { get; set; }
+                public nint Pointer { get; set; }
+                public nuint? Size { get; set; }
+            }
+            """);
+
+        await Assert.That(described.Types.Single().Members.Select(_ => _.Name)).IsEquivalentTo(["Id"], CollectionOrdering.Matching);
+    }
+
+    static async Task<ScryIntrospection> Agree(string model)
     {
         var (assembly, image) = CompiledModel.Compile(
             $"""
@@ -371,6 +437,7 @@ public class CompiledLockstepTests
 
             await LockstepTests.AgreeOnEveryMember(extract, described);
             await LockstepTests.AgreeOnEveryCommand(extract, described);
+            return described;
         }
         finally
         {

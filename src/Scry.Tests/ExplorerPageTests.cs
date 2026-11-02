@@ -173,4 +173,49 @@ public class ExplorerPageTests
 
         await Assert.That(page.Html).Contains("""<base href="/" />""");
     }
+
+    /// <summary>
+    /// A host mounted under a prefix — UsePathBase, or one a proxy forwards — is reached under it,
+    /// and the page's base href has to begin with it or every asset is asked for at an address nothing
+    /// answers. The prefix is known only from a request, so the page is built per prefix and once:
+    /// with and without a trailing slash is one prefix, none is the route alone, and each is its own
+    /// tag. Bounded, since a forwarded prefix is whatever a client sent: past the bound a page is built
+    /// for its request and kept by nobody.
+    /// </summary>
+    [Test]
+    public async Task ThePageIsBuiltOncePerPrefixTheHostIsReachedUnder()
+    {
+        var built = new List<string>();
+        var pages = new ServedPages<ExplorerPage>(
+            prefix =>
+            {
+                built.Add(prefix);
+                return Build("""<base href="__SCRY_BASE__" />""", prefix + "/scry");
+            });
+
+        var bare = pages.For(null);
+        var prefixed = pages.For("/app");
+        var slashed = pages.For("/app/");
+        for (var forwarded = 0; forwarded < 20; forwarded++)
+        {
+            pages.For($"/forwarded{forwarded}");
+        }
+
+        pages.For("/forwarded19");
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(bare.Html).Contains("""<base href="/scry/" />""");
+            await Assert.That(prefixed.Html).Contains("""<base href="/app/scry/" />""");
+            await Assert.That(prefixed.Tag).IsNotEqualTo(bare.Tag);
+            await Assert.That(slashed).IsSameReferenceAs(prefixed);
+            await Assert.That(pages.For("")).IsSameReferenceAs(bare);
+            await Assert.That(built.Count(_ => _ == "/app")).IsEqualTo(1);
+
+            // Sixteen kept — none, /app, and the first fourteen forwarded — and the rest built again
+            // each time they are asked for.
+            await Assert.That(built.Count(_ => _ == "/forwarded13")).IsEqualTo(1);
+            await Assert.That(built.Count(_ => _ == "/forwarded19")).IsEqualTo(2);
+        }
+    }
 }

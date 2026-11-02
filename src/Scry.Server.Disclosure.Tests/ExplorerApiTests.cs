@@ -303,6 +303,79 @@ public class ExplorerApiTests
         }
     }
 
+    // A host mounted under a prefix — UsePathBase, or one a proxy forwards — serves the page with the
+    // prefix ahead of the route, where the redirect to the page already sent it: a base without it
+    // would ask for every asset at an address nothing answers. Without a prefix the page is as it was.
+    [Test]
+    public async Task ThePageIsServedUnderTheHostsPrefix()
+    {
+        await using var host = await ExplorerHost.Run(pathBase: "/app");
+        await using var plain = await ExplorerHost.Run();
+
+        using var bare = await host.Client.GetAsync("/app/scry-disclosures");
+        using var page = await host.Client.GetAsync("/app/scry-disclosures/");
+        using var style = await host.Client.GetAsync("/app/scry-disclosures/css/app.css");
+        using var unprefixed = await plain.Client.GetAsync("/scry-disclosures/");
+        var html = await page.Content.ReadAsStringAsync();
+        var policy = page.Headers.GetValues("Content-Security-Policy").Single();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(bare.StatusCode).IsEqualTo(HttpStatusCode.Redirect);
+            await Assert.That(bare.Headers.Location!.ToString()).IsEqualTo("/app/scry-disclosures/");
+            await Assert.That(page.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(html).Contains("<base href=\"/app/scry-disclosures/\" />");
+            await Assert.That(style.StatusCode).IsEqualTo(HttpStatusCode.OK);
+
+            // The policy and the tag are of the page as it is served under the prefix.
+            await Assert.That(policy).Contains(string.Join(' ', ExplorerAssets.InlineScriptHashes(html)));
+            await Assert.That(page.Headers.ETag!.ToString()).IsNotEqualTo(unprefixed.Headers.ETag!.ToString());
+            await Assert.That(await unprefixed.Content.ReadAsStringAsync()).Contains("<base href=\"/scry-disclosures/\" />");
+        }
+    }
+
+    // A store that fails to read is a refusal the page can show, saying nothing of what went wrong.
+    // Left to the host, a development server answers with a stack trace naming the store's tables,
+    // which the page cannot read and nobody outside the host should.
+    [Test]
+    public async Task AStoreThatFailsToReadIsARefusalAndNotAStackTrace()
+    {
+        await using var host = await ExplorerHost.Run(
+            environment: "Development",
+            services: _ => _.AddSingleton<IScryDisclosureReader>(new Failing()));
+
+        (string Path, string? Body)[] questions =
+        [
+            ("api/rows", """{"source":"Patient","key":"1"}"""),
+            ("api/callers", """{"caller":"dr.osei"}"""),
+            ("api/members", """{"caller":"nurse.kim","source":"Patient","member":"Diagnosis"}"""),
+            ($"api/events/{Guid.NewGuid():D}", null),
+            ("api/status", null),
+            ("api/catalog", null)
+        ];
+        var seen = new List<string>();
+        foreach (var (path, body) in questions)
+        {
+            using var response = await host.Ask(path, body);
+            seen.Add($"{path.Split('/')[1]} {(int) response.StatusCode} {response.Content.Headers.ContentType?.MediaType} {await response.Content.ReadAsStringAsync()}");
+        }
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(seen).IsEquivalentTo(
+                [
+                    """rows 500 application/json {"message":"The record could not be read."}""",
+                    """callers 500 application/json {"message":"The record could not be read."}""",
+                    """members 500 application/json {"message":"The record could not be read."}""",
+                    """events 500 application/json {"message":"The record could not be read."}""",
+                    """status 500 application/json {"message":"The record could not be read."}""",
+                    """catalog 500 application/json {"message":"The record could not be read."}"""
+                ],
+                CollectionOrdering.Matching);
+            await Assert.That(await host.Store.Reviews().ToListAsync()).IsEmpty();
+        }
+    }
+
     // What the explorer is told is somebody's data, so nothing keeps a copy of it; the page and its
     // assets are the program, so they are revalidated against a tag of their content. And the page
     // runs under a policy that gives what it is shown nowhere else to go.
@@ -421,6 +494,56 @@ public class ExplorerApiTests
             await Assert.That(review.Reviewer).IsEqualTo("records.officer");
             await Assert.That(catalog).Contains("\"erase\":true");
             await Assert.That(await shut.Answer("api/catalog")).Contains("\"erase\":false");
+        }
+    }
+
+    // A key the explorer cannot type is found however it is spelled: the record holds a GUID in
+    // lowercase with hyphens and a date in ISO form, and a reviewer pastes one from wherever it was —
+    // in uppercase from a database tool, in braces, with a space between the date and the time. The
+    // answer says what the record holds the row by, and erasing goes by the same rule and is recorded
+    // under that key.
+    [Test]
+    public async Task AKeyIsFoundHoweverItIsSpelled()
+    {
+        await using var host = await ExplorerHost.Run(_ => _.EnableErase = _ => true);
+        var visit = Guid.Parse("3f2504e0-4f89-11d3-9a0c-0305e82c3301");
+        var shift = new DateTime(2026, 3, 1, 9, 0, 0);
+        var seen = Clinic.Content(ScryDisclosureContentKind.Row, "{\"note\":\"Seen\"}");
+        var begin = ExplorerHost.Begin(1, "dr.osei", source: "Visit");
+        await host.Store.AppendAsync(
+            Clinic.Part(
+                begin.Id,
+                0,
+                begin,
+                close: ExplorerHost.Close(ScryDisclosureOutcome.Released, 2),
+                rows:
+                [
+                    (0, seen, "Visit", ScryDisclosureEntity.KeyOf([visit])),
+                    (1, seen, "Shift", ScryDisclosureEntity.KeyOf([shift]))
+                ]),
+            Cancel.None);
+
+        using var upper = JsonDocument.Parse(await host.Answer("api/rows", """{"source":"Visit","key":"3F2504E0-4F89-11D3-9A0C-0305E82C3301"}"""));
+        using var braced = JsonDocument.Parse(await host.Answer("api/rows", """{"source":"Visit","key":"{3f2504e0-4f89-11d3-9a0c-0305e82c3301}"}"""));
+        using var spaced = JsonDocument.Parse(await host.Answer("api/rows", """{"source":"Shift","key":"2026-03-01 09:00:00"}"""));
+        using var unknown = JsonDocument.Parse(await host.Answer("api/rows", """{"source":"Visit","key":"0F2504E0-4F89-11D3-9A0C-0305E82C3301"}"""));
+        var erased = await host.Answer("api/erase", """{"source":"Visit","key":"3F2504E0-4F89-11D3-9A0C-0305E82C3301","confirm":"3f2504e0-4f89-11d3-9a0c-0305e82c3301"}""");
+        var erasure = (await host.Store.Erasures().ToListAsync()).Single();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(upper.RootElement.GetProperty("rows").GetArrayLength()).IsEqualTo(1);
+            await Assert.That(upper.RootElement.GetProperty("key").GetString()).IsEqualTo("[\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"]");
+            await Assert.That(braced.RootElement.GetProperty("rows").GetArrayLength()).IsEqualTo(1);
+            await Assert.That(spaced.RootElement.GetProperty("rows").GetArrayLength()).IsEqualTo(1);
+            await Assert.That(spaced.RootElement.GetProperty("key").GetString()).IsEqualTo("[\"2026-03-01T09:00:00\"]");
+
+            // Found under no spelling, the answer names the key as it was typed.
+            await Assert.That(unknown.RootElement.GetProperty("rows").GetArrayLength()).IsEqualTo(0);
+            await Assert.That(unknown.RootElement.GetProperty("key").GetString()).IsEqualTo("[\"0F2504E0-4F89-11D3-9A0C-0305E82C3301\"]");
+            await Assert.That(erased).Contains("\"units\":1");
+            await Assert.That(erasure.Key).IsEqualTo("[\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"]");
+            await Assert.That((await host.Store.Reconstruct(begin.Id))!.Units[0].Erased).IsTrue();
         }
     }
 
@@ -607,8 +730,8 @@ public class ExplorerApiTests
     [Arguments("007", "[\"007\"]")]
     public async Task AKeyIsReadAsItIsTyped(string typed, string read)
     {
-        await Assert.That(DisclosureKeys.TryRead(typed, out var key)).IsTrue();
-        await Assert.That(ScryDisclosureEntity.KeyOf(key!)).IsEqualTo(read);
+        await Assert.That(DisclosureKeys.TryRead(typed, out var spellings)).IsTrue();
+        await Assert.That(ScryDisclosureEntity.KeyOf(spellings![0])).IsEqualTo(read);
     }
 
     [Test]
@@ -723,5 +846,38 @@ public class ExplorerApiTests
 
         public ValueTask AppendAsync(ScryDisclosureBatch batch, Cancel cancel) =>
             ValueTask.CompletedTask;
+    }
+
+    // A store that cannot be read: what a lost connection or a dropped table looks like from here,
+    // failing in words that name what nobody outside the host should be told.
+    sealed class Failing :
+        IScryDisclosureReader
+    {
+        static InvalidOperationException Failure() =>
+            new("SELECT [Unit] FROM [scry].[DisclosureUnits] failed: the table is gone.");
+
+        public IAsyncEnumerable<ScryRowDisclosure> ReceiversOf(string source, IReadOnlyList<object?> key, DateTimeOffset? from = null, DateTimeOffset? to = null, ScryDisclosureCursor? after = null, Cancel cancel = default) =>
+            throw Failure();
+
+        public IAsyncEnumerable<ScryDisclosureEntry> ReceivedBy(string? caller, DateTimeOffset from, DateTimeOffset to, ScryDisclosureCursor? after = null, Cancel cancel = default) =>
+            throw Failure();
+
+        public IAsyncEnumerable<ScryDisclosureEntry> MemberReceivedBy(string? caller, string source, string member, ScryDisclosureCursor? after = null, Cancel cancel = default) =>
+            throw Failure();
+
+        public ValueTask<ScryDisclosedResponse?> Reconstruct(Guid eventId, Cancel cancel = default) =>
+            throw Failure();
+
+        public ValueTask<ScryDisclosureContent?> Content(ScryDisclosureAddress address, Cancel cancel = default) =>
+            throw Failure();
+
+        public ValueTask<ScryDisclosureShape?> Shape(ScryDisclosureAddress address, Cancel cancel = default) =>
+            throw Failure();
+
+        public ValueTask<ScryDisclosureCatalog> Catalog(Cancel cancel = default) =>
+            throw Failure();
+
+        public IAsyncEnumerable<ScryDisclosureReview> Reviews(ScryDisclosureCursor? after = null, Cancel cancel = default) =>
+            throw Failure();
     }
 }

@@ -301,7 +301,7 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
             yield break;
         }
 
-        await foreach (var answer in Receipts(processor.Receipt(parsed, Caller, cancel), drifted: false, cancel))
+        await foreach (var answer in Receipts(processor.Receipt(parsed, services, Caller, cancel), drifted: false, cancel))
         {
             yield return answer;
         }

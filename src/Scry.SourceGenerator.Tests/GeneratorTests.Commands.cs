@@ -172,6 +172,91 @@ public partial class GeneratorTests
         }
     }
 
+    // A command's target is read before inherited members are folded into the base model, so an override
+    // of a base's [Key] is met twice along the chain. It is one key, bound once: bound twice, the stamp
+    // named it twice where the server names it once, and every client reported itself stale.
+    [Test]
+    public async Task AnOverriddenKeyBindsOnce()
+    {
+        const string model = """
+            using System.ComponentModel.DataAnnotations;
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Asset
+            {
+                [Key] public virtual int Id { get; set; }
+            }
+
+            [Queryable]
+            public class Vehicle : Asset
+            {
+                public override int Id { get; set; }
+            }
+
+            [Command(typeof(Vehicle))]
+            public class Touch
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        var commands = (await GeneratedSources(model)).Single(_ => _.Contains("public sealed class ScryCommands"));
+
+        await Assert.That(commands).Contains("""[global::Scry.ScryCommand("Touch", Target = "Vehicle", Keys = new[] {"Id"})]""");
+    }
+
+    // The server binds a payload into the public properties it can both read and set, and describes a
+    // result by the public ones it can read; a declaration outside that set leaves its name to a base's,
+    // as reflection does. The generator once let it claim the name, dropped it, and lost the base's.
+    [Test]
+    public async Task ANewPropertyThePayloadCannotUseLeavesTheBasesToTheCommand()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public class Payload
+            {
+                public int Id { get; set; }
+                public string Text { get; set; } = "";
+            }
+
+            [Command]
+            public class Touch : Payload
+            {
+                public new string Text => "";
+            }
+
+            public class Answer
+            {
+                public int Count { get; set; }
+            }
+
+            public class Detailed : Answer
+            {
+                protected new int Count { get; set; }
+            }
+
+            [Command(Result = typeof(Detailed))]
+            public class Poke
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        var commands = (await GeneratedSources(model)).Single(_ => _.Contains("public sealed class ScryCommands"));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(commands).Contains("public string Text { get; init; } = null!;");
+            await Assert.That(commands).Contains("public int Count { get; init; }");
+        }
+    }
+
     // Deprecating a command, like deprecating a member, is a note to whoever rebuilds a client and
     // leaves what a deployed one may send exactly as it was.
     [Test]
@@ -254,6 +339,12 @@ public partial class GeneratorTests
         """,
         "The name 'Touch' is generated twice: as an enum and as the command 'Poke'.")]
     [Arguments(
+        "SCRY011",
+        """
+        [Command(Name = "client")] public class Touch { public int Id { get; set; } }
+        """,
+        "The name 'client' is generated twice: as the facade's client field and as the facade method for 'Touch'.")]
+    [Arguments(
         "SCRY012",
         """
         [Command(Name = "class")] public class Touch { public int Id { get; set; } }
@@ -303,6 +394,13 @@ public partial class GeneratorTests
         [Command(typeof(Badge))] public class Touch { public int Id { get; set; } }
         """,
         "'Touch' would add 'CanTouch' to 'Badge', which already has a member of that name.")]
+    [Arguments(
+        "SCRY019",
+        """
+        public class @lock { public int Id { get; set; } }
+        [Command(Result = typeof(@lock))] public class Touch { public int Id { get; set; } }
+        """,
+        "The result class 'lock' is emitted as a type of its own name, which cannot be written as a C# type name, so nothing can be generated for it.")]
     [Arguments(
         "SCRY017",
         "[Command] public abstract class Touch { public int Id { get; set; } }",

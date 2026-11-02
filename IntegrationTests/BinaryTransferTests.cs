@@ -454,7 +454,7 @@ public class BinaryTransferTests
         var documents = limitedClient.Source<Doc>("Document", docMembers);
 
         var rows = new List<Doc>();
-        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             async () =>
             {
                 await foreach (var row in documents.OrderBy(_ => _.Id).ToAsyncEnumerable())
@@ -464,6 +464,7 @@ public class BinaryTransferTests
             });
 
         await Assert.That(exception!.Message).Contains("more than the maximum of 2 streamed rows");
+        await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Validation);
         // The rows that did arrive are whole — their parts were read and resolved before the failure,
         // so a truncated stream is an error rather than a short answer with mangled bytes.
         await Assert.That(rows.Select(_ => Described(_.Name, _.Payload))).IsEquivalentTo(seeded[..2].Select(_ => Described(_.Name, _.Payload)), CollectionOrdering.Matching);

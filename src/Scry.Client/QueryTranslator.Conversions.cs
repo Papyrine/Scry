@@ -36,14 +36,18 @@ sealed partial class QueryTranslator
                 $"The conversion from '{source.Name}' to '{target.Name}' is not supported by Scry.");
         }
 
-        // The same width under a different sign: nothing the provider would compute differently, so
-        // the operand travels as it is and the server's own promotion reconciles the pair.
-        if (to == from)
+        // The same type, behind an optional or not: nothing to carry, so the operand travels as it is.
+        if (source == target)
         {
             return TranslateExpr(convert.Operand, root);
         }
 
-        if (to < from)
+        // Narrower, or the same width under the other sign, which has no room for half the values
+        // either: a ulong above long.MaxValue read as a long is negative, and a negative int read as a
+        // uint is enormous. Dropped, the cast would send the member as it is and a constant parsed as
+        // the member's own type, so the row the cast was written to catch is the one the filter lost —
+        // and a projection would answer with a value the client's type cannot hold.
+        if (to <= from)
         {
             throw new NotSupportedException(
                 $"'({target.Name})' narrows a '{source.Name}', which the wire does not carry: the database truncates where the CLR rounds, so the two would answer differently. Compute over the wider type, or round with Math.Round or Math.Truncate first.");
@@ -99,7 +103,9 @@ sealed partial class QueryTranslator
     // What C# converts a comparison's operands through — an enum to its underlying number, a char to
     // an int, a narrower number to the wider operand's type — which means nothing on the wire: the
     // server promotes a comparison's operands itself, exactly as C# did, and compares an enum or a
-    // char as what it is. Anywhere else the same conversion is a real read of the value.
+    // char as what it is. Anywhere else the same conversion is a real read of the value. So is one
+    // across the sign at the same width: C# never lowers a comparison through it — a uint against an
+    // int goes to long — so it is the cast the client wrote, and TranslateConversion refuses it.
     static bool IsComparisonLowering(Type from, Type to)
     {
         var source = Nullable.GetUnderlyingType(from) ?? from;
@@ -116,7 +122,7 @@ sealed partial class QueryTranslator
 
         return Rank(source) is { } narrow &&
                Rank(target) is { } wide &&
-               wide >= narrow;
+               wide > narrow;
     }
 
     static bool IsComparison(ExpressionType type) =>

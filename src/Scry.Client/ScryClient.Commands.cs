@@ -444,9 +444,8 @@ public sealed partial class ScryClient :
                     {
                         case CommandEnding.Lost:
                             return Lost(request, attempt, exception, "The server no longer holds this command's outcome. It may have run.");
-                        case CommandEnding.Failed:
-                            ReportCommand(request, ScryCommandActivityKind.Failed, attempt, failure: exception);
-                            return ScryCommandOutcome.Final(request.Command, request.Id, ScryCommandStatus.Failed, result: null, Shown(exception));
+                        case CommandEnding.Refused:
+                            return Lost(request, attempt, exception, $"The server would not say what became of this command ({Refusal(exception)}). It may have run.");
                     }
 
                     failure = exception;
@@ -505,10 +504,12 @@ public sealed partial class ScryClient :
     {
         AskAgain,
         Lost,
-        Failed
+        Refused
     }
 
-    // What ended a connection a pending command was being answered on.
+    // What ended a connection a pending command was being answered on. The command was accepted before
+    // any of these, so none of them can say it was not done — a receipt alone says that — and what is
+    // not worth asking again past leaves the outcome unknown.
     static CommandEnding Classify(Exception exception, bool reattached) =>
         exception switch
         {
@@ -528,8 +529,10 @@ public sealed partial class ScryClient :
                          HttpStatusCode.TooManyRequests => CommandEnding.AskAgain,
             HttpRequestException or IOException or TimeoutException or OperationCanceledException => CommandEnding.AskAgain,
 
-            // A rejection asking again would meet again.
-            _ => CommandEnding.Failed
+            // A rejection asking again would meet again — an expired token's 401, a denial — which is
+            // about the asking and says nothing about the handler. Once read as a failed command, with
+            // whatever body the refusal came in as its reason, though the handler may well have run.
+            _ => CommandEnding.Refused
         };
 
     ScryCommandOutcome Finished(CommandRequest request, CommandReceipt receipt, int attempt)
@@ -557,6 +560,23 @@ public sealed partial class ScryClient :
             ScryRequestException request => ScryJson.TryDeserializeError(request.Body)?.Error ?? request.Message,
             _ => exception.Message
         };
+
+    // Why a server would not answer for a command, as a person reads it: the endpoint's own message
+    // where there is one, and otherwise the status alone — a gateway's HTML page is not a reason.
+    static string Refusal(Exception exception)
+    {
+        if (exception is not ScryRequestException request)
+        {
+            return exception.Message;
+        }
+
+        if (ScryJson.TryDeserializeError(request.Body) is {Error.Length: > 0} error)
+        {
+            return error.Error;
+        }
+
+        return $"{(int) request.StatusCode} {request.StatusCode}";
+    }
 
     void RecordReceipt(CommandReceipt receipt)
     {

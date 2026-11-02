@@ -28,6 +28,21 @@ partial class QueryRenderer
         void From(string keyword)
         {
             var type = InferType(call.Target, scope);
+            if (type is null &&
+                !YieldsText(call.Target))
+            {
+                // Over text this is a parse and over a number the cast the client wrote, so the spelling
+                // takes the target's type. A member the renderer cannot type is a model it does not have;
+                // anything else — `(double)(_.Age ?? 0)` — has no type the renderer can read off it, and
+                // spelled as a Parse over a number it would not compile.
+                if (call.Target is MemberNode)
+                {
+                    throw Refuse(RenderRefusal.UnresolvedModel);
+                }
+
+                throw Refuse(RenderRefusal.UnsupportedShape);
+            }
+
             if (type is null ||
                 (Nullable.GetUnderlyingType(type) ?? type) == typeof(string))
             {
@@ -406,6 +421,22 @@ partial class QueryRenderer
         }
     }
 
+    // Whether a node is text where InferType cannot say: the string functions answer with text, so a
+    // parse over one is the parse the client wrote and not a cast.
+    static bool YieldsText(Node node) =>
+        node is CallNode
+        {
+            Function: KnownFunction.StringToLower or
+            KnownFunction.StringToUpper or
+            KnownFunction.StringTrim or
+            KnownFunction.StringTrimStart or
+            KnownFunction.StringTrimEnd or
+            KnownFunction.StringSubstring or
+            KnownFunction.StringReplace or
+            KnownFunction.StringConcat or
+            KnownFunction.StringFrom
+        };
+
     static void FlattenConcat(Node node, List<Node> parts)
     {
         if (node is CallNode {Function: KnownFunction.StringConcat, Arguments: [var right]} concat)
@@ -678,6 +709,15 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
+        // ValueTag has no tag for the unsigned and the narrow integers either, so one travels as text
+        // under the String tag and the compared member's type is what says it was a number. Spelled
+        // back as a string it would not compile against that member.
+        if (type is {IsEnum: false} &&
+            Type.GetTypeCode(type) is TypeCode.SByte or TypeCode.Byte or TypeCode.Int16 or TypeCode.UInt16 or TypeCode.UInt32 or TypeCode.UInt64)
+        {
+            return RenderInteger(type, text);
+        }
+
         if (type == typeof(TimeSpan))
         {
             return $"TimeSpan.Parse({CSharpLiteral.String(text)}, System.Globalization.CultureInfo.InvariantCulture)";
@@ -710,5 +750,39 @@ partial class QueryRenderer
         }
 
         return CSharpLiteral.String(text);
+    }
+
+    // An integer constant of a type ValueTag writes as text, spelled as the literal that captures to
+    // the same text: a suffix where C# has one, and a cast where it does not. Parsed as the type first,
+    // and only a text the parsed value re-spells exactly is rendered — anything else is not a value of
+    // the type, or a spelling the forward pass would not have written.
+    static string RenderInteger(Type type, string text)
+    {
+        var culture = CultureInfo.InvariantCulture;
+        object parsed;
+        try
+        {
+            parsed = Convert.ChangeType(text, type, culture);
+        }
+        catch (Exception exception)
+            when (exception is FormatException or OverflowException)
+        {
+            throw Refuse(RenderRefusal.UnsupportedShape);
+        }
+
+        if (Convert.ToString(parsed, culture) != text)
+        {
+            throw Refuse(RenderRefusal.UnsupportedShape);
+        }
+
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.UInt32 => $"{text}u",
+            TypeCode.UInt64 => $"{text}UL",
+            TypeCode.SByte => $"(sbyte){text}",
+            TypeCode.Byte => $"(byte){text}",
+            TypeCode.Int16 => $"(short){text}",
+            _ => $"(ushort){text}"
+        };
     }
 }

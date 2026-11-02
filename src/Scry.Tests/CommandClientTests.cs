@@ -182,6 +182,31 @@ public class CommandClientTests
         Assert.ThrowsExactly<ScryCommandFailedException>(() => outcome.EnsureCompleted());
     }
 
+    // Asked for again and refused — an expired token's 401 from a gateway, a denial — the server has
+    // said nothing about a command it had already accepted: that is not knowing, not a failure of the
+    // handler, and a gateway's HTML page is not the reason shown for it.
+    [Test]
+    [Arguments(HttpStatusCode.Unauthorized, null)]
+    [Arguments(HttpStatusCode.Forbidden, ScryErrorCode.Forbidden)]
+    [Arguments(HttpStatusCode.BadRequest, ScryErrorCode.Validation)]
+    public async Task ACommandRefusedWhenAskedForAgainIsUnknown(HttpStatusCode status, ScryErrorCode? code)
+    {
+        var stub = new CommandStub(
+            CommandStub.Events(CommandStub.Result(CommandStatus.Pending)),
+            CommandStub.Refusal(status, code));
+        var client = stub.Client();
+
+        var outcome = await client.SendCommandAsync(Rename);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Unknown);
+            await Assert.That(outcome.Error).Contains("may have run");
+            await Assert.That(outcome.Error).DoesNotContain("<html>");
+            await Assert.That(stub.Requests).Count().IsEqualTo(2);
+        }
+    }
+
     // A busy or failing server is asked again, as a live query's is.
     [Test]
     public async Task ABusyServerIsAskedAgain()

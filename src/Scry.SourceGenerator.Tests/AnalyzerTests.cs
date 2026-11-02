@@ -485,6 +485,48 @@ public class AnalyzerTests
         await Assert.That(Analyze(queries)).IsEmpty();
     }
 
+    // Only a lambda a query operator was handed is one. A chain written inside a lambda given to plain
+    // LINQ over a plain collection composes a query like any other, and was once skipped as though the
+    // Select around it were reading a row.
+    [Test]
+    public Task ChainsInsideAPlainCollectionsLambdaAreAnalyzed() =>
+        Verify(
+            Analyze(
+                """
+                var ids = new List<int> {1, 2};
+                await Task.WhenAll(ids.Select(id => Query.Order.Cast<OrderQueryModel>().Where(_ => _.Id == id).ToListAsync()));
+                """))
+                .Snapshot(
+                    """
+                    SCRY101: Cast is not supported by Scry — use OfType<OrderQueryModel> to narrow by filtering
+                        await Task.WhenAll(ids.Select(id => Query.Order.Cast<OrderQueryModel>().Where(_ => _.Id == id).ToListAsync()));
+                    """);
+
+    // A chain's last call is not always a link: ConfigureAwait, WaitAsync and GetAwaiter are called on
+    // the task a terminal returned, and a query handed to a method is its argument. Each once read the
+    // terminal as the inside of a chain the outer call would walk, and the outer call walked nothing.
+    [Test]
+    public Task ChainsUnderANonLinkAreAnalyzed() =>
+        Verify(
+            Analyze(
+                """
+                await Query.Asset.Cast<VehicleQueryModel>().ToListAsync().ConfigureAwait(false);
+                await Query.Asset.Cast<VehicleQueryModel>().ToListAsync().WaitAsync(TimeSpan.FromSeconds(1));
+                Query.Asset.Cast<VehicleQueryModel>().ToListAsync().GetAwaiter().GetResult();
+                Render(Query.Asset.Cast<VehicleQueryModel>());
+                """))
+                .Snapshot(
+                    """
+                    SCRY101: Cast is not supported by Scry — use OfType<VehicleQueryModel> to narrow by filtering
+                        await Query.Asset.Cast<VehicleQueryModel>().ToListAsync().ConfigureAwait(false);
+                    SCRY101: Cast is not supported by Scry — use OfType<VehicleQueryModel> to narrow by filtering
+                        await Query.Asset.Cast<VehicleQueryModel>().ToListAsync().WaitAsync(TimeSpan.FromSeconds(1));
+                    SCRY101: Cast is not supported by Scry — use OfType<VehicleQueryModel> to narrow by filtering
+                        Query.Asset.Cast<VehicleQueryModel>().ToListAsync().GetAwaiter().GetResult();
+                    SCRY101: Cast is not supported by Scry — use OfType<VehicleQueryModel> to narrow by filtering
+                        Render(Query.Asset.Cast<VehicleQueryModel>());
+                    """);
+
     // The element type stops being a query model the moment a Select projects an anonymous type, so
     // the chain is recognised by what it bottoms out at rather than by what it currently carries.
     [Test]
@@ -763,6 +805,10 @@ public class AnalyzerTests
             ScryClient client = null!;
 
             static string Munge(string value) => value;
+
+            static void Render(IQueryable<VehicleQueryModel> rows)
+            {
+            }
 
             public async Task Run()
             {

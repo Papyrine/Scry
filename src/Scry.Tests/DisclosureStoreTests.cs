@@ -279,6 +279,54 @@ public class DisclosureStoreTests
         }
     }
 
+    // A store fed from two places may be handed a later part of an answer before an earlier one. The
+    // units are still found by their ordinal: who received a row of the earlier part, what is erased
+    // of it, and the answer rebuilt in order.
+    [Test]
+    public async Task PartsHandedOverOutOfOrderAreStillFoundByOrdinal()
+    {
+        var store = new ScryMemoryDisclosureStore();
+        var id = Guid.CreateVersion7(noon);
+        var contents = new[] {Row(1, "Alice"), Row(2, "Aaron"), Row(3, "Ada"), Row(4, "Abe")}
+            .Select(_ => Content(ScryDisclosureContentKind.Row, _.Json))
+            .ToList();
+        var later = new ScryDisclosureBatch
+        {
+            EventId = id,
+            Sequence = 1,
+            Units = [new(2, contents[2].Address), new(3, contents[3].Address)],
+            Entities = [new(2, 0, "Employee", "[3]", ""), new(3, 0, "Employee", "[4]", "")],
+            Contents = [contents[2], contents[3]],
+            Close = new(ScryDisclosureOutcome.Released, 4)
+        };
+        var earlier = new ScryDisclosureBatch
+        {
+            EventId = id,
+            Begin = new(id, noon, ScryDisclosureKind.Stream, "Employee")
+            {
+                Caller = "alice"
+            },
+            Units = [new(0, contents[0].Address), new(1, contents[1].Address)],
+            Entities = [new(0, 0, "Employee", "[1]", ""), new(1, 0, "Employee", "[2]", "")],
+            Contents = [contents[0], contents[1]]
+        };
+
+        store.Append(later);
+        store.Append(earlier);
+
+        var received = await store.ReceiversOf("Employee", [1]).ToListAsync();
+        var erased = await store.EraseAsync("Employee", [2], by: null);
+        var rebuilt = (await store.Reconstruct(id))!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(received.Select(_ => _.Ordinal)).IsEquivalentTo([0], CollectionOrdering.Matching);
+            await Assert.That(received.Single().Content).IsEqualTo(contents[0].Address);
+            await Assert.That(erased.Units).IsEqualTo(1);
+            await Assert.That(rebuilt.Units.Select(_ => _.Ordinal)).IsEquivalentTo([0, 1, 2, 3], CollectionOrdering.Matching);
+            await Assert.That(rebuilt.Units[1].Erased).IsTrue();
+        }
+    }
+
     // Erasing a row removes what was sent of it and keeps that it was sent: the events, the addresses
     // and the key all stay, and the content is gone from every answer that carried it.
     [Test]

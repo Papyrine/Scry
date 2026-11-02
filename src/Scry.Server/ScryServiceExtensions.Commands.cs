@@ -70,7 +70,7 @@ public static partial class ScryServiceExtensions
         var id = Guid.Parse((string) context.Request.RouteValues["id"]!, CultureInfo.InvariantCulture);
         using var ending = CancelSource.CreateLinkedTokenSource(context.RequestAborted);
         await using var receipts = new HeldItems<CommandReceipt>(
-            processor.Receipt(id, options.Caller(context), ending.Token),
+            processor.Receipt(id, services, options.Caller(context), ending.Token),
             ending);
         await AnswerCommand(context, options, receipts, drifted: false);
     }

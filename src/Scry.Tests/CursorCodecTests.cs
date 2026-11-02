@@ -50,6 +50,39 @@ public class CursorCodecTests
     public async Task ALocalTimestampKeyCarriesNoOffset(string expected) =>
         await Assert.That(CursorCodec.TagValue(new DateTime(2026, 9, 3, 0, 0, 0, DateTimeKind.Local)).Value).IsEqualTo(expected);
 
+    // An enum key is spelled by its number rather than its name: a column can hold a value the enum does
+    // not declare, whose name is its number anyway, and the seek side reads a number back from a cursor
+    // where it refuses one in a client's constant. A declared value is spelled the same way, so a
+    // cursor never depends on which values the model happens to name.
+    [Test]
+    public async Task AnEnumKeyIsSpelledByItsNumber()
+    {
+        var declared = CursorCodec.TagValue(HttpStatusCode.OK);
+        var undeclared = CursorCodec.TagValue((HttpStatusCode) 299);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(declared.Value).IsEqualTo("200");
+            await Assert.That(declared.Tag).IsEqualTo(ClrTypeTag.Enum);
+            await Assert.That(undeclared.Value).IsEqualTo("299");
+            await Assert.That(undeclared.Tag).IsEqualTo(ClrTypeTag.Enum);
+        }
+    }
+
+    [Test]
+    public async Task RoundTripsAnUndeclaredEnumValue()
+    {
+        var cursor = CursorCodec.Encode([CursorCodec.TagValue((HttpStatusCode) 299)], order, key);
+
+        var (values, _) = CursorCodec.Decode(cursor, key);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(values.Single().Value).IsEqualTo("299");
+            await Assert.That(values.Single().Tag).IsEqualTo(ClrTypeTag.Enum);
+        }
+    }
+
     // Base64url, so a cursor is safe in a query string or a path segment without further escaping.
     [Test]
     public async Task ProducesOnlyUrlSafeCharacters()

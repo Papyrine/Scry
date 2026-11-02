@@ -80,43 +80,27 @@ public static class ScrySignalRClient
         return ScryJson.DeserializeBatchResponse((ReadOnlyMemory<byte>)Answer(answer));
     }
 
-    // The lines the stream endpoint writes. The markers are consumed here, since a supplied transport
-    // hands the client rows and nothing else — and the closing one is required, for the reason it is
-    // over HTTP: without it the rows that arrived are a prefix rather than the answer.
-    static async IAsyncEnumerable<JsonElement> Rows(
+    // The lines the stream endpoint writes, markers included, handed to the client as they are: it
+    // reads them with the reader it reads them with over HTTP, which is what records the opening
+    // marker's stamp, carries its enum aliases to every row, and requires the closing one. Consumed
+    // here instead, the markers' stamp and aliases went nowhere, and a drifted client's rows threw.
+    static async IAsyncEnumerable<string> Rows(
         HubConnection connection,
         QueryRequest request,
         [EnumeratorCancellation] Cancel cancel)
     {
-        var ended = false;
         using var stopping = CancelSource.CreateLinkedTokenSource(cancel);
         try
         {
             var lines = connection.StreamAsync<string>(ScryHubProtocol.Stream, ScryJson.Serialize(request), stopping.Token);
             await foreach (var line in lines)
             {
-                var bytes = Encoding.UTF8.GetBytes(line);
-                if (!ScryJson.IsMarker(bytes))
-                {
-                    using var document = JsonDocument.Parse(bytes);
-                    yield return document.RootElement.Clone();
-                    continue;
-                }
-
-                var marker = ScryJson.DeserializeMarker(bytes);
-                ThrowIfFailure(marker);
-                ended |= marker.Kind == ScryStream.End;
+                yield return line;
             }
         }
         finally
         {
             await Stop(stopping);
-        }
-
-        if (!ended)
-        {
-            throw new ScryWireException(
-                "The result stream ended without its closing marker, so the rows received are incomplete.");
         }
     }
 

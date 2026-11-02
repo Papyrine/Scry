@@ -69,6 +69,27 @@ public class SidecarCommandTests
         }
     }
 
+    // Refused when asked for again, a command reads unknown rather than refused: it was accepted on the
+    // connection before, so the refusal is of the asking and says nothing about the handler.
+    [Test]
+    public async Task ACommandRefusedWhenAskedForAgainReadsUnknown()
+    {
+        var (store, client) = Watched(
+            new(
+                CommandStub.Events(CommandStub.Result(CommandStatus.Pending)),
+                CommandStub.Refusal(HttpStatusCode.Unauthorized, code: null)));
+
+        var outcome = await client.SendCommandAsync(Rename);
+
+        var command = store.Entries.Single().Command!;
+        using (Assert.Multiple())
+        {
+            await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Unknown);
+            await Assert.That(command.State).IsEqualTo(ScryCommandActivityKind.Unknown);
+            await Assert.That(command.Attempt).IsEqualTo(2);
+        }
+    }
+
     [Test]
     public async Task TheCapabilitiesReadIsListedAsAboutNoOneCommand()
     {

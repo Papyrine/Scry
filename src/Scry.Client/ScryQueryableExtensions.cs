@@ -582,9 +582,11 @@ public static partial class ScryQueryableExtensions
         // A batched query is collected rather than sent, and its task completes when the batch does.
         // Everything above this — translation, the default projection, materialization, the kind check
         // — is the unbatched path untouched, which is what lets every terminal batch without knowing it.
+        // The terminal's token cannot take the query back out of the batch, which is one request, but
+        // it still ends this wait: a caller that stopped is not left awaiting a batch nothing may send.
         if (provider.Batch is { } batch)
         {
-            return batch.Enqueue(request, provider.Call);
+            return batch.Enqueue(request, provider.Call).WaitAsync(cancel);
         }
 
         return provider.Client.SendAsync(request, provider.Call, cancel);
