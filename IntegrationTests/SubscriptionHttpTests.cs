@@ -169,13 +169,17 @@ public class SubscriptionHttpTests
         await Assert.That(await live.Ended()).IsTrue();
     }
 
+    // A ticket's expiry is kept to the second — AuthenticationProperties writes it as RFC 1123 text —
+    // so what is asked for is cut back to the start of its second. A ticket shorter than a second was
+    // then already expired when it was issued, more often than not, and the stream ended before its
+    // first answer. Half a second is what this one is sure to keep.
     [Test]
     public async Task TheStreamEndsWhenTheTicketThatOpenedItExpires()
     {
         await using var server = await Server.Start(
             database,
             configure: null,
-            ticketExpiresIn: TimeSpan.FromMilliseconds(300));
+            ticketExpiresIn: TimeSpan.FromSeconds(1.5));
         await using var live = await LiveStream.Open(server.Http, Amounts("North"));
         await live.Next();
 
