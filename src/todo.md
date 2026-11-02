@@ -718,3 +718,61 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   threat model per `docs/security.md`; `BufferedReadTests`, `BinaryConverterTests`, and `NdjsonReaderTests` pin what
   the client does bound.
 - The source generator reads a trusted DLL at build time; a malformed DLL fails the build rather than the server.
+
+
+## Scan of 2026-11-02 — found and left
+
+The bug scan of 2026-11-02 (commit `16ad481`) read every area with one reviewer each and fixed what it confirmed. These were
+confirmed or half-confirmed and left, each with why. `[ ]` is work to do.
+
+### Confirmed
+
+- [ ] MEDIUM — the ETag is an unkeyed hash (`QueryEtag.Etag`: the stamp plus fingerprints of the freshness token, `q` and
+  the scope). A caller holding one genuine tag can mint the tag of any other `q` and be answered `304` for a query that was
+  never decoded, validated or policy-checked. The `304` carries nothing, so no row leaves; but with the disclosure audit on,
+  `ScryProcessor.ConfirmAsync` writes a `Confirmed` record for a caller who never received that answer, where any caller ran
+  the same `q` before. An HMAC under a server key (the cursor key would do) closes it; the `*` guard in `QueryEtag` covers
+  only the wildcard.
+- [ ] LOW — a caller paging a row's receivers with `ScryDisclosureCursor.After(row)` across a tie group of showings (one
+  review, several events, the row at the same ordinal in each) loses the rest of the group: the public cursor has no event
+  id. The store's own internal paging was fixed (`Place` carries the event); the public cursor and the explorer's `PageMark`
+  need an optional `Guid? Event`.
+- [ ] LOW — the SQL store's showings query still joins a receipt to its event's segment (`t.[Segment] = e.[Segment]`), and
+  `MemberReceivedBy` narrows by the segment-held close, so a receipt of a later part whose home segment was retiring is
+  left out of those two listings. `ReceiversOf` and `Reconstruct` read strays through the views; these were left because
+  each would turn a seek into a probe of every segment on the common path.
+- [ ] LOW — the drifted client's live run (`ScryProcessor.cs`, the enum-alias envelope path) materializes the whole
+  `QueryResponse` before the bounded writer applies `MaxSubscriptionBytes`; the limit still refuses, after the memory was
+  spent. Needs a row writer that knows the alias table.
+- [ ] LOW — `ScryPolicyCache.InvalidateRows<T>` given a boxed key of the wrong type (`5L` for an `int` key) pends it in every
+  scope, and every refresh then throws `InvalidCastException` before deciding — a 500 on every query of the source until an
+  `InvalidateScope` per scope. Convert or refuse the keys at the call, where the registration knows the key type.
+- [ ] LOW — `CommandTracker.PruneLoop` runs a `PeriodicTimer` per `ScryProcessor` that ever accepted a command, for the life
+  of the process; `ScryProcessor` is not disposable. A leak only where many processors are made (tests).
+- [ ] LOW — in memory, `CompareTo` is ordinal (`ExpressionBuilder`, the `InMemory` branch) while ordering a POCO source goes
+  through `Comparer<string>.Default`, so `"a".CompareTo("B") < 0` and the order disagree over a POCO. Order POCO strings
+  ordinally, or document the exception.
+- [ ] LOW — `SnippetLayout.Of` refuses a snippet with trailing garbage after a complete expression (`…Active)) .CountAsync()`)
+  as "Only a variable declaration can come before the query." rather than saying it does not parse.
+- [ ] INFO — client edges: `Equals(object)` with an argument of another type (`_.Id.Equals("5")`) is sent as `==` and the
+  server parses the text at the member's type, where C# answers false; a queryable captured from another `ScryClient` in a
+  `Join`, `Union` or `Contains` is translated as a bare root name against this server; a closure-only `Conditional`
+  travels structurally and the renderer prints `(true ? "a" : "b")`, which does not round-trip byte for byte; an F# `let`
+  bound to closure state (`let now = DateTime.UtcNow`) is re-evaluated at every read; `SseFramer` credits a CRLF split across
+  reads to the next event's byte count (diagnostic only); the hub's `Capabilities` with commands off never fires
+  `CapabilitiesChanged`, where HTTP's 404 fires it once.
+- [ ] INFO — `ScryMcpGrammar` names `aggregate` as a terminal without its payload (`function`, `selector`, the `AggregateFn`
+  names) and leaves `longCount` out of the terminal list; no drift today.
+
+### Unverified
+
+- [ ] MassTransit: `ScryCommandFilter` publishes `Succeeded=false` from its catch before rethrowing. If `UseMessageRetry`
+  wraps the consumer pipe outside the filter whatever the configuration order, a failing first attempt fails the command on
+  the server and a later successful retry's completion is ignored (`CompleteCommand` returns false). The pipe composition
+  was not confirmed; the test hosts configure no retry.
+- [ ] `ResponseBody.ReadAsync` reads exactly `Content-Length` bytes. A browser that exposes the compressed length over a
+  decompressed stream would truncate the body into a wire failure; no server or proxy in this repo sends
+  `Content-Encoding` with `Content-Length`.
+- [ ] Journal recovery (`AnyGroupAfter`) scans payload bytes for the plain `SDJG` marker and a digest prefix; content is
+  client-influenced (row JSON, raw bytes under `StoreBinaryContent`). No input was found that makes a cut-short tail read as
+  damage before intact records.
