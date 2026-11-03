@@ -54,9 +54,9 @@ public sealed class ScryPolicyCache
         // deciding anything: every query of the source a 500, until each scope was invalidated.
         foreach (var key in keys)
         {
-            if (key?.GetType() != registration.Key)
+            if (key.GetType() != registration.Key)
             {
-                throw new ArgumentException($"'{typeof(TEntity).Name}' is keyed by {registration.Key.Name}, so a key of its rows has to be one; {key?.GetType().Name ?? "null"} was given.", nameof(keys));
+                throw new ArgumentException($"'{typeof(TEntity).Name}' is keyed by {registration.Key.Name}, so a key of its rows has to be one; {key.GetType().Name} was given.", nameof(keys));
             }
         }
 

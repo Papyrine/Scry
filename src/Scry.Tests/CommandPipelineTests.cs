@@ -481,7 +481,8 @@ public class CommandPipelineTests
         var sending = host.Send("RenameShift", new {id = 1, name = "Night"}, cancel: leaving.Token);
         await WaitFor(() => !host.Script.Seen.IsEmpty);
         await leaving.CancelAsync();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => sending.WaitAsync(patience));
+        // Not leaving's token: it is already cancelled, so the wait would throw whatever sending did.
+        await Assert.ThrowsAsync<OperationCanceledException>(() => sending.WaitAsync(patience, Cancel.None));
         await WaitFor(() => host.Audited.Count == 1);
 
         host.Script.Gate.SetResult();
@@ -502,7 +503,7 @@ public class CommandPipelineTests
     public async Task AnAuditorThatThrowsAsACommandFinishesIsCounted()
     {
         List<string> failures = [];
-        using var listener = new System.Diagnostics.Metrics.MeterListener
+        using var listener = new MeterListener
         {
             InstrumentPublished = (instrument, meterListener) =>
             {

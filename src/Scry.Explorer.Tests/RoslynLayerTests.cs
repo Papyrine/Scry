@@ -318,6 +318,7 @@ public class RoslynLayerTests
 
     sealed class Probe
     {
+        // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
         public string Name { get; init; } = "";
 
         public bool Active { get; init; }

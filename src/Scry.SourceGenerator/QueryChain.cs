@@ -68,15 +68,10 @@ static class QueryChain
     // longer stands for the chain its declaration gave it, and following one would report against a
     // query that was never written. Every local of a body is found in one walk of it, kept for as
     // long as the body is: a walk per reference made a body of many query locals quadratic.
-    static IOperation? Initializer(ILocalReferenceOperation reference)
-    {
-        if (initializers.GetValue(Root(reference), Collect).TryGetValue(reference.Local, out var initializer))
-        {
-            return initializer;
-        }
-
-        return null;
-    }
+    static IOperation? Initializer(ILocalReferenceOperation reference) =>
+        initializers
+            .GetValue(Root(reference), Collect)
+            .GetValueOrDefault(reference.Local);
 
     static ConditionalWeakTable<IOperation, Dictionary<ILocalSymbol, IOperation?>> initializers = new();
 

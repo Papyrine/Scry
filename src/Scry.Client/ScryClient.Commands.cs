@@ -293,7 +293,7 @@ public sealed partial class ScryClient :
         // One that settled synchronously has already been through its own cleanup, so is not left behind.
         if (follower.IsCompleted)
         {
-            following.TryRemove(request.Id, out _);
+            following.TryRemove(request.Id, out var _);
         }
 
         try
@@ -496,7 +496,9 @@ public sealed partial class ScryClient :
         finally
         {
             reading.Dispose();
-            following.TryRemove(request.Id, out _);
+#pragma warning disable CS8601 // Possible null reference assignment.
+            following.TryRemove(request.Id, out var _);
+#pragma warning restore CS8601 // Possible null reference assignment.
         }
     }
 

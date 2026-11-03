@@ -253,7 +253,7 @@ public class CachedPolicyTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(exception!.Message).Contains("Int64");
+            await Assert.That(exception.Message).Contains("Int64");
             await Assert.That(await client.Source<Order>("Order").CountAsync()).IsEqualTo(before);
         }
     }

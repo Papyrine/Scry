@@ -54,7 +54,7 @@ public class SubqueryDepthTests
                 ["Parent", "Parent", "Parent", "Parent", "Children"],
                 ["Name"]));
 
-        await Assert.That(exception!.Message).Contains("Subquery path is too deep");
+        await Assert.That(exception.Message).Contains("Subquery path is too deep");
     }
 
     [Test]
@@ -65,7 +65,7 @@ public class SubqueryDepthTests
                 ["Children"],
                 ["Parent", "Parent", "Parent", "Parent", "Name"]));
 
-        await Assert.That(exception!.Message).Contains("path is too deep");
+        await Assert.That(exception.Message).Contains("path is too deep");
     }
 
     // Whether any folder at the end of the first path has a second path reading "root".

@@ -291,6 +291,7 @@ public class ClosureReaderTests
         yield return Case("an operator over a decimal", _ => _.Amount > 10.5m * size);
         yield return Case("a date and a span", _ => _.Placed > cutoff + TimeSpan.FromDays(1));
         yield return Case("a conditional", _ => _.Region == (flag ? region : "south"));
+        // ReSharper disable once ConstantNullCoalescingCondition
         yield return Case("a coalesce", _ => _.Region == (region ?? "south"));
         yield return Case("an array index", _ => _.Id == ids.ToArray()[0]);
         yield return Case("an array length", _ => _.Id == ids.ToArray().Length);

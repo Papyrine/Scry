@@ -8,7 +8,7 @@ public class ResponseBodyTests
     [Test]
     public async Task ABodyLongerThanItsLengthIsReadWhole()
     {
-        var body = Encoding.UTF8.GetBytes("{\"kind\":\"List\",\"payload\":[1,2,3]}");
+        var body = "{\"kind\":\"List\",\"payload\":[1,2,3]}"u8.ToArray();
         using var content = new StreamContent(new MemoryStream(body));
         content.Headers.ContentLength = 12;
 
@@ -20,7 +20,7 @@ public class ResponseBodyTests
     [Test]
     public async Task AnEncodedBodyIsNotSizedByItsLength()
     {
-        var body = Encoding.UTF8.GetBytes("{\"kind\":\"Scalar\",\"payload\":3}");
+        var body = "{\"kind\":\"Scalar\",\"payload\":3}"u8.ToArray();
         using var content = new StreamContent(new MemoryStream(body));
         content.Headers.ContentLength = 40;
         content.Headers.ContentEncoding.Add("gzip");

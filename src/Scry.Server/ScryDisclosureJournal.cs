@@ -118,7 +118,9 @@ public sealed class ScryDisclosureJournal :
         catch
         {
             // Recovery opens the last segment before it has finished checking the checkpoint against
-            // it, so a damaged one leaves that open too.
+            // it, so a damaged one leaves that open too. One that failed before opening it leaves it null,
+            // whatever the field's annotation says.
+            // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
             active?.Dispose();
             lockFile.Dispose();
             throw;
