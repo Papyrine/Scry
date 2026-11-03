@@ -1,5 +1,3 @@
-
-
 // The small questions every other part asks: what a value is, where a member path runs, and how a
 // closure expression becomes a constant.
 sealed partial class QueryTranslator
@@ -71,7 +69,11 @@ sealed partial class QueryTranslator
     // optional's value: a boxed optional is its value or null, so int? and int are one type here.
     static Type Boxed(Expression operand)
     {
-        if (operand is UnaryExpression {NodeType: ExpressionType.Convert, Operand: var inner} &&
+        if (operand is UnaryExpression
+            {
+                NodeType: ExpressionType.Convert,
+                Operand: var inner
+            } &&
             operand.Type == typeof(object))
         {
             operand = inner;

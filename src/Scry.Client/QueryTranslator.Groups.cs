@@ -71,7 +71,8 @@ sealed partial class QueryTranslator
                 // SUM(DISTINCT x) folds. Over the group's rows it would fold distinct rows — every
                 // row, since a row is distinct from every other — and the fold's own selector would
                 // then be read as the distinct one, summing equal values once.
-                case "Distinct" when inner.Arguments.Count == 1 && !distinct && selector is null:
+                case "Distinct" when inner.Arguments.Count == 1 &&
+                                     !distinct && selector is null:
                     if (inner.Arguments[0] is not MethodCallExpression {Method.Name: "Select"})
                     {
                         throw new NotSupportedException(
@@ -81,12 +82,15 @@ sealed partial class QueryTranslator
                     distinct = true;
                     break;
 
-                case "Select" when inner.Arguments.Count == 2 && selector is null && predicate is null:
+                case "Select" when inner.Arguments.Count == 2 &&
+                                   selector is null &&
+                                   predicate is null:
                     var projected = Lambda(inner.Arguments[1]);
                     selector = TranslateExpr(projected.Body, projected.Parameters[0]);
                     break;
 
-                case "Where" when inner.Arguments.Count == 2 && predicate is null:
+                case "Where" when inner.Arguments.Count == 2 &&
+                                  predicate is null:
                     var filter = Lambda(inner.Arguments[1]);
                     predicate = TranslateExpr(filter.Body, filter.Parameters[0]);
                     break;
@@ -233,7 +237,11 @@ sealed partial class QueryTranslator
             throw new NotSupportedException("string.Join over a group takes a constant separator.");
         }
 
-        if (call.Arguments[1] is not MethodCallExpression {Method.Name: "Select", Arguments: [var source, var projection]} ||
+        if (call.Arguments[1] is not MethodCallExpression
+            {
+                Method.Name: "Select",
+                Arguments: [var source, var projection]
+            } ||
             source != root)
         {
             throw new NotSupportedException(
@@ -271,7 +279,8 @@ sealed partial class QueryTranslator
     // out of it, such as g.Key.ToUpper(), which is an ordinary function over the key.
     static bool IsCallOver(MethodCallExpression call, ParameterExpression target) =>
         call.Object == target ||
-        (call.Arguments.Count > 0 && call.Arguments[0] == target);
+        (call.Arguments.Count > 0 &&
+         call.Arguments[0] == target);
 
     // The same question through the Where/Select/Distinct chain a composed aggregate may put between
     // the fold and the group. A chain bottoming at anything else — g.Key, a closure — is not the
@@ -282,7 +291,11 @@ sealed partial class QueryTranslator
     static bool IsChainOver(MethodCallExpression call, ParameterExpression target)
     {
         Expression? current = call;
-        while (current is MethodCallExpression {Object: null, Arguments.Count: > 0} inner)
+        while (current is MethodCallExpression
+               {
+                   Object: null,
+                   Arguments.Count: > 0
+               } inner)
         {
             current = inner.Arguments[0];
         }
