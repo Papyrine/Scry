@@ -42,12 +42,21 @@ sealed partial class QueryTranslator
 
     static ScryClient? RootClient(Expression expression)
     {
-        while (expression is MethodCallExpression {Arguments.Count: > 0} call)
+        while (expression is MethodCallExpression
+               {
+                   Arguments.Count: > 0
+               } call)
         {
             expression = call.Arguments[0];
         }
 
-        if (expression is ConstantExpression {Value: IQueryable {Provider: QueryProvider provider}})
+        if (expression is ConstantExpression
+            {
+                Value: IQueryable
+                {
+                    Provider: QueryProvider provider
+                }
+            })
         {
             return provider.Client;
         }
@@ -83,8 +92,15 @@ sealed partial class QueryTranslator
 
         // GroupBy with a result selector abbreviates the GroupBy + Select it stands for, and unfolds
         // into the same two operators on the wire.
-        if (call is {Method.Name: "GroupBy", Arguments.Count: 3} &&
-            Lambda(call.Arguments[2]) is {Parameters.Count: 2} result)
+        if (call is
+            {
+                Method.Name: "GroupBy",
+                Arguments.Count: 3
+            } &&
+            Lambda(call.Arguments[2]) is
+            {
+                Parameters.Count: 2
+            } result)
         {
             ops.Add(TranslateGroupBy(Lambda(call.Arguments[1])));
             ops.Add(new SelectOp(TranslateProjection(RebindGroupResult(result))));
@@ -112,10 +128,11 @@ sealed partial class QueryTranslator
 
     QueryOp TranslateCall(MethodCallExpression call)
     {
+        var arguments = call.Arguments;
         switch (call.Method.Name)
         {
             case "Where":
-                var where = Lambda(call.Arguments[1]);
+                var where = Lambda(arguments[1]);
                 return new WhereOp(TranslateExpr(where.Body, where.Parameters[0]));
 
             case "OrderBy":
@@ -128,12 +145,12 @@ sealed partial class QueryTranslator
                 return new ThenByOp(TranslateKey(call), Descending: true);
 
             case "Skip":
-                return new SkipOp(IntArgument(call.Arguments[1]));
+                return new SkipOp(IntArgument(arguments[1]));
             case "Take":
-                return new TakeOp(IntArgument(call.Arguments[1]));
+                return new TakeOp(IntArgument(arguments[1]));
 
-            case "GroupBy" when call.Arguments.Count == 2:
-                return TranslateGroupBy(Lambda(call.Arguments[1]));
+            case "GroupBy" when arguments.Count == 2:
+                return TranslateGroupBy(Lambda(arguments[1]));
 
             // The result-selector form was unfolded before this switch, so what arrives here is an
             // element selector or a comparer — and silently grouping without one would answer with
@@ -143,7 +160,7 @@ sealed partial class QueryTranslator
                     "This overload of GroupBy is not supported by Scry — group by the key alone, and compose the elements inside the aggregates that read the group.");
 
             case "Select":
-                return new SelectOp(TranslateProjection(Lambda(call.Arguments[1])));
+                return new SelectOp(TranslateProjection(Lambda(arguments[1])));
 
             case "OfType":
                 return new OfTypeOp(ModelSource(call.Method.GetGenericArguments()[0]));
@@ -152,8 +169,8 @@ sealed partial class QueryTranslator
                 throw new NotSupportedException(
                     "Cast is not supported by Scry. Its check runs when a row is materialized into an entity, and a Scry query always ends in a projection instead — so the assertion would be dropped and the derived members read as null over rows of any other type. Use OfType, which narrows by filtering and needs no check on the way back.");
 
-            case "SelectMany" when call.Arguments.Count == 2:
-                var flatten = Lambda(call.Arguments[1]);
+            case "SelectMany" when arguments.Count == 2:
+                var flatten = Lambda(arguments[1]);
                 if (flatten.Body is not MemberExpression collection ||
                     !IsRootedCollection(collection, flatten.Parameters[0]))
                 {
@@ -167,7 +184,7 @@ sealed partial class QueryTranslator
                 throw new NotSupportedException(
                     "SelectMany with a result selector is not supported by Scry — flatten first, then Select.");
 
-            case "Distinct" when call.Arguments.Count == 1:
+            case "Distinct" when arguments.Count == 1:
                 return new DistinctOp();
 
             case "Distinct":

@@ -7,7 +7,10 @@ sealed partial class QueryTranslator
         {
             switch (expression)
             {
-                case UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} convert:
+                case UnaryExpression
+                {
+                    NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked
+                } convert:
                     // Converted closure state is a constant of the converted type: (double)count
                     // reaches the wire as the double it is, where converting what the operand
                     // evaluated to would tag it as what it was.

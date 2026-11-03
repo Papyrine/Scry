@@ -27,7 +27,7 @@ sealed partial class QueryTranslator
                 keys.Add(key);
 
                 // A member part is named back by its path; a computed one by its position.
-                parts.Add(name, key is MemberNode member ? member : new GroupKeyNode(keys.Count - 1));
+                parts.Add(name, key as MemberNode ?? (Node)new GroupKeyNode(keys.Count - 1));
             }
 
             if (keys.Count == 0)
@@ -41,7 +41,7 @@ sealed partial class QueryTranslator
         }
 
         var single = TranslateExpr(keyLambda.Body, parameter);
-        groupKeyNode = single is MemberNode path ? path : new GroupKeyNode(0);
+        groupKeyNode = single as MemberNode ?? (Node)new GroupKeyNode(0);
         groupKeyParts = null;
         return new([single]);
     }

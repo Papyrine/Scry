@@ -1,5 +1,3 @@
-using System.Net.ServerSentEvents;
-
 namespace Scry;
 
 public sealed partial class ScryClient

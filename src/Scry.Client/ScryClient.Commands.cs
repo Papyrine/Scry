@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Net.ServerSentEvents;
 
 namespace Scry;
 
