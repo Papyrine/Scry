@@ -375,9 +375,10 @@ sealed class ExpressionBuilder(
 
         var greater = strictGreater.Value ^ descending;
 
+        // Ordinally over an in-memory source, which is how its ordering compares text.
         if (left.Type == typeof(string))
         {
-            var comparison = Expression.Call(stringCompare, left, right);
+            var comparison = Expression.Call(InMemory(parameter) ? stringCompareOrdinal : stringCompare, left, right);
             var zero = Expression.Constant(0);
             if (greater)
             {

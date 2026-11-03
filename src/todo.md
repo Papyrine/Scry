@@ -534,8 +534,10 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `ValidatorLimitTests`, `SecurityTests` (limits), `BatchTests.OverMaxBatchSizeRejectsTheWholeBatch`,
   `StreamingTests.EndsAStreamThatExceedsTheRowLimitWithAFailure`
 - [x] covered: F5's node and subquery caps (`ValidatorLimitTests`)
-- [ ] add (no shape in the test model reaches it: the collections' elements are complex types or values, with no navigation below them): `MaxNavigationDepth` is measured per path, so a subquery predicate's path plus its owner's path reaches
-  twice the limit — pin the effective bound
+- [x] pinned (`SubqueryDepthTests`, on a model compiled for it, since the shared one has no collection whose elements lead
+  anywhere): `MaxNavigationDepth` is measured per path, and a subquery's predicate is read from the collection's element, so the
+  path to the collection and the path inside it are each held to the limit — under a limit of four a subquery reaches eight
+  segments from the row, and one more either side is refused
 - [x] covered (`ValidatorLimitTests.AJoinResultIsBoundedByTheProjectionWidth`, `ASetOperandProjectionIsCountedOnItsOwn`): `MaxProjectionMembers` counts a join's `Result` and a set operand's projection (the operand is validated
   through `ValidateProjection` and so counted; the join has its own check) — pin both
 
@@ -773,6 +775,10 @@ confirmed or half-confirmed and left, each with why; all but one have since been
   `AFailureNoRetryRecoversFromIsReportedOnceTheyAreSpent`).
 - [x] `ResponseBody.ReadAsync` no longer pre-sizes a body with a `Content-Encoding`, and reads past a declared length when
   more arrives rather than cutting it there (`ResponseBodyTests`).
+- [x] Found while testing the in-memory ordering: a `[QueryablePoco]` never paged by cursor, since the seek-safe rule read the
+  key and the nullability from the EF model, which has no POCO. A POCO now pages by cursor where it has a key derived as an
+  attachment's is (`[Key]`, `Id`, `{Type}Id`) and is ordered by members its CLR declarations say are never null
+  (`Member.DeclaredNotNull`); text is sought past ordinally, as it is ordered (`PocoCursorTests`; `docs/paging.md`).
 - [ ] INFO — `SseFramer` still credits a CRLF split between the `\r` and the `\n` of the blank line that ends an event to
   the next event's byte count. Left on purpose: crediting the newline before it arrives makes every event from a bare-CR
   server one byte over (a read usually ends right after an event's last `\r`; `LinesEndWithAnyOfTheThreeEndings` pins it),

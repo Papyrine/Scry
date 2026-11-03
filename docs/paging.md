@@ -81,9 +81,9 @@ This is ordinary SQL that EF Core translates; it introduces no new execution con
 
 A correct keyset seek needs a **total order over non-null, comparable keys**. The server emits (and accepts) a cursor only when the query is **seek-safe**:
 
-1. the source is an **entity with a primary key** (a view or POCO has none),
+1. the source has a **key** to break ties with: an entity's primary key, or — for a [`[QueryablePoco]`](annotations.md) — the key derived as an attachment's is, a `[Key]` member or one named `Id` or `{Type}Id`, which has to be unique among the rows the host supplies (a view has none),
 2. the client supplied **≥ 1 `OrderBy`** and it is the **trailing** restricting op — no `Where`, `Skip`, or `Take` after it (a `Skip`/`Take` anywhere means offset intent), and
-3. every client ordering key is a **single-segment scalar member** that EF reports **non-nullable**.
+3. every client ordering key is a **single-segment scalar member** that is **non-nullable**: as EF reports it for an entity, and as its CLR declaration says for a POCO — a value type that is not `Nullable<T>`, or a reference type the nullable annotations declare not null.
 
 When a query is not seek-safe the response falls back to offset paging: `Cursor` is null and the caller advances with `Skip`. Passing a cursor to a non-seek-safe query is rejected with a `400`. This deliberately sidesteps NULL-ordering and nav-path seek correctness (where a naive `>`/`<` seek would skip or duplicate rows) while covering the common case — filter, then sort by stable columns.
 

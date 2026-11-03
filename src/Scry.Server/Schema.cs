@@ -1553,7 +1553,7 @@ sealed partial class Schema
     /// agree at all — the generator never runs the model, so fluent configuration is invisible to it —
     /// and <see cref="ValidateAgainstModel"/> verifies the answer against the real key at startup.
     /// </remarks>
-    static List<Member> DeriveKeys(TypeMeta meta)
+    internal static List<Member> DeriveKeys(TypeMeta meta)
     {
         // An attachment is not a value and a navigation is not one either, so neither can be a key.
         var candidates = meta.Members.Values

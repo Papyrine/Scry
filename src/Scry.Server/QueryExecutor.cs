@@ -1552,7 +1552,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         // Text over an in-memory source is ordered ordinally, as it is compared there: the default
         // comparer is the current culture's, so the same request would otherwise be ordered per
-        // Accept-Language, and disagree with CompareTo.
+        // Accept-Language, and disagree with CompareTo and with the seek a cursor resumes by.
         if (keySelector.ReturnType == typeof(string) &&
             query is EnumerableQuery)
         {
@@ -1763,10 +1763,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     // Decides whether a page can be resumed by a keyset cursor and, if so, the total ordering to seek
-    // over: the client's ordering keys plus the primary key appended as a tiebreaker. A cursor is only
-    // safe over an entity ordered by single-segment, non-nullable scalar members (so the seek is a true
-    // total order); anything else — a view/POCO, no ordering, a nav-path or nullable key — falls back to
-    // offset paging with no cursor.
+    // over: the client's ordering keys plus the key appended as a tiebreaker. A cursor is only safe
+    // over a source with a key, ordered by single-segment, non-nullable scalar members (so the seek is
+    // a true total order): an entity, by its primary key and EF's nullability, or a POCO, by the key
+    // derived as an attachment's is ([Key], Id, {Type}Id) and its CLR declarations. Anything else — a
+    // view, a POCO with no key, no ordering, a nav-path or nullable key — falls back to offset paging
+    // with no cursor.
     (bool SeekSafe, IReadOnlyList<(Node Key, bool Descending)> Keys) PlanSeek(
         List<(Node Key, bool Descending)> orderings,
         bool seekEligible,
@@ -1775,15 +1777,29 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         DbContext db)
     {
         if (!seekEligible ||
-            source.Kind != SourceKind.Entity ||
-            orderings.Count == 0)
+            source.Kind is not (SourceKind.Entity or SourceKind.Poco) ||
+            orderings.Count == 0 ||
+            !schema.TryGetType(elementType, out var meta))
         {
             return (false, orderings);
         }
 
-        var primaryKey = db.Model.FindEntityType(elementType)?.FindPrimaryKey();
-        if (primaryKey is null ||
-            !schema.TryGetType(elementType, out var meta))
+        var poco = source.Kind == SourceKind.Poco;
+        IReadOnlyList<string>? primaryKey;
+        if (poco)
+        {
+            primaryKey = Schema.DeriveKeys(meta) switch
+            {
+                {Count: > 0} derived when derived.All(_ => _.DeclaredNotNull) => [.. derived.Select(_ => _.Name)],
+                _ => null
+            };
+        }
+        else
+        {
+            primaryKey = db.Model.FindEntityType(elementType)?.FindPrimaryKey()?.Properties.Select(_ => _.Name).ToList();
+        }
+
+        if (primaryKey is null)
         {
             return (false, orderings);
         }
@@ -1793,19 +1809,20 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         foreach (var (key, _) in orderings)
         {
             if (key is not MemberNode { Path: [var single] } ||
-                !IsNonNullableScalar(db, elementType, single) ||
                 !meta.Members.TryGetValue(single, out var ordered) ||
+                ordered.Kind != MemberKind.Scalar ||
+                !(poco ? ordered.DeclaredNotNull : IsNonNullableScalar(db, elementType, single)) ||
                 !ExpressionBuilder.CanSeek(ordered.Type))
             {
                 return (false, orderings);
             }
         }
 
-        var pkKeys = new List<(Node, bool)>(primaryKey.Properties.Count);
-        foreach (var property in primaryKey.Properties)
+        var pkKeys = new List<(Node, bool)>(primaryKey.Count);
+        foreach (var property in primaryKey)
         {
             // The key must be an exposable scalar to build a member node for the tiebreaker/cursor.
-            if (!meta.Members.TryGetValue(property.Name, out var member) ||
+            if (!meta.Members.TryGetValue(property, out var member) ||
                 member.Kind != MemberKind.Scalar ||
                 !ExpressionBuilder.CanSeek(member.Type))
             {
@@ -1813,9 +1830,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             }
 
             if (!orderings.Any(_ => _.Key is MemberNode { Path: [var name] } &&
-                                    name == property.Name))
+                                    name == property))
             {
-                pkKeys.Add((new MemberNode([property.Name]), false));
+                pkKeys.Add((new MemberNode([property]), false));
             }
         }
 

@@ -18,7 +18,27 @@ sealed class Member
         BinaryTransfer = property?.HasAttribute<BinaryTransferAttribute>() == true;
         Sensitive = property?.HasAttribute<SensitiveAttribute>() == true;
         ContentType = property?.GetCustomAttribute<AttachmentAttribute>(inherit: true)?.ContentType;
+        DeclaredNotNull = property is not null && DeclaresNotNull(property);
     }
+
+    static bool DeclaresNotNull(PropertyInfo property)
+    {
+        var type = property.PropertyType;
+        if (type.IsValueType)
+        {
+            return Nullable.GetUnderlyingType(type) is null;
+        }
+
+        return new NullabilityInfoContext().Create(property).ReadState == NullabilityState.NotNull;
+    }
+
+    /// <summary>
+    /// Whether the CLR declaration says the member is never null: a value type that is not
+    /// <c>Nullable&lt;T&gt;</c>, or a reference type its nullable annotations declare not null. What a
+    /// source with no EF model — a POCO — can say about a member, and so what decides whether a
+    /// cursor may seek over it there.
+    /// </summary>
+    public bool DeclaredNotNull { get; }
 
     /// <summary>
     /// The capability a targeted command adds to its target: <c>Can{command}</c>, a <c>bool</c> backed

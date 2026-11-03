@@ -436,8 +436,8 @@ services
 
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->
 Objects with the same validation, shaping, and limits as a database source. The string functions run
-ordinally there — a prefix, a suffix, a search, a casing, a three-way comparison, and text ordered or folded
-by `Min`, `Max` or a join — so an answer does not
+ordinally there — a prefix, a suffix, a search, a casing, a three-way comparison, and text ordered, sought
+past by a cursor, or folded by `Min`, `Max` or a join — so an answer does not
 follow the request's culture, as a database source's answer does not.<!-- endInclude -->
 
 Registration is **mandatory**. `AddScry` throws at startup if a `[QueryablePoco]` type has no registered source:
