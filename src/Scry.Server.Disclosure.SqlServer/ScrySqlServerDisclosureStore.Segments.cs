@@ -255,15 +255,40 @@ public sealed partial class ScrySqlServerDisclosureStore
                          $"INSERT INTO {sql.Segments} ([Segment], [What], [At], [Batches], [Events], [Bytes], [From], [To], [HandedOn]) VALUES (@segment, @what, @at, @batches, @events, @bytes, @from, @to, @handedOn);",
                          transaction))
         {
-            enter.Parameters.AddWithValue("@segment", segment.Number);
-            enter.Parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Retired);
-            enter.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = options.Clock.GetUtcNow()});
-            enter.Parameters.Add(new("@batches", SqlDbType.BigInt) {Value = Value(segment.Batches)});
-            enter.Parameters.Add(new("@events", SqlDbType.BigInt) {Value = Value(segment.Events)});
-            enter.Parameters.Add(new("@bytes", SqlDbType.BigInt) {Value = Value(segment.Bytes)});
-            enter.Parameters.Add(new("@from", SqlDbType.DateTimeOffset) {Value = Value(segment.From)});
-            enter.Parameters.Add(new("@to", SqlDbType.DateTimeOffset) {Value = Value(segment.To)});
-            enter.Parameters.AddWithValue("@handedOn", handedOn);
+            var parameters = enter.Parameters;
+            parameters.AddWithValue("@segment", segment.Number);
+            parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Retired);
+            parameters.Add(
+                new("@at", SqlDbType.DateTimeOffset)
+                {
+                    Value = options.Clock.GetUtcNow()
+                });
+            parameters.Add(
+                new("@batches", SqlDbType.BigInt)
+                {
+                    Value = Value(segment.Batches)
+                });
+            parameters.Add(
+                new("@events", SqlDbType.BigInt)
+                {
+                    Value = Value(segment.Events)
+                });
+            parameters.Add(
+                new("@bytes", SqlDbType.BigInt)
+                {
+                    Value = Value(segment.Bytes)
+                });
+            parameters.Add(
+                new("@from", SqlDbType.DateTimeOffset)
+                {
+                    Value = Value(segment.From)
+                });
+            parameters.Add(
+                new("@to", SqlDbType.DateTimeOffset)
+                {
+                    Value = Value(segment.To)
+                });
+            parameters.AddWithValue("@handedOn", handedOn);
             await enter.ExecuteNonQueryAsync(cancel);
         }
 
@@ -442,13 +467,34 @@ public sealed partial class ScrySqlServerDisclosureStore
             connection,
             $"INSERT INTO {sql.Segments} ([Segment], [What], [At], [RollAfter], [RollAtBytes], [Keep], [KeepFor], [HandsOn]) VALUES (0, @what, @at, @after, @bytes, @keep, @keepFor, @handsOn);",
             transaction);
-        enter.Parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Settings);
-        enter.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = options.Clock.GetUtcNow()});
-        enter.Parameters.Add(new("@after", SqlDbType.BigInt) {Value = Value(own.RollAfter?.Ticks)});
-        enter.Parameters.Add(new("@bytes", SqlDbType.BigInt) {Value = Value(own.RollAtBytes)});
-        enter.Parameters.Add(new("@keep", SqlDbType.Int) {Value = Value(own.Keep)});
-        enter.Parameters.Add(new("@keepFor", SqlDbType.BigInt) {Value = Value(own.KeepFor?.Ticks)});
-        enter.Parameters.AddWithValue("@handsOn", own.HandsOn);
+        var parameters = enter.Parameters;
+        parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Settings);
+        parameters.Add(
+            new("@at", SqlDbType.DateTimeOffset)
+            {
+                Value = options.Clock.GetUtcNow()
+            });
+        parameters.Add(
+            new("@after", SqlDbType.BigInt)
+            {
+                Value = Value(own.RollAfter?.Ticks)
+            });
+        parameters.Add(
+            new("@bytes", SqlDbType.BigInt)
+            {
+                Value = Value(own.RollAtBytes)
+            });
+        parameters.Add(
+            new("@keep", SqlDbType.Int)
+            {
+                Value = Value(own.Keep)
+            });
+        parameters.Add(
+            new("@keepFor", SqlDbType.BigInt)
+            {
+                Value = Value(own.KeepFor?.Ticks)
+            });
+        parameters.AddWithValue("@handsOn", own.HandsOn);
         await enter.ExecuteNonQueryAsync(cancel);
         return own;
     }
@@ -521,13 +567,30 @@ public sealed partial class ScrySqlServerDisclosureStore
                          $"INSERT INTO {sql.Segments} ([Segment], [What], [At], [Link], [Head], [From], [To]) VALUES (@segment, @what, @at, @link, @head, @from, @to);",
                          transaction))
         {
-            enter.Parameters.AddWithValue("@segment", current.Number);
-            enter.Parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Sealed);
-            enter.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = now});
-            enter.Parameters.AddWithValue("@link", link);
-            enter.Parameters.Add(new("@head", SqlDbType.Binary, 32) {Value = hash});
-            enter.Parameters.Add(new("@from", SqlDbType.DateTimeOffset) {Value = from});
-            enter.Parameters.Add(new("@to", SqlDbType.DateTimeOffset) {Value = to});
+            var parameters = enter.Parameters;
+            parameters.AddWithValue("@segment", current.Number);
+            parameters.AddWithValue("@what", (byte) DisclosureSegmentEntry.Sealed);
+            parameters.Add(
+                new("@at", SqlDbType.DateTimeOffset)
+                {
+                    Value = now
+                });
+            parameters.AddWithValue("@link", link);
+            parameters.Add(
+                new("@head", SqlDbType.Binary, 32)
+                {
+                    Value = hash
+                });
+            parameters.Add(
+                new("@from", SqlDbType.DateTimeOffset)
+                {
+                    Value = from
+                });
+            parameters.Add(
+                new("@to", SqlDbType.DateTimeOffset)
+                {
+                    Value = to
+                });
             await enter.ExecuteNonQueryAsync(cancel);
         }
 
@@ -540,9 +603,14 @@ public sealed partial class ScrySqlServerDisclosureStore
     async Task Enter(SqlConnection connection, SqlTransaction transaction, int segment, DisclosureSegmentEntry what, DateTimeOffset at, Cancel cancel)
     {
         await using var enter = Command(connection, $"INSERT INTO {sql.Segments} ([Segment], [What], [At]) VALUES (@segment, @what, @at);", transaction);
-        enter.Parameters.AddWithValue("@segment", segment);
-        enter.Parameters.AddWithValue("@what", (byte) what);
-        enter.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = at});
+        var parameters = enter.Parameters;
+        parameters.AddWithValue("@segment", segment);
+        parameters.AddWithValue("@what", (byte) what);
+        parameters.Add(
+            new("@at", SqlDbType.DateTimeOffset)
+            {
+                Value = at
+            });
         await enter.ExecuteNonQueryAsync(cancel);
     }
 
@@ -741,11 +809,24 @@ public sealed partial class ScrySqlServerDisclosureStore
                           WHERE k.[Address] IN (SELECT u.[Content] FROM {tables.Units} u WHERE u.[EventId] = @event AND u.[Sequence] = @sequence) OR k.[Address] = @request OR k.[Address] = @parameters;
                           """))
         {
-            command.Parameters.Add(new("@shape", SqlDbType.Binary, 32) {Value = Value(Bytes(batch.Begin?.Shape))});
-            command.Parameters.Add(new("@request", SqlDbType.Binary, 32) {Value = Value(Bytes(batch.Begin?.Request))});
-            command.Parameters.Add(new("@parameters", SqlDbType.Binary, 32) {Value = Value(Bytes(batch.Review?.Parameters))});
-            command.Parameters.AddWithValue("@event", batch.EventId);
-            command.Parameters.AddWithValue("@sequence", batch.Sequence);
+            var parameters = command.Parameters;
+            parameters.Add(
+                new("@shape", SqlDbType.Binary, 32)
+                {
+                    Value = Value(Bytes(batch.Begin?.Shape))
+                });
+            parameters.Add(
+                new("@request", SqlDbType.Binary, 32)
+                {
+                    Value = Value(Bytes(batch.Begin?.Request))
+                });
+            parameters.Add(
+                new("@parameters", SqlDbType.Binary, 32)
+                {
+                    Value = Value(Bytes(batch.Review?.Parameters))
+                });
+            parameters.AddWithValue("@event", batch.EventId);
+            parameters.AddWithValue("@sequence", batch.Sequence);
             await using var reader = await command.ExecuteReaderAsync(cancel);
             while (await reader.ReadAsync(cancel))
             {

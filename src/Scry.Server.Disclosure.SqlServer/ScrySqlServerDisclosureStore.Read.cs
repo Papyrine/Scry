@@ -106,14 +106,39 @@ public sealed partial class ScrySqlServerDisclosureStore
 
         void Parameters(SqlCommand command)
         {
-            command.Parameters.AddWithValue("@page", Page);
+            var parameters = command.Parameters;
+            parameters.AddWithValue("@page", Page);
             Row(command, row, source, text);
-            command.Parameters.Add(new("@from", SqlDbType.DateTimeOffset) {Value = Value(from)});
-            command.Parameters.Add(new("@to", SqlDbType.DateTimeOffset) {Value = Value(to)});
-            command.Parameters.Add(new("@afterAt", SqlDbType.DateTimeOffset) {Value = Value(place?.At)});
-            command.Parameters.Add(new("@afterId", SqlDbType.UniqueIdentifier) {Value = Value(place?.Id)});
-            command.Parameters.Add(new("@afterOrdinal", SqlDbType.Int) {Value = Value(place?.Ordinal)});
-            command.Parameters.Add(new("@afterEvent", SqlDbType.UniqueIdentifier) {Value = Value(place?.Event)});
+            parameters.Add(
+                new("@from", SqlDbType.DateTimeOffset)
+                {
+                    Value = Value(from)
+                });
+            parameters.Add(
+                new("@to", SqlDbType.DateTimeOffset)
+                {
+                    Value = Value(to)
+                });
+            parameters.Add(
+                new("@afterAt", SqlDbType.DateTimeOffset)
+                {
+                    Value = Value(place?.At)
+                });
+            parameters.Add(
+                new("@afterId", SqlDbType.UniqueIdentifier)
+                {
+                    Value = Value(place?.Id)
+                });
+            parameters.Add(
+                new("@afterOrdinal", SqlDbType.Int)
+                {
+                    Value = Value(place?.Ordinal)
+                });
+            parameters.Add(
+                new("@afterEvent", SqlDbType.UniqueIdentifier)
+                {
+                    Value = Value(place?.Event)
+                });
         }
 
         while (true)
@@ -491,8 +516,17 @@ public sealed partial class ScrySqlServerDisclosureStore
             "AND e.[At] >= @from AND e.[At] <= @to",
             command =>
             {
-                command.Parameters.Add(new("@from", SqlDbType.DateTimeOffset) {Value = from});
-                command.Parameters.Add(new("@to", SqlDbType.DateTimeOffset) {Value = to});
+                var parameters = command.Parameters;
+                parameters.Add(
+                    new("@from", SqlDbType.DateTimeOffset)
+                    {
+                        Value = from
+                    });
+                parameters.Add(
+                    new("@to", SqlDbType.DateTimeOffset)
+                    {
+                        Value = to
+                    });
             },
             after,
             cancel);
@@ -525,10 +559,27 @@ public sealed partial class ScrySqlServerDisclosureStore
              """,
             command =>
             {
-                command.Parameters.Add(new("@field", SqlDbType.Binary, 32) {Value = DisclosureSql.FieldHash(source, member)});
-                command.Parameters.Add(new("@returned", SqlDbType.TinyInt) {Value = (byte) ScryDisclosureFieldUse.Returned});
-                command.Parameters.Add(new("@source", SqlDbType.NVarChar, -1) {Value = source});
-                command.Parameters.Add(new("@member", SqlDbType.NVarChar, -1) {Value = member});
+                var parameters = command.Parameters;
+                parameters.Add(
+                    new("@field", SqlDbType.Binary, 32)
+                    {
+                        Value = DisclosureSql.FieldHash(source, member)
+                    });
+                parameters.Add(
+                    new("@returned", SqlDbType.TinyInt)
+                    {
+                        Value = (byte) ScryDisclosureFieldUse.Returned
+                    });
+                parameters.Add(
+                    new("@source", SqlDbType.NVarChar, -1)
+                    {
+                        Value = source
+                    });
+                parameters.Add(
+                    new("@member", SqlDbType.NVarChar, -1)
+                    {
+                        Value = member
+                    });
             },
             after,
             cancel);
@@ -581,10 +632,23 @@ public sealed partial class ScrySqlServerDisclosureStore
             {
                 await using (var command = Command(connection, query))
                 {
-                    command.Parameters.AddWithValue("@page", Page);
-                    command.Parameters.Add(new("@caller", SqlDbType.Binary, 32) {Value = Value(DisclosureSql.CallerHash(caller))});
-                    command.Parameters.Add(new("@name", SqlDbType.NVarChar, -1) {Value = Value(caller)});
-                    command.Parameters.Add(new("@retracted", SqlDbType.TinyInt) {Value = (byte) ScryDisclosureOutcome.Retracted});
+                    var parameters = command.Parameters;
+                    parameters.AddWithValue("@page", Page);
+                    parameters.Add(
+                        new("@caller", SqlDbType.Binary, 32)
+                        {
+                            Value = Value(DisclosureSql.CallerHash(caller))
+                        });
+                    parameters.Add(
+                        new("@name", SqlDbType.NVarChar, -1)
+                        {
+                            Value = Value(caller)
+                        });
+                    parameters.Add(
+                        new("@retracted", SqlDbType.TinyInt)
+                        {
+                            Value = (byte) ScryDisclosureOutcome.Retracted
+                        });
                     bind(command);
                     After(command, after);
                     await using var reader = await command.ExecuteReaderAsync(cancel);
@@ -644,9 +708,22 @@ public sealed partial class ScrySqlServerDisclosureStore
 
     static void After(SqlCommand command, ScryDisclosureCursor? after)
     {
-        command.Parameters.Add(new("@afterAt", SqlDbType.DateTimeOffset) {Value = Value(after?.At)});
-        command.Parameters.Add(new("@afterId", SqlDbType.UniqueIdentifier) {Value = Value(after?.Id)});
-        command.Parameters.Add(new("@afterOrdinal", SqlDbType.Int) {Value = Value(after?.Ordinal)});
+        var parameters = command.Parameters;
+        parameters.Add(
+            new("@afterAt", SqlDbType.DateTimeOffset)
+            {
+                Value = Value(after?.At)
+            });
+        parameters.Add(
+            new("@afterId", SqlDbType.UniqueIdentifier)
+            {
+                Value = Value(after?.Id)
+            });
+        parameters.Add(
+            new("@afterOrdinal", SqlDbType.Int)
+            {
+                Value = Value(after?.Ordinal)
+            });
     }
 
     // An event as the listings select it: the columns of DisclosureSql.Columns, in that order.
@@ -864,7 +941,12 @@ public sealed partial class ScrySqlServerDisclosureStore
         await using (var connection = await OpenAsync(cancel))
         await using (var command = Command(connection, $"SELECT TOP (1) k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {sql.Content} k WHERE k.[Address] = @address ORDER BY CASE WHEN k.[Bytes] IS NOT NULL OR k.[Elsewhere] = 1 THEN 0 ELSE 1 END, k.[Segment] DESC;"))
         {
-            command.Parameters.Add(new("@address", SqlDbType.Binary, 32) {Value = address.ToArray()});
+            command.Parameters
+                .Add(
+                    new("@address", SqlDbType.Binary, 32)
+                    {
+                        Value = address.ToArray()
+                    });
             await using var reader = await command.ExecuteReaderAsync(cancel);
             if (!await reader.ReadAsync(cancel))
             {
@@ -916,7 +998,12 @@ public sealed partial class ScrySqlServerDisclosureStore
         var fields = new List<ScryDisclosureField>();
         await using var connection = await OpenAsync(cancel);
         await using var command = Command(connection, $"SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {sql.Field} f WHERE f.[Shape] = @shape AND f.[Segment] = (SELECT MAX(x.[Segment]) FROM {sql.Field} x WHERE x.[Shape] = @shape) ORDER BY f.[Position];");
-        command.Parameters.Add(new("@shape", SqlDbType.Binary, 32) {Value = address.ToArray()});
+        command.Parameters
+            .Add(
+                new("@shape", SqlDbType.Binary, 32)
+                {
+                    Value = address.ToArray()
+                });
         await using var reader = await command.ExecuteReaderAsync(cancel);
         while (await reader.ReadAsync(cancel))
         {

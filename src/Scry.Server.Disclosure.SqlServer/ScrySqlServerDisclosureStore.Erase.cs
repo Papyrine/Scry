@@ -95,8 +95,18 @@ public sealed partial class ScrySqlServerDisclosureStore
         await using (var erase = Command(connection, erasing.ToString(), transaction))
         {
             Row(erase, row, source, text);
-            erase.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = at});
-            erase.Parameters.Add(new("@by", SqlDbType.NVarChar, -1) {Value = Value(by)});
+            erase.Parameters
+                .Add(
+                    new("@at", SqlDbType.DateTimeOffset)
+                    {
+                        Value = at
+                    });
+            erase.Parameters
+                .Add(
+                    new("@by", SqlDbType.NVarChar, -1)
+                    {
+                        Value = Value(by)
+                    });
             units = (int) (await erase.ExecuteScalarAsync(cancel))!;
         }
 
@@ -107,9 +117,22 @@ public sealed partial class ScrySqlServerDisclosureStore
 
     static void Row(SqlCommand command, byte[] row, string source, string key)
     {
-        command.Parameters.Add(new("@row", SqlDbType.Binary, 32) {Value = row});
-        command.Parameters.Add(new("@source", SqlDbType.NVarChar, -1) {Value = source});
-        command.Parameters.Add(new("@key", SqlDbType.NVarChar, -1) {Value = key});
+        var parameters = command.Parameters;
+        parameters.Add(
+            new("@row", SqlDbType.Binary, 32)
+            {
+                Value = row
+            });
+        parameters.Add(
+            new("@source", SqlDbType.NVarChar, -1)
+            {
+                Value = source
+            });
+        parameters.Add(
+            new("@key", SqlDbType.NVarChar, -1)
+            {
+                Value = key
+            });
     }
 
     /// <inheritdoc />
@@ -235,7 +258,11 @@ public sealed partial class ScrySqlServerDisclosureStore
                           WHERE b.[Link] IN (SELECT TOP (@count) l.[Link] FROM {sql.Chain} l WHERE @from IS NULL OR l.[Link] >= @from ORDER BY l.[Link]);
                           """))
         {
-            command.Parameters.Add(new("@from", SqlDbType.BigInt) {Value = Value(from)});
+            command.Parameters.Add(
+                new("@from", SqlDbType.BigInt)
+                {
+                    Value = Value(from)
+                });
             command.Parameters.AddWithValue("@count", count);
             await using var reader = await command.ExecuteReaderAsync(cancel);
             if (await reader.ReadAsync(cancel))
@@ -333,11 +360,12 @@ public sealed partial class ScrySqlServerDisclosureStore
                  SELECT t.[RowHash], t.[Ordinal] FROM {tables.Receipt} t LEFT JOIN {tables.Event} e ON e.[EventId] = @event
                  WHERE t.[RowHash] IN ({rows}) AND (e.[At] IS NULL OR t.[At] = e.[At]) AND t.[EventId] = @event AND t.[Ordinal] BETWEEN @first AND @last;
                  """);
-            command.Parameters.AddWithValue("@event", batch.EventId);
+            var parameters = command.Parameters;
+            parameters.AddWithValue("@event", batch.EventId);
             // A range rather than a list, which would grow with the batch as the rows do; the pairs
             // are matched exactly below.
-            command.Parameters.AddWithValue("@first", expected.Min(_ => _.Ordinal));
-            command.Parameters.AddWithValue("@last", expected.Max(_ => _.Ordinal));
+            parameters.AddWithValue("@first", expected.Min(_ => _.Ordinal));
+            parameters.AddWithValue("@last", expected.Max(_ => _.Ordinal));
             await using var reader = await command.ExecuteReaderAsync(cancel);
             while (await reader.ReadAsync(cancel))
             {
@@ -416,7 +444,11 @@ public sealed partial class ScrySqlServerDisclosureStore
         await EnsureAsync(cancel);
         await using var connection = await OpenAsync(cancel);
         await using var command = Command(connection, $"SELECT TOP (1) l.[Link] FROM {sql.Chain} l WHERE l.[Hash] = @hash ORDER BY l.[Link];");
-        command.Parameters.Add(new("@hash", SqlDbType.Binary, 32) {Value = hash.ToArray()});
+        command.Parameters.Add(
+            new("@hash", SqlDbType.Binary, 32)
+            {
+                Value = hash.ToArray()
+            });
         if (await command.ExecuteScalarAsync(cancel) is long link)
         {
             return link;
@@ -441,9 +473,10 @@ public sealed partial class ScrySqlServerDisclosureStore
              SELECT r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node] FROM {read.Review} r WHERE r.[ReviewId] = @event AND @sequence = 0 AND r.[Segment] = @segment;
              SELECT v.[EventId] FROM {read.ReviewEvent} v WHERE v.[ReviewId] = @event AND @sequence = 0 AND v.[Segment] = @segment;
              """);
-        command.Parameters.AddWithValue("@event", id);
-        command.Parameters.AddWithValue("@sequence", sequence);
-        command.Parameters.AddWithValue("@segment", segment);
+        var parameters = command.Parameters;
+        parameters.AddWithValue("@event", id);
+        parameters.AddWithValue("@sequence", sequence);
+        parameters.AddWithValue("@segment", segment);
         await using var reader = await command.ExecuteReaderAsync(cancel);
         ScryDisclosureEvent? begin = null;
         if (await reader.ReadAsync(cancel))
@@ -484,7 +517,10 @@ public sealed partial class ScrySqlServerDisclosureStore
         await reader.NextResultAsync(cancel);
         if (await reader.ReadAsync(cancel))
         {
-            review = new(reader.GetGuid(0), reader.GetDateTimeOffset(1), (ScryDisclosureQuestion) reader.GetByte(3))
+            review = new(
+                reader.GetGuid(0),
+                reader.GetDateTimeOffset(1),
+                (ScryDisclosureQuestion) reader.GetByte(3))
             {
                 Reviewer = Text(reader, 2),
                 Parameters = Address(reader, 4),

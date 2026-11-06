@@ -59,19 +59,29 @@ sealed partial class QueryTranslator
         Node? selector = null;
         if (argument is not null)
         {
-            if (function is SubqueryFn.Any or SubqueryFn.All or SubqueryFn.Count)
+            if (function is
+                SubqueryFn.Any or
+                SubqueryFn.All or
+                SubqueryFn.Count)
             {
-                predicate = predicate is null
-                    ? argument
-                    : throw new NotSupportedException(
+                if (predicate is not null)
+                {
+                    throw new NotSupportedException(
                         $"'{call.Method.Name}' over a collection cannot combine a Where with its own predicate.");
+                }
+
+                predicate = argument;
             }
             else
             {
                 selector = TranslateExpr(argument.Body, argument.Parameters[0]);
             }
         }
-        else if (function is SubqueryFn.Sum or SubqueryFn.Average or SubqueryFn.Min or SubqueryFn.Max)
+        else if (function is
+                 SubqueryFn.Sum or
+                 SubqueryFn.Average or
+                 SubqueryFn.Min or
+                 SubqueryFn.Max)
         {
             // Sum() and friends without a selector fold the elements themselves, which only a
             // collection of values can be asked for — there is nothing else there to read.

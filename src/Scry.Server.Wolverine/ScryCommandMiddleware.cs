@@ -1,32 +1,4 @@
 /// <summary>
-/// <see cref="ICommandDispatcher"/> over Wolverine: sends the command the server bound, with its id and
-/// caller as headers, routed by the application's own routing.
-/// </summary>
-sealed class WolverineDispatcher(IServiceProvider services, BusCommands claims) :
-    ICommandDispatcher
-{
-    // Nothing by default: a Wolverine message is any class, so nothing about one says it is a command
-    // meant for the bus rather than for an in-process handler.
-    public bool CanDispatch(Type command) =>
-        claims.Claims(command);
-
-    public async Task Dispatch(CommandEnvelope envelope, Cancel cancel)
-    {
-        var options = new DeliveryOptions().WithHeader(ScryCommandHeaders.CommandId, envelope.Id.ToString("D"));
-        if (envelope.Caller is { } caller)
-        {
-            options = options.WithHeader(ScryCommandHeaders.Caller, caller);
-        }
-
-        // A bus of its own, as a request's would be: the one Wolverine registers is scoped.
-        await using var scope = services.CreateAsyncScope();
-        await scope.ServiceProvider
-            .GetRequiredService<IMessageBus>()
-            .SendAsync(envelope.Command, options);
-    }
-}
-
-/// <summary>
 /// Wolverine middleware, after each handler of a message a Scry server sent as a command: responds to
 /// the sender with how it ended. Added to every handler chain but the completion's own by
 /// <c>UseScryCommands</c>, and does nothing for a message that is not a command.
@@ -104,11 +76,11 @@ public static class ScryCommandMiddleware
     // not, for whatever the application routes completions to.
     static Task Respond(IMessageContext context, Envelope envelope, WolverineCommandCompleted completion)
     {
-        if (envelope.ReplyUri is not null)
+        if (envelope.ReplyUri is null)
         {
-            return context.RespondToSenderAsync(completion).AsTask();
+            return context.PublishAsync(completion).AsTask();
         }
 
-        return context.PublishAsync(completion).AsTask();
+        return context.RespondToSenderAsync(completion).AsTask();
     }
 }

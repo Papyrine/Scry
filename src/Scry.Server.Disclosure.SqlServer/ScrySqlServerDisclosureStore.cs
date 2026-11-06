@@ -167,9 +167,22 @@ public sealed partial class ScrySqlServerDisclosureStore :
         // The one statement an answer waits on, bounded by how long it is willing to.
         var command = Command(connection, sql.Accept);
         command.CommandTimeout = Seconds(options.AcceptTimeout);
-        command.Parameters.Add(new("@event", SqlDbType.UniqueIdentifier) {Value = batch.EventId});
-        command.Parameters.Add(new("@sequence", SqlDbType.Int) {Value = batch.Sequence});
-        command.Parameters.Add(new("@batch", SqlDbType.VarBinary, written.Count) {Value = written.Array});
+        var parameters = command.Parameters;
+        parameters.Add(
+            new("@event", SqlDbType.UniqueIdentifier)
+            {
+                Value = batch.EventId
+            });
+        parameters.Add(
+            new("@sequence", SqlDbType.Int)
+            {
+                Value = batch.Sequence
+            });
+        parameters.Add(
+            new("@batch", SqlDbType.VarBinary, written.Count)
+            {
+                Value = written.Array
+            });
         return command;
     }
 

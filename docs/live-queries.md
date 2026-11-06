@@ -512,9 +512,53 @@ Invalidating a [cached policy](policies.md) reports a change too. No row was wri
 <!-- snippet: useDeltaChanges -->
 <a id='snippet-useDeltaChanges'></a>
 ```cs
+/// <summary>
+/// Runs every live query again when anything is written to <typeparamref name="TContext"/>'s
+/// database, by watching the same change marker <see cref="UseDeltaFreshness{TContext}"/> reads.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The marker moves for every writer there is — another node, another system, a bulk update, raw
+/// SQL — none of which has to know Scry exists. That makes the database the backplane: a
+/// deployment of several nodes needs nothing else for a write on one to reach the live queries
+/// held by the others.
+/// </para>
+/// <para>
+/// What it cannot say is what changed, so every live query is run again rather than the ones that
+/// read what was written. A run that finds its answer unchanged sends nothing, so the cost is
+/// queries and not traffic — and it is paid only while a live query is open, since nothing probes
+/// otherwise. Use it beside <see cref="ScryChangeInterceptor"/>, which does know what changed and
+/// reports it at once: the interceptor makes this node's own writes fast and precise, and this
+/// catches everything the interceptor cannot see.
+/// </para>
+/// <para>
+/// The marker is asked every <see cref="ScryOptions.ChangeProbeInterval"/>, so that is how far
+/// behind a write this alone can be — and, on a SQL Server database with delayed durability, the
+/// tens of milliseconds the marker itself trails a commit by.
+/// </para>
+/// </remarks>
+public ScryOptions UseDeltaChanges<TContext>()
+    where TContext : DbContext
+{
+    options.ChangeProbe = async (services, cancel) =>
+    {
+        var data = services.GetRequiredService<TContext>();
+        var timeStamp = await data.GetLastTimeStamp(cancel);
 
+        // A marker that says nothing is not one to compare against: the probe is skipped this
+        // once rather than read as the database having moved.
+        if (timeStamp.Length == 0)
+        {
+            return null;
+        }
+
+        return timeStamp;
+    };
+
+    return options;
+}
 ```
-<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L107-L108' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaChanges' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L60-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaChanges' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 **The poll.** `SubscriptionPollInterval` runs every live query on a timer whether or not anything reported a change, thirty seconds by default. It is what catches everything nothing reports: a policy that answers by a claim or the clock, a view over a table the query never names, a transaction committed outside EF. Reports make a live query fast; the poll makes it correct. A run that finds the answer unchanged sends nothing, so an idle poll costs a query and no bandwidth.

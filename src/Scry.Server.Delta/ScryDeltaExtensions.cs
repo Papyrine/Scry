@@ -55,7 +55,9 @@ public static class ScryDeltaExtensions
 
             return options;
         }
+        // end-snippet
 
+        // begin-snippet: useDeltaChanges
         /// <summary>
         /// Runs every live query again when anything is written to <typeparamref name="TContext"/>'s
         /// database, by watching the same change marker <see cref="UseDeltaFreshness{TContext}"/> reads.
@@ -101,9 +103,6 @@ public static class ScryDeltaExtensions
 
             return options;
         }
+        // end-snippet
     }
-    // end-snippet
-
-    // begin-snippet: useDeltaChanges
-    // end-snippet
 }

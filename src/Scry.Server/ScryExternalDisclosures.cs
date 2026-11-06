@@ -51,7 +51,7 @@ public sealed class ScryExternalDisclosures(IScryDisclosureSink sink, ScryDisclo
     /// <exception cref="ScryDisclosureException">
     /// The sink did not accept it. The record then still says all of it went.
     /// </exception>
-    public async ValueTask WithdrawAsync(ScryExternalRecord record, int sent = 0, Cancel cancel = default)
+    public ValueTask WithdrawAsync(ScryExternalRecord record, int sent = 0, Cancel cancel = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(sent);
         var outcome = ScryDisclosureOutcome.Truncated;
@@ -72,7 +72,7 @@ public sealed class ScryExternalDisclosures(IScryDisclosureSink sink, ScryDisclo
                 At = settings.Clock.GetUtcNow()
             }
         };
-        await DisclosureRuntime.AppendAsync(sink, batch, cancel);
+        return DisclosureRuntime.AppendAsync(sink, batch, cancel);
     }
 
     // The record and the one batch that holds it: the event, every unit, the rows each was made from,

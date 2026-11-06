@@ -2,7 +2,7 @@ namespace Scry;
 
 /// <summary>
 /// Carries commands somewhere else to be handled — a message bus, a queue, another process — and reports
-/// each one's outcome back through <see cref="ScryProcessor.CompleteCommand"/> or
+/// each one's outcome back through <see cref="ScryProcessor.CompleteCommand(System.Guid,System.Text.Json.JsonElement?)"/> or
 /// <see cref="ScryProcessor.FailCommand"/>. Registered with <see cref="ScryOptions.AddDispatcher{TDispatcher}()"/>.
 /// </summary>
 /// <remarks>

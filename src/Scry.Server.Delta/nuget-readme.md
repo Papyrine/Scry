@@ -63,7 +63,31 @@ public ScryOptions UseDeltaFreshness<TContext>()
 
     return options;
 }
+```
+<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L11-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaFreshness' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
+Where a source carries a [row policy](https://github.com/Papyrine/Scry/blob/main/docs/policies.md), its rows depend on who asked, so `ScryOptions.CacheScope` has to say what a cached response belongs to — `MapScry` refuses to start otherwise.
+
+
+## Live queries
+
+The same marker tells a [live query](https://github.com/Papyrine/Scry/blob/main/docs/live-queries.md) that something was written, whoever wrote it:
+
+```cs
+builder.Services.AddScry<SampleContext>(
+    _ =>
+    {
+        _.MaxSubscriptions = 1000;
+        _.UseDeltaChanges<SampleContext>();
+    });
+```
+
+The marker moves for another node, another system, a bulk update and raw SQL alike, so the database is the backplane and a deployment of several nodes needs no other.
+
+<!-- snippet: useDeltaChanges -->
+<a id='snippet-useDeltaChanges'></a>
+```cs
 /// <summary>
 /// Runs every live query again when anything is written to <typeparamref name="TContext"/>'s
 /// database, by watching the same change marker <see cref="UseDeltaFreshness{TContext}"/> reads.
@@ -109,35 +133,8 @@ public ScryOptions UseDeltaChanges<TContext>()
 
     return options;
 }
-}
 ```
-<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L11-L105' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaFreshness' title='Start of snippet'>anchor</a></sup>
-<!-- endSnippet -->
-
-Where a source carries a [row policy](https://github.com/Papyrine/Scry/blob/main/docs/policies.md), its rows depend on who asked, so `ScryOptions.CacheScope` has to say what a cached response belongs to — `MapScry` refuses to start otherwise.
-
-
-## Live queries
-
-The same marker tells a [live query](https://github.com/Papyrine/Scry/blob/main/docs/live-queries.md) that something was written, whoever wrote it:
-
-```cs
-builder.Services.AddScry<SampleContext>(
-    _ =>
-    {
-        _.MaxSubscriptions = 1000;
-        _.UseDeltaChanges<SampleContext>();
-    });
-```
-
-The marker moves for another node, another system, a bulk update and raw SQL alike, so the database is the backplane and a deployment of several nodes needs no other.
-
-<!-- snippet: useDeltaChanges -->
-<a id='snippet-useDeltaChanges'></a>
-```cs
-
-```
-<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L107-L108' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaChanges' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L60-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaChanges' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Caching and 304 Not Modified](https://github.com/Papyrine/Scry/blob/main/docs/caching.md), [Live queries](https://github.com/Papyrine/Scry/blob/main/docs/live-queries.md)

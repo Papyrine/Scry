@@ -12,11 +12,11 @@
 sealed class DisclosureManifest
 {
     // A run ends on one unit in this many, by its digest, and so is this long on average.
-    const uint Every = 32;
+    const uint every = 32;
 
     // And is never longer than this, whatever the digests say: units that are all the same have one
     // digest between them, which either ends every run or ends none.
-    const int Longest = 256;
+    const int longest = 256;
 
     DisclosureManifest(int start, byte[] address, List<ScryDisclosureUnit> units, ILookup<int, ScryDisclosureEntity> rows, List<DisclosureRun> runs)
     {
@@ -81,8 +81,8 @@ sealed class DisclosureManifest
             run.AppendData(digest);
             var length = index - from + 1;
             if (index < units.Count - 1 &&
-                length < Longest &&
-                BinaryPrimitives.ReadUInt32LittleEndian(digest) % Every != 0)
+                length < longest &&
+                BinaryPrimitives.ReadUInt32LittleEndian(digest) % every != 0)
             {
                 continue;
             }

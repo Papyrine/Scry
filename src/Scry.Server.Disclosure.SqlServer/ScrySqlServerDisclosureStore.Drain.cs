@@ -367,7 +367,14 @@ public sealed partial class ScrySqlServerDisclosureStore
         await using var reader = await command.ExecuteReaderAsync(cancel);
         while (await reader.ReadAsync(cancel))
         {
-            taken.Add((reader.GetInt64(0), reader.GetDateTimeOffset(1), reader.GetGuid(2), reader.GetInt32(3), (byte[]) reader[4]));
+            taken.Add(
+                (
+                    reader.GetInt64(0),
+                    reader.GetDateTimeOffset(1),
+                    reader.GetGuid(2),
+                    reader.GetInt32(3),
+                    (byte[]) reader[4])
+                );
         }
 
         return taken;
@@ -404,7 +411,13 @@ public sealed partial class ScrySqlServerDisclosureStore
             await create.ExecuteNonQueryAsync(cancel);
         }
 
-        using (var copy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction) {DestinationTableName = "#batch"})
+        using (var copy = new SqlBulkCopy(
+                   connection,
+                   SqlBulkCopyOptions.Default,
+                   transaction)
+               {
+                   DestinationTableName = "#batch"
+               })
         {
             await copy.WriteToServerAsync(marks, cancel);
         }
