@@ -11,8 +11,14 @@ static class ScryServer
     public static void Add(IServiceCollection services, TimeSpan? window, Action<ScryOptions> dispatch, bool second = false)
     {
         services.AddDbContext<BusContext>(_ => _.UseSqlServer("Server=.;Database=NeverOpened"));
+
+        // Recorded, so that what a handler says its result was made from is seen to cross the bus.
+        // Anonymous, since most tests here send as nobody in particular.
+        var record = new ScryMemoryDisclosureStore();
+        services.AddSingleton(record);
         services.AddScry<BusContext>(options =>
         {
+            options.UseDisclosureAudit(record, _ => _.AllowAnonymous = true);
             options.AllowUnmappedSources = true;
             options.MaxPendingCommands = 10;
             // As long as Send waits: a starved runner has taken 40 seconds to handle a command, and a
@@ -47,6 +53,43 @@ static class ScryServer
 
     public static void EnsureDispatchable(IServiceProvider root) =>
         root.GetRequiredService<ScryProcessor>().EnsureCommandsDispatchable(root);
+
+    /// <summary>
+    /// The rows the receipt carrying a command's result was recorded as carrying, as
+    /// <c>Source[key] via route</c>.
+    /// </summary>
+    public static async Task<List<string>> ResultRows(IServiceProvider root, Guid id)
+    {
+        var record = root.GetRequiredService<ScryMemoryDisclosureStore>();
+        var entries = await record.ReceivedBy(null, DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync();
+        foreach (var entry in entries)
+        {
+            var answer = (await record.Reconstruct(entry.Event.Id))!;
+            if (answer.Event.Kind != ScryDisclosureKind.CommandReceipt ||
+                answer.Request is not { } request ||
+                !Encoding.UTF8.GetString(request.Span).Contains(id.ToString("D"), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var unit = answer.Units.Single();
+            if (!Encoding.UTF8.GetString(unit.Content.Bytes.Span).Contains("\"Completed\"", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return [.. unit.Entities.Select(_ => $"{_.Source}{_.Key} via {_.Via}")];
+        }
+
+        return [];
+    }
+}
+
+/// <summary>What every bus's handler of <see cref="Parcels.WeighParcel"/> says its result was made from.</summary>
+static class Weighing
+{
+    public static ScryDisclosureRow Row(int grams) =>
+        new("Parcel", [grams]);
 }
 
 /// <summary>What each bus's handler saw of the headers a command carried, by the label it was sent with.</summary>

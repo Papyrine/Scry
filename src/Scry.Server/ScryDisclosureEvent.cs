@@ -109,7 +109,14 @@ public enum ScryDisclosureKind
     /// A query refused because a row policy denied a row and says so rather than hiding it. No content
     /// left, but the caller learned that rows it may not see matched.
     /// </summary>
-    Denial
+    Denial,
+
+    /// <summary>
+    /// Something host code sent outside Scry — an email, a webhook, an export, a message to another
+    /// system — and recorded through <see cref="ScryExternalDisclosures"/>. The caller is whoever it
+    /// was sent to.
+    /// </summary>
+    External
 }
 
 /// <summary>Whether an answer's content crossed to the caller this time.</summary>

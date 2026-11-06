@@ -20,7 +20,8 @@ public readonly record struct ScryDisclosureUnit(int Ordinal, ScryDisclosureAddr
 /// </param>
 /// <param name="Via">
 /// How the unit reached the row: empty for the root, a navigation path, <c>inner</c> for a join's
-/// other side, <c>target</c> for the row a command was sent against.
+/// other side, <c>target</c> for the row a command was sent against, <c>result</c> for a row its
+/// handler said the result was made from (<see cref="ScryCommandContext.Discloses(IEnumerable{ScryDisclosureRow})"/>).
 /// </param>
 public readonly record struct ScryDisclosureEntity(int Ordinal, int Slot, string Source, string Key, string Via)
 {
@@ -120,7 +121,13 @@ public enum ScryDisclosureContentKind : byte
     /// nothing of any. It holds nothing of the row it was read from, so erasing that row leaves it
     /// where it is, though every other row of the answer was recorded as the same bytes.
     /// </summary>
-    LeftOut = 11
+    LeftOut = 11,
+
+    /// <summary>
+    /// What host code sent outside Scry, as the host gave it: no form of Scry's own, so it is
+    /// whatever was sent — a message body, a document, a payload.
+    /// </summary>
+    External = 12
 }
 
 /// <summary>

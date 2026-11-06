@@ -214,12 +214,71 @@ public sealed partial class ScryProcessor
     /// <param name="id">The command's id, as the envelope carried it.</param>
     /// <param name="result">What the handler answered with, as JSON, or null for a command with no result.</param>
     public bool CompleteCommand(Guid id, JsonElement? result = null) =>
+        CompleteCommand(id, result, []);
+
+    /// <summary>
+    /// The same, with the rows the handler said its result was made from: what a dispatcher passes on
+    /// from the other end, read with <see cref="ScryDisclosureRow.Parse"/>. Where the disclosure audit
+    /// is on, the receipt carrying the result is recorded as carrying them.
+    /// </summary>
+    /// <param name="id">The command's id, as the envelope carried it.</param>
+    /// <param name="result">What the handler answered with, as JSON, or null for a command with no result.</param>
+    /// <param name="rows">
+    /// The rows the result holds anything of, beyond the row the command was sent against. A row of a
+    /// source the host left out of the record is dropped.
+    /// </param>
+    public bool CompleteCommand(Guid id, JsonElement? result, IReadOnlyList<ScryDisclosureRow> rows) =>
         tracker.Finish(
             id,
             CommandReceipt.Create(id, CommandStatus.Completed) with
             {
                 Result = result
-            }) is not null;
+            },
+            rows: ResultRows(rows)) is not null;
+
+    // The rows a result was made from as the record names them: by the top of the source's hierarchy,
+    // as a query of the row is recorded, and without those of a source left out of the record. A name
+    // the schema does not know is kept as given: the host may be naming a row of something Scry never
+    // serves, and the record still answers who received it.
+    List<ScryDisclosureEntity>? ResultRows(IReadOnlyList<ScryDisclosureRow> rows)
+    {
+        if (disclosure is null ||
+            rows.Count == 0)
+        {
+            return null;
+        }
+
+        var settings = disclosure.Settings;
+        var named = new List<ScryDisclosureEntity>(rows.Count);
+        foreach (var row in rows)
+        {
+            var type = row.ClrType;
+            if (type is null &&
+                schema.TryGetSource(row.Source, out var known))
+            {
+                type = known.ClrType;
+            }
+
+            var source = row.Source;
+            if (type is not null)
+            {
+                if (settings.Excludes(type))
+                {
+                    continue;
+                }
+
+                source = DisclosurePlanner.SourceName(schema, type);
+            }
+
+            named.Add(
+                new(Ordinal: 0, Slot: 0, source, ScryDisclosureEntity.KeyOf(row.Key), Via: "result")
+                {
+                    Version = row.Version
+                });
+        }
+
+        return named;
+    }
 
     /// <summary>
     /// Reports that a command failed, with the message its sender is shown. Say only what a caller may
@@ -423,7 +482,7 @@ public sealed partial class ScryProcessor
                 serialized = JsonSerializer.SerializeToElement(result, resultType, ScryJson.Options);
             }
 
-            CompleteCommand(envelope.Id, serialized);
+            CompleteCommand(envelope.Id, serialized, context.Disclosed);
         }
         catch (ScryCommandException exception)
         {

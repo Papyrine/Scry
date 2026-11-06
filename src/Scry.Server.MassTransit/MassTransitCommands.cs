@@ -55,7 +55,7 @@ sealed class MassTransitCommandCompletedConsumer(ScryProcessor processor) :
             result = document.RootElement.Clone();
         }
 
-        processor.CompleteCommand(message.Id, result);
+        processor.CompleteCommand(message.Id, result, ScryDisclosureRow.Parse(message.Rows));
         return Task.CompletedTask;
     }
 }
@@ -121,7 +121,8 @@ sealed class ScryCommandFilter<TMessage> :
             {
                 Id = id,
                 Succeeded = true,
-                Result = result.Json
+                Result = result.Json,
+                Rows = result.Rows
             });
     }
 
@@ -133,4 +134,7 @@ sealed class ScryCommandFilter<TMessage> :
 sealed class CommandResult
 {
     public string? Json { get; set; }
+
+    /// <summary>The rows the result was made from, as <see cref="ScryDisclosureRow.Serialize"/> wrote them.</summary>
+    public string? Rows { get; set; }
 }

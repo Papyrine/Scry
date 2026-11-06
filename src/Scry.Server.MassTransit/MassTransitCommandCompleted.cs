@@ -20,6 +20,12 @@ public sealed class MassTransitCommandCompleted
     /// <summary>What the consumer answered with, as JSON, for a command that has a result.</summary>
     public string? Result { get; set; }
 
+    /// <summary>
+    /// The rows the consumer said the result was made from, as <see cref="ScryDisclosureRow.Serialize"/>
+    /// wrote them. Null where it said none, and from a worker older than this property.
+    /// </summary>
+    public string? Rows { get; set; }
+
     /// <summary>Why it failed: only ever what a caller may read.</summary>
     public string? Error { get; set; }
 }

@@ -82,13 +82,15 @@ public class NServiceBusCommandTests
     {
         await using var server = await Server.Start("ScryTests.CommandsResult", storage);
 
-        var receipts = await server.Send("WeighParcel", new {grams = 21});
+        var id = Guid.NewGuid();
+        var receipts = await server.Send("WeighParcel", new {grams = 21}, id);
 
         var final = receipts.Last();
         using (Assert.Multiple())
         {
             await Assert.That(final.Status).IsEqualTo(CommandStatus.Completed);
             await Assert.That(final.Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
+            await Assert.That(await server.ResultRows(id)).IsEquivalentTo(["Parcel[21] via result"]);
         }
     }
 
@@ -208,8 +210,12 @@ public class NServiceBusCommandTests
 
             // Only ever asked for its model: every command here is untargeted.
             builder.Services.AddDbContext<BusContext>(_ => _.UseSqlServer("Server=.;Database=NeverOpened"));
+            // Recorded, so that what a handler says its result was made from is seen to cross the bus.
+            var record = new ScryMemoryDisclosureStore();
+            builder.Services.AddSingleton(record);
             builder.Services.AddScry<BusContext>(options =>
             {
+                options.UseDisclosureAudit(record, _ => _.AllowAnonymous = true);
                 options.AllowUnmappedSources = true;
                 options.MaxPendingCommands = 10;
                 options.CommandSyncWindow = window ?? TimeSpan.FromSeconds(20);
@@ -248,6 +254,26 @@ public class NServiceBusCommandTests
             }
 
             return receipts;
+        }
+
+        /// <summary>The rows the completed receipt of a command was recorded as carrying, as <c>Source[key] via route</c>.</summary>
+        public async Task<List<string>> ResultRows(Guid id)
+        {
+            var record = host.Services.GetRequiredService<ScryMemoryDisclosureStore>();
+            var entries = await record.ReceivedBy(null, DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync();
+            foreach (var entry in entries)
+            {
+                var answer = (await record.Reconstruct(entry.Event.Id))!;
+                if (answer.Event.Kind == ScryDisclosureKind.CommandReceipt &&
+                    answer.Request is { } request &&
+                    Encoding.UTF8.GetString(request.Span).Contains(id.ToString("D"), StringComparison.OrdinalIgnoreCase) &&
+                    Encoding.UTF8.GetString(answer.Units.Single().Content.Bytes.Span).Contains("\"Completed\"", StringComparison.Ordinal))
+                {
+                    return [.. answer.Units.Single().Entities.Select(_ => $"{_.Source}{_.Key} via {_.Via}")];
+                }
+            }
+
+            return [];
         }
 
         // What the adapter's own dispatcher, as UseNServiceBusCommands registered it, says it carries.
@@ -393,7 +419,8 @@ public sealed class WeighParcelHandler :
             new Weighed
             {
                 Grams = message.Grams * 2
-            });
+            },
+            new ScryDisclosureRow("Parcel", [message.Grams]));
         return Task.CompletedTask;
     }
 }

@@ -55,7 +55,21 @@ public static class ScryWolverineExtensions
     /// What a handler of a command with a result answers with, sent back to the server in the
     /// response. Serialized as the server's own results are, so it arrives as the client expects it.
     /// </summary>
-    public static void SetScryResult(this IMessageContext context, object result)
+    public static void SetScryResult(this IMessageContext context, object result) =>
+        ScryCommandMiddleware.SetResult(Envelope(context), JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options));
+
+    /// <summary>
+    /// The same, with the rows the result was made from: where the server's disclosure audit is on,
+    /// the receipt that carries the result is recorded as carrying them.
+    /// </summary>
+    public static void SetScryResult(this IMessageContext context, object result, params IEnumerable<ScryDisclosureRow> rows) =>
+        ScryCommandMiddleware.SetResult(
+            Envelope(context),
+            JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options),
+            ScryDisclosureRow.Serialize(rows));
+    // end-snippet
+
+    static Envelope Envelope(IMessageContext context)
     {
         if (context.Envelope is not { } envelope ||
             !envelope.Headers.ContainsKey(ScryCommandHeaders.CommandId))
@@ -63,7 +77,6 @@ public static class ScryWolverineExtensions
             throw new InvalidOperationException("SetScryResult was called while handling a message no Scry server sent as a command.");
         }
 
-        ScryCommandMiddleware.SetResult(envelope, JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options));
+        return envelope;
     }
-    // end-snippet
 }

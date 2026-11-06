@@ -585,8 +585,18 @@ public static void SetScryResult(this IMessageHandlerContext context, object res
 
     holder.Json = JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options);
 }
+
+/// <summary>
+/// The same, with the rows the result was made from: where the server's disclosure audit is on,
+/// the receipt that carries the result is recorded as carrying them.
+/// </summary>
+public static void SetScryResult(this IMessageHandlerContext context, object result, params IEnumerable<ScryDisclosureRow> rows)
+{
+    context.SetScryResult(result);
+    context.Extensions.Get<CommandResult>().Rows = ScryDisclosureRow.Serialize(rows);
+}
 ```
-<sup><a href='/src/Scry.Server.NServiceBus/ScryNServiceBusExtensions.cs#L56-L113' title='Snippet source file'>snippet source</a> | <a href='#snippet-useNServiceBusCommands' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.NServiceBus/ScryNServiceBusExtensions.cs#L56-L123' title='Snippet source file'>snippet source</a> | <a href='#snippet-useNServiceBusCommands' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The worker's handler is an ordinary `IHandleMessages<T>`. The reply leaves through the message's own context, beside the `ScryChanged` publish — so it leaves only if the handler's work was kept, with the outbox after its transaction commits, and once for a retried message. A message that exhausts recoverability is answered as failed as it goes to the error queue.
@@ -657,8 +667,18 @@ public static void SetScryResult(this ConsumeContext context, object result)
 
     holder.Json = JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options);
 }
+
+/// <summary>
+/// The same, with the rows the result was made from: where the server's disclosure audit is on,
+/// the receipt that carries the result is recorded as carrying them.
+/// </summary>
+public static void SetScryResult(this ConsumeContext context, object result, params IEnumerable<ScryDisclosureRow> rows)
+{
+    context.SetScryResult(result);
+    context.GetPayload<CommandResult>().Rows = ScryDisclosureRow.Serialize(rows);
+}
 ```
-<sup><a href='/src/Scry.Server.MassTransit/ScryMassTransitExtensions.cs#L6-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-useMassTransitCommands' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.MassTransit/ScryMassTransitExtensions.cs#L6-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-useMassTransitCommands' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: useRebusCommands -->
@@ -718,8 +738,18 @@ public static void SetScryResult(this IMessageContext context, object result)
 
     holder.Json = JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options);
 }
+
+/// <summary>
+/// The same, with the rows the result was made from: where the server's disclosure audit is on,
+/// the receipt that carries the result is recorded as carrying them.
+/// </summary>
+public static void SetScryResult(this IMessageContext context, object result, params IEnumerable<ScryDisclosureRow> rows)
+{
+    context.SetScryResult(result);
+    context.IncomingStepContext.Load<CommandResult>().Rows = ScryDisclosureRow.Serialize(rows);
+}
 ```
-<sup><a href='/src/Scry.Server.Rebus/ScryRebusExtensions.cs#L6-L61' title='Snippet source file'>snippet source</a> | <a href='#snippet-useRebusCommands' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Rebus/ScryRebusExtensions.cs#L6-L71' title='Snippet source file'>snippet source</a> | <a href='#snippet-useRebusCommands' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: useWolverineCommands -->
@@ -776,18 +806,20 @@ public static IAdditionalActions AndScryFailure(this IAdditionalActions actions)
 /// What a handler of a command with a result answers with, sent back to the server in the
 /// response. Serialized as the server's own results are, so it arrives as the client expects it.
 /// </summary>
-public static void SetScryResult(this IMessageContext context, object result)
-{
-    if (context.Envelope is not { } envelope ||
-        !envelope.Headers.ContainsKey(ScryCommandHeaders.CommandId))
-    {
-        throw new InvalidOperationException("SetScryResult was called while handling a message no Scry server sent as a command.");
-    }
+public static void SetScryResult(this IMessageContext context, object result) =>
+    ScryCommandMiddleware.SetResult(Envelope(context), JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options));
 
-    ScryCommandMiddleware.SetResult(envelope, JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options));
-}
+/// <summary>
+/// The same, with the rows the result was made from: where the server's disclosure audit is on,
+/// the receipt that carries the result is recorded as carrying them.
+/// </summary>
+public static void SetScryResult(this IMessageContext context, object result, params IEnumerable<ScryDisclosureRow> rows) =>
+    ScryCommandMiddleware.SetResult(
+        Envelope(context),
+        JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options),
+        ScryDisclosureRow.Serialize(rows));
 ```
-<sup><a href='/src/Scry.Server.Wolverine/ScryWolverineExtensions.cs#L6-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-useWolverineCommands' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Wolverine/ScryWolverineExtensions.cs#L6-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-useWolverineCommands' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A worker on one of these reaches live queries through the target notification on completion, a change probe, or the poll.
@@ -802,7 +834,7 @@ A worker on one of these reaches live queries through the target notification on
 
 - The payload is bound into the server's own class, through the properties the server allows, with unknown members refused, enums by name only, and nested depth bounded. The name the client sends is looked up among the server's commands; the client's class is never trusted.
 - A target the caller may not act on is answered exactly as one that is not there.
-- Where the [disclosure audit](disclosure-audit.md) is on, each receipt handed to a caller is recorded with the row the command was sent against, and so is the list of what a caller may send.
+- Where the [disclosure audit](disclosure-audit.md) is on, each receipt handed to a caller is recorded with the row the command was sent against, and so is the list of what a caller may send. A handler whose result holds something of other rows names them, with `context.Discloses` in process or `SetScryResult(result, rows)` on a bus, and the receipt carrying the result is recorded as carrying them. See [What host code sends](disclosure-audit.md#what-host-code-sends).
 - A command's outcome is given again only to the caller that sent it. Anyone else asking by its id is answered as if it were unknown.
 - Capabilities are advisory. They decide what a screen enables, never what the server accepts.
 - Commands are off by default, and off maps no route.

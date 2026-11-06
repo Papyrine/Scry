@@ -38,4 +38,38 @@ public sealed class ScryCommandContext(
     /// a handler that saves for itself, or writes nothing through the context, turns it off.
     /// </summary>
     public bool SaveChanges { get; set; } = true;
+
+    List<ScryDisclosureRow> disclosed = [];
+
+    /// <summary>The rows the handler said its result was made from.</summary>
+    public IReadOnlyList<ScryDisclosureRow> Disclosed => disclosed;
+
+    /// <summary>
+    /// Says the command's result holds something of these rows, beyond the row it was sent against.
+    /// Where the disclosure audit is on, the receipt that carries the result is recorded as carrying
+    /// them, so who received a row finds the caller this result went to. Nothing where it is off.
+    /// </summary>
+    /// <remarks>
+    /// Host code is trusted to say this, and nothing checks it against what the result holds. A row
+    /// left unsaid is in the record's content and named by nothing.
+    /// </remarks>
+    public void Discloses(params IEnumerable<ScryDisclosureRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            ScryDisclosureRow.Validate(row);
+            disclosed.Add(row);
+        }
+    }
+
+    /// <summary>
+    /// The same, for one row of <typeparamref name="TSource"/>, named as the schema names it.
+    /// </summary>
+    /// <param name="key">The primary-key values in the key's own order.</param>
+    public void Discloses<TSource>(params object?[] key) =>
+        Discloses(
+            new ScryDisclosureRow(typeof(TSource).Name, key)
+            {
+                ClrType = typeof(TSource)
+            });
 }

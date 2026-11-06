@@ -146,9 +146,13 @@ sealed class CommandScript
 
     public ConcurrentQueue<(string Command, string? Caller, IReadOnlyList<object> Keys)> Seen { get; } = new();
 
+    /// <summary>Run inside every handler, with its context: what a test has a handler say.</summary>
+    public Action<ScryCommandContext>? During { get; set; }
+
     public async Task Run(string command, ScryCommandContext context, Cancel cancel)
     {
         Seen.Enqueue((command, context.Caller, context.TargetKeys));
+        During?.Invoke(context);
         if (Gate is { } gate)
         {
             await gate.Task.WaitAsync(cancel);

@@ -45,16 +45,23 @@ sealed class CommandRecord(CommandRequest request, CommandMeta meta, string? cal
     /// </summary>
     public string? DisclosureKey { get; set; }
 
+    /// <summary>
+    /// The rows its handler said the result was made from, as the disclosure audit names rows: empty
+    /// until it completes, and where the audit is off.
+    /// </summary>
+    public IReadOnlyList<ScryDisclosureEntity> ResultRows { get; private set; } = [];
+
     /// <summary>The real failure, for the audit trail, where the client was shown a fixed message.</summary>
     public Exception? Failure { get; private set; }
 
     // Called under the tracker's lock, once: from here the command reads as finished to everything
     // that asks, while whoever awaits its outcome is not told until Release.
-    public void Finish(CommandReceipt receipt, DateTimeOffset at, Exception? failure)
+    public void Finish(CommandReceipt receipt, DateTimeOffset at, Exception? failure, IReadOnlyList<ScryDisclosureEntity> rows)
     {
         Finished = at;
         Failure = failure;
         Current = receipt;
+        ResultRows = rows;
     }
 
     // Called once, outside the lock, after what finishing sets off — the change it reports, its audit

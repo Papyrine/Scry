@@ -110,7 +110,7 @@ sealed class CommandTracker(ScryOptions options, string stamp, Action<CommandRec
     /// flight: unknown, already finished, or pruned. A command finishes once; a second report of it —
     /// a bus redelivering a completion — changes nothing.
     /// </summary>
-    public CommandRecord? Finish(Guid id, CommandReceipt receipt, Exception? failure = null)
+    public CommandRecord? Finish(Guid id, CommandReceipt receipt, Exception? failure = null, IReadOnlyList<ScryDisclosureEntity>? rows = null)
     {
         CommandRecord? record;
         lock (gate)
@@ -121,7 +121,7 @@ sealed class CommandTracker(ScryOptions options, string stamp, Action<CommandRec
                 return null;
             }
 
-            record.Finish(receipt with {Stamp = stamp}, DateTimeOffset.UtcNow, failure);
+            record.Finish(receipt with {Stamp = stamp}, DateTimeOffset.UtcNow, failure, rows ?? []);
             Released(record);
         }
 

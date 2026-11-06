@@ -284,26 +284,47 @@ public sealed partial class ScryProcessor
             return null;
         }
 
+        // What the handler said its result was made from: only on the receipt that carries the result.
+        IReadOnlyList<ScryDisclosureEntity> made = [];
+        if (receipt.Status == CommandStatus.Completed)
+        {
+            made = record.ResultRows;
+        }
+
         var source = "";
+        string? targetKey = null;
         if (record.Meta.Target is { } target)
         {
             // A receipt says what became of a command against a row, and a row of a source the
-            // host left out of the record is not one anybody is asked after.
+            // host left out of the record is not one anybody is asked after — unless its result
+            // carries rows that are.
             if (disclosure.Settings.Excludes(target.ClrType))
             {
-                return null;
+                if (made.Count == 0)
+                {
+                    return null;
+                }
             }
-
-            source = DisclosurePlanner.SourceName(schema, target.ClrType);
+            else
+            {
+                source = DisclosurePlanner.SourceName(schema, target.ClrType);
+                targetKey = record.DisclosureKey;
+            }
         }
 
         var capture = disclosure.Begin(record.Request, source, caller, services);
         try
         {
             capture.Begin(ScryDisclosureKind.CommandReceipt);
-            if (record.DisclosureKey is { } key)
+            var slot = 0;
+            if (targetKey is not null)
             {
-                capture.AddEntity(slot: 0, source, key, via: "target");
+                capture.AddEntity(slot++, source, targetKey, via: "target");
+            }
+
+            foreach (var row in made)
+            {
+                capture.AddEntity(slot++, row.Source, row.Key, row.Via, row.Version);
             }
 
             capture.AddUnit(ScryDisclosureContentKind.Receipt, ScryJson.SerializeToUtf8(receipt));

@@ -56,9 +56,14 @@ public class MassTransitCommandTests
     [Test]
     public async Task ATypedResultTravelsBack()
     {
-        var receipts = await ScryServer.Send(host.Services, "WeighParcel", new {grams = 21});
+        var id = Guid.NewGuid();
+        var receipts = await ScryServer.Send(host.Services, "WeighParcel", new {grams = 21}, id);
 
-        await Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
+        using (Assert.Multiple())
+        {
+            await Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
+            await Assert.That(await ScryServer.ResultRows(host.Services, id)).IsEquivalentTo(["Parcel[21] via result"]);
+        }
     }
 
     [Test]
@@ -220,7 +225,8 @@ public sealed class WeighParcelConsumer :
             new Weighed
             {
                 Grams = context.Message.Grams * 2
-            });
+            },
+            Weighing.Row(context.Message.Grams));
         return Task.CompletedTask;
     }
 }

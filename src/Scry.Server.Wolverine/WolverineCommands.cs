@@ -40,7 +40,7 @@ public static class ScryCommandMiddleware
 {
     // Beside the envelope rather than in its headers: what a handler returns cascades as messages, so
     // a result has to be handed over some other way, and one table entry per envelope in flight is it.
-    static ConditionalWeakTable<Envelope, string> results = new();
+    static ConditionalWeakTable<Envelope, Answer> results = new();
 
     /// <summary>Responds with how the command ended, once its handler has returned.</summary>
     public static Task AfterAsync(Envelope envelope, IMessageContext context)
@@ -50,7 +50,7 @@ public static class ScryCommandMiddleware
             return Task.CompletedTask;
         }
 
-        results.TryGetValue(envelope, out var json);
+        results.TryGetValue(envelope, out var answer);
         results.Remove(envelope);
         return Respond(
             context,
@@ -59,12 +59,16 @@ public static class ScryCommandMiddleware
             {
                 Id = id,
                 Succeeded = true,
-                Result = json
+                Result = answer?.Json,
+                Rows = answer?.Rows
             });
     }
 
-    internal static void SetResult(Envelope envelope, string json) =>
-        results.AddOrUpdate(envelope, json);
+    internal static void SetResult(Envelope envelope, string json, string? rows = null) =>
+        results.AddOrUpdate(envelope, new(json, rows));
+
+    // What a handler answered with, and the rows it said the answer was made from.
+    sealed record Answer(string Json, string? Rows);
 
     internal static async ValueTask Failed(IWolverineRuntime runtime, IEnvelopeLifecycle lifecycle, Exception exception)
     {

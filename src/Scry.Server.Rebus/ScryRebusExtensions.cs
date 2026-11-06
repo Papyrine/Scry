@@ -58,5 +58,15 @@ public static class ScryRebusExtensions
 
         holder.Json = JsonSerializer.Serialize(result, result.GetType(), ScryJson.Options);
     }
+
+    /// <summary>
+    /// The same, with the rows the result was made from: where the server's disclosure audit is on,
+    /// the receipt that carries the result is recorded as carrying them.
+    /// </summary>
+    public static void SetScryResult(this IMessageContext context, object result, params IEnumerable<ScryDisclosureRow> rows)
+    {
+        context.SetScryResult(result);
+        context.IncomingStepContext.Load<CommandResult>().Rows = ScryDisclosureRow.Serialize(rows);
+    }
     // end-snippet
 }

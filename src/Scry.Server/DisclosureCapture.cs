@@ -450,8 +450,12 @@ sealed class DisclosureCapture(
     }
 
     /// <summary>Says which row of which source the unit about to be recorded was read from.</summary>
-    public void AddEntity(int slot, string entitySource, string key, string via) =>
-        entities.Add(new(ordinal, slot, entitySource, key, via));
+    public void AddEntity(int slot, string entitySource, string key, string via, string? version = null) =>
+        entities.Add(
+            new(ordinal, slot, entitySource, key, via)
+            {
+                Version = version
+            });
 
     /// <summary>
     /// A binary value's place in a canonical row: its address and its length, where the wire has the

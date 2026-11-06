@@ -209,9 +209,13 @@ sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions optio
     /// a request. Keyed as <see cref="Address(ReadOnlySpan{byte})"/> is, so both make the same
     /// address of the same content.
     /// </summary>
-    public IncrementalHash Incremental()
+    public IncrementalHash Incremental() =>
+        Incremental(settings.AddressKey);
+
+    /// <summary>The same, under a key that is not this runtime's: a disclosure recorded by a host with no processor.</summary>
+    public static IncrementalHash Incremental(byte[]? key)
     {
-        if (settings.AddressKey is { } key)
+        if (key is not null)
         {
             return IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, key);
         }

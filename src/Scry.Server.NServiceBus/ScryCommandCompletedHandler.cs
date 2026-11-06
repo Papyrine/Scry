@@ -31,7 +31,7 @@ sealed class ScryCommandCompletedHandler(IServiceProvider services) :
             result = document.RootElement.Clone();
         }
 
-        processor.CompleteCommand(message.Id, result);
+        processor.CompleteCommand(message.Id, result, ScryDisclosureRow.Parse(message.Rows));
         return Task.CompletedTask;
     }
 }

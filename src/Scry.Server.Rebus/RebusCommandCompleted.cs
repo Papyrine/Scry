@@ -18,6 +18,12 @@ public sealed class RebusCommandCompleted
     /// <summary>What the handler answered with, as JSON, for a command that has a result.</summary>
     public string? Result { get; set; }
 
+    /// <summary>
+    /// The rows the handler said the result was made from, as <see cref="ScryDisclosureRow.Serialize"/>
+    /// wrote them. Null where it said none, and from a worker older than this property.
+    /// </summary>
+    public string? Rows { get; set; }
+
     /// <summary>Why it failed: only ever what a caller may read.</summary>
     public string? Error { get; set; }
 }
@@ -47,7 +53,7 @@ public sealed class RebusCommandCompletedHandler(ScryProcessor processor) :
             result = document.RootElement.Clone();
         }
 
-        processor.CompleteCommand(message.Id, result);
+        processor.CompleteCommand(message.Id, result, ScryDisclosureRow.Parse(message.Rows));
         return Task.CompletedTask;
     }
 }

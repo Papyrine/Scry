@@ -219,7 +219,7 @@ Every entry is reached through `ScryProcessor`, so HTTP, the SignalR hub, MCP an
 | Batch | One event per entry, sharing a correlation id. A refused or failed entry records nothing |
 | Live query | One event per answer that was sent. A run whose answer had not changed sends nothing and records nothing. A first answer the caller named in `Last-Event-ID` is recorded as `Confirmed` |
 | Attachment | Source, row key, member, content type, length, digest. The bytes only where `StoreBinaryContent` is set. A `204` (a null value) is recorded; a `404` discloses nothing by design and is not |
-| Command receipt | One event per receipt yielded, with the receipt (status, result, error) and the row the command was sent against |
+| Command receipt | One event per receipt yielded, with the receipt (status, result, error), the row the command was sent against, and, on the receipt carrying a result, the rows its handler said the result was made from |
 | Capabilities | The list of commands the caller may send |
 | `Can{Command}` in rows | Part of the row's unit. The member is recorded with the use `Capability` |
 | `DeniedRowMode.Error` | A `Denial` event with the request and no content: the caller was told that rows it may not see matched |
@@ -235,6 +235,55 @@ Out of scope, each with its reason:
 - **Change backplanes** carry entity names between servers, never rows, and never to a caller.
 - **Explorer assets** are static files. The queries an explorer sends go through `MapScry` and are recorded there.
 - **Enum aliases** are schema data sent to a drifted client, covered by the stamp on the event.
+- **What host code reads.** A command handler, a job, a policy reading rows on a `DbContext` of its own discloses nothing by reading. What it then sends somewhere is the host's to record: see [What host code sends](#what-host-code-sends).
+
+
+## What host code sends
+
+Everything above is something Scry hands to a transport, so Scry can hold it back until the record is accepted. A command handler on a bus, a scheduled export or a webhook sends things Scry never sees. Some of them are still something a row's owner would count as having been handed out: a payslip emailed, a file dropped for another system.
+
+The two kinds of call are told apart by whether Scry sent the content:
+
+- **A command's result** goes back to the caller through `ScryProcessor` as a receipt, wherever its handler ran: in process, or on MassTransit, Rebus, NServiceBus or Wolverine. It is recorded with the row the command was sent against. Rows the handler read and wrote into the result are in the receipt's content, and are named only where the handler says so (see below).
+- **Everything a handler sends elsewhere** is recorded by the host through `ScryExternalDisclosures`, into the same record. It is an event of kind `External`. Its caller is whoever it went to, its agent is what sent it, and each unit names the rows it was made from. So the question of who received a row answers with both sorts of event, and an erasure of the row removes what was sent of it either way.
+
+<!-- snippet: externalDisclosure -->
+<a id='snippet-externalDisclosure'></a>
+```cs
+var body = $"Dear {employee.Name}, your payslip for March is attached.";
+var record = await disclosures.RecordAsync(
+    new()
+    {
+        Recipient = "aaron@example.test",
+        Agent = "PayslipHandler",
+        ContentType = "text/plain",
+        Units =
+        [
+            new()
+            {
+                Content = Encoding.UTF8.GetBytes(body),
+                Rows = [new("Employee", [employee.Id])]
+            }
+        ]
+    });
+try
+{
+    outbox.Add(body);
+}
+catch
+{
+    await disclosures.WithdrawAsync(record);
+    throw;
+}
+```
+<sup><a href='/src/Scry.Tests/DisclosureExternalTests.cs#L78-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-externalDisclosure' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The ordering is the host's to keep, since Scry cannot hold back a send it does not make: await the record, then send, and send nothing where it throws. Where the send fails afterwards, `WithdrawAsync` writes a second close: `Retracted`, or `Truncated` with the number of units that went. Left unsaid, the record says all of it went, which over-reports and never under-reports.
+
+**The rows a result was made from.** A handler names them as it answers. In process, it calls `context.Discloses<T>(key)`, or `context.Discloses(new ScryDisclosureRow("Employee", [id]))`. On a bus, it passes them to `SetScryResult(result, rows)`. They travel back on the completion message as plain text (`ScryDisclosureRow.Serialize`, and a `Rows` property on each adapter's completion type), so the endpoint's serializer never sees a Scry type. A completion from a worker older than the property carries none. Whoever sends the completion through a dispatcher of their own passes the rows to `ScryProcessor.CompleteCommand(id, result, rows)`. The server records them on the receipt carrying the result (`Via = "result"`, after the target), named by the top of each source's hierarchy and without those of a source left out of the record. A command whose target is left out, and whose result names a row that is recorded, is recorded without its target. The handler is trusted to name the rows: nothing compares them with what the result holds. The pending receipt, and a failed one, name none.
+
+`AddScry` registers `ScryExternalDisclosures` where the audit is on. A worker with no model, such as one handling commands for the serving nodes, gets it from `AddScryDisclosureRecord` (or `AddSqlServerDisclosureRecord`), passing the same settings so its addresses are made under the same key. Nothing checks a source's name or a key against a model, since the worker may have none. A row is found as the same row only where its source has the wire name a query of it is recorded under, at the top of its hierarchy, and its key values have the key members' own types.
 
 
 ## The record
@@ -251,9 +300,9 @@ row written ─► capture (per call: canonicalise, hash, collect the rows it wa
 
 | Record | Fields |
 | --- | --- |
-| Event (begin) | `Id` (a version 7 GUID), `At`, `Caller`, `Kind` (List, Page, Single, Scalar, Stream, Attachment, CommandReceipt, Capabilities, Schema, SqlPreview, Denial), `Subscribed`, `Delivery` (Sent, Confirmed), `Source`, `Request` (an address), `Shape` (an address), `Sensitive`, `Stamp`, `Correlation`, `Node`, `ContentType` |
+| Event (begin) | `Id` (a version 7 GUID), `At`, `Caller`, `Kind` (List, Page, Single, Scalar, Stream, Attachment, CommandReceipt, Capabilities, Schema, SqlPreview, Denial, External), `Subscribed`, `Delivery` (Sent, Confirmed), `Source`, `Request` (an address), `Shape` (an address), `Sensitive`, `Stamp`, `Correlation`, `Node`, `ContentType` |
 | Unit | `EventId`, `Ordinal`, `Content` (an address) |
-| Entity ref | `EventId`, `Ordinal`, `Slot`, `Source`, `Key` (canonical), `Via` (a navigation path, a join's side, or the row a command was sent against) |
+| Entity ref | `EventId`, `Ordinal`, `Slot`, `Source`, `Key` (canonical), `Via` (a navigation path, a join's side, the row a command was sent against, or a row its result was made from) |
 | Shape | An addressed descriptor: the members the query read, each with what it did with it. Which member of the answer each one became is in the request, which is stored beside it |
 | Field | `Shape`, `Source`, `Member` (a path from the row, as `Address.City`), `Use` (Returned, Aggregated, Read, Traversed, Capability), `Sensitive` |
 | Content | `Address`, `Kind` (row, scalar, request, receipt, capabilities, schema, sql, bytes, parameters), `Length`, `Bytes` (absent for a unit recorded by digest alone) |

@@ -87,13 +87,15 @@ sealed class CompletionStep(CompletionSender sender) :
         if (!context.Load<bool>(DefaultRetryStep.DispatchAsFailedMessageKey) &&
             CompletionSender.TryRead(message.Headers, out var id, out var replyTo))
         {
+            var result = context.Load<CommandResult>();
             await sender.Send(
                 replyTo,
                 new()
                 {
                     Id = id,
                     Succeeded = true,
-                    Result = context.Load<CommandResult>()?.Json
+                    Result = result?.Json,
+                    Rows = result?.Rows
                 },
                 context.Load<ITransactionContext>());
         }
@@ -138,4 +140,7 @@ sealed class CompletionErrorHandler(IErrorHandler inner, CompletionSender sender
 sealed class CommandResult
 {
     public string? Json { get; set; }
+
+    /// <summary>The rows the result was made from, as <see cref="ScryDisclosureRow.Serialize"/> wrote them.</summary>
+    public string? Rows { get; set; }
 }
