@@ -214,7 +214,7 @@ public class DisclosureRowTests
             .Select(_ => new
             {
                 _.Region,
-                Lines = _.Lines.Count(),
+                Lines = _.Lines.Count,
                 Units = _.Lines.Sum(line => line.Units),
                 Heavy = _.Lines.Any(line => line.Quantity > 4)
             })

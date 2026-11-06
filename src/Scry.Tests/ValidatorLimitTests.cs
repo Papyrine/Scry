@@ -159,10 +159,10 @@ public class ValidatorLimitTests
     {
         if (leaves == 1)
         {
-            return new BinaryNode(BinaryOp.Equal, new MemberNode(["Id"]), new ConstNode("1", ClrTypeTag.Int32));
+            return new(BinaryOp.Equal, new MemberNode(["Id"]), new ConstNode("1", ClrTypeTag.Int32));
         }
 
-        return new BinaryNode(BinaryOp.OrElse, Balanced(leaves / 2), Balanced(leaves / 2));
+        return new(BinaryOp.OrElse, Balanced(leaves / 2), Balanced(leaves / 2));
     }
 
     [Test]

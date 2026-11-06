@@ -44,8 +44,9 @@ public class BatchSpillHeaderTests
         var processor = new ScryProcessor(Schema.Build(options), options);
 
         // Never opened: every query here reads the poco source.
-        var contextOptions = SqlServerDbContextOptionsExtensions
-            .UseSqlServer(new DbContextOptionsBuilder(), "Server=(localdb)\\ScryUnused;Database=ScryUnused")
+        var optionsBuilder = new DbContextOptionsBuilder();
+        var contextOptions = optionsBuilder
+            .UseSqlServer("Server=(localdb)\\ScryUnused;Database=ScryUnused")
             .Options;
         var data = (DbContext) Activator.CreateInstance(contextType, contextOptions)!;
         return (processor, data);

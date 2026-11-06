@@ -318,7 +318,7 @@ sealed partial class QueryTranslator
 
             if (text is { } reading)
             {
-                return new CallNode(reading, TranslateExpr(source, root), []);
+                return new(reading, TranslateExpr(source, root), []);
             }
 
             return null;
@@ -334,11 +334,11 @@ sealed partial class QueryTranslator
         return call.Method.Name switch
         {
             "First" when call.Arguments.Count == 1 =>
-                new CallNode(KnownFunction.BytesElementAt, TranslateExpr(source, root), [ConstantOf(0)]),
+                new(KnownFunction.BytesElementAt, TranslateExpr(source, root), [ConstantOf(0)]),
             "ElementAt" when call.Arguments is [_, var at] =>
-                new CallNode(KnownFunction.BytesElementAt, TranslateExpr(source, root), [TranslateExpr(at, root)]),
+                new(KnownFunction.BytesElementAt, TranslateExpr(source, root), [TranslateExpr(at, root)]),
             "Contains" when call.Arguments is [_, var value] =>
-                new CallNode(KnownFunction.BytesContains, TranslateExpr(source, root), [TranslateExpr(value, root)]),
+                new(KnownFunction.BytesContains, TranslateExpr(source, root), [TranslateExpr(value, root)]),
             _ => null
         };
     }

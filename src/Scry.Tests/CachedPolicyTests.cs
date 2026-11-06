@@ -761,8 +761,9 @@ public class CachedPolicyRegistrationTests
 
         // Spelled out rather than imported: EF's query extensions share names with Scry's. No server is
         // reached — the model is built from the provider alone.
+        var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder();
         var contextOptions = Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions
-            .UseSqlServer(new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder(), "Server=(none)")
+            .UseSqlServer(optionsBuilder, "Server=(none)")
             .Options;
         await using var context = (Microsoft.EntityFrameworkCore.DbContext) Activator.CreateInstance(contextType, contextOptions)!;
 

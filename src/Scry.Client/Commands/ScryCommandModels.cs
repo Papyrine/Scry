@@ -22,7 +22,7 @@ static class ScryCommandModels
             return [];
         }
 
-        var properties = keyProperties.GetOrAdd(command.GetType(), _ => [.. model.Keys.Select(key => _.GetProperty(key))]);
+        var properties = keyProperties.GetOrAdd(command.GetType(), _ => [.. model.Keys.Select(_.GetProperty)]);
         return [.. properties.Select(_ => ValueTag.Of(_?.GetValue(command)).Value)];
     }
 

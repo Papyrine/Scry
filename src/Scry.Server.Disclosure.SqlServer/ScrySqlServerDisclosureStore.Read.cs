@@ -27,7 +27,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             return by;
         }
 
-        by = new SqlGuid(other.Id).CompareTo(new SqlGuid(one.Id));
+        by = new SqlGuid(other.Id).CompareTo(new(one.Id));
         if (by != 0)
         {
             return by;
@@ -39,7 +39,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             return by;
         }
 
-        return new SqlGuid(other.Event ?? other.Id).CompareTo(new SqlGuid(one.Event ?? one.Id));
+        return new SqlGuid(other.Event ?? other.Id).CompareTo(new(one.Event ?? one.Id));
     }
 
     static Place Of(ScryRowDisclosure row) =>

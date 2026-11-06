@@ -46,7 +46,7 @@ public static class ScryHeaderExtensions
     {
         if (source.Provider is QueryProvider provider)
         {
-            return new CaptureQueryable<T>(provider.With(add(provider.Call)), source.Expression);
+            return new(provider.With(add(provider.Call)), source.Expression);
         }
 
         throw new("This IQueryable is not a Scry source.");

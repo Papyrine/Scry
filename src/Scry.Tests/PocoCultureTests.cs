@@ -144,7 +144,7 @@ public class PocoCultureTests
     {
         var previous = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = new(culture);
-        return new Restore(previous);
+        return new(previous);
     }
 
     sealed class Restore(CultureInfo previous) :

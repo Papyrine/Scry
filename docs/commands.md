@@ -108,7 +108,7 @@ public async Task<ScryCommandOutcome<TResult>> SendCommandAsync<TCommand, TResul
     where TCommand : class =>
     ScryCommandOutcome<TResult>.From(await SendCommand(command, cancel));
 ```
-<sup><a href='/src/Scry.Client/ScryClient.Commands.cs#L199-L229' title='Snippet source file'>snippet source</a> | <a href='#snippet-sendCommandApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.Commands.cs#L198-L228' title='Snippet source file'>snippet source</a> | <a href='#snippet-sendCommandApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Through the generated facade, a command is a method call:
