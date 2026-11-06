@@ -24,8 +24,8 @@ namespace Benchmarks;
 /// <para>
 /// <c>Off</c> is the request <c>ResponseBenchmarks.Endpoint</c> sends, from a host that writes no
 /// logs. That a host with the audit off pays nothing for it is not something this arm can say by
-/// itself, since it runs the code as it now is: it is what that arm reads on the commit before the
-/// audit existed against what it reads after, and <c>docs/performance.md</c> records both.
+/// itself, since it runs the code as it now is: it is what that arm reads on the commit before a
+/// change to the response path against what it reads after.
 /// </para>
 /// </remarks>
 [MemoryDiagnoser]

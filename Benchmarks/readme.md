@@ -55,6 +55,6 @@ These arms carry no transport and no execution, so their absolute figures are th
 
 The setup refuses to run unless all three answered with the same bytes. The hosts write no logs. A host's console lines for a request come to a few kilobytes, where recording adds under 8 KB to a one-row answer, so left on they would be a good part of the smallest difference here.
 
-`Off` is the same request `ResponseBenchmarks.Endpoint` sends to the same endpoint, so the two agree to within what those log lines cost, which is a few kilobytes a request. Neither can say by itself that a host with the audit off pays nothing for it, since both run the code as it now is. That was measured once, by running `ResponseBenchmarks.Endpoint` on the commit before the audit existed and on the one after, and `docs/performance.md` records the two sets of figures. It is the comparison to repeat after a change that touches the response path.
+`Off` is the same request `ResponseBenchmarks.Endpoint` sends to the same endpoint, so the two agree to within what those log lines cost, which is a few kilobytes a request. Neither can say by itself that a host with the audit off pays nothing for it, since both run the code as it now is. That is a comparison of `ResponseBenchmarks.Endpoint` on the commit before a change and the one after, to repeat after a change that touches the response path.
 
 The journaled arm's time is the disk's. It is the one figure here that says more about the machine than about the code, and the least steady: its fixed part halved between two runs.

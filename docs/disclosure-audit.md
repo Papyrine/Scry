@@ -1102,7 +1102,7 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 
 ### A span of time over many segments
 
-Who received a row is read a page at a time from [its receipts in time order](performance.md#a-rows-receipts-in-time-order), and is a page's worth of work however many answers carried the row: a few milliseconds for a page of a row in ten thousand of a million answers, a quarter of a second for all of it. Asked for a span of time over twenty-four segments of a small record it is a few milliseconds where it was one, the page of receipts being read through a view of every segment. Whether a host keeps that many segments, and asks that question often enough for it to matter, is open.
+Who received a row is read a page at a time from [its receipts in time order](performance.md#a-rows-receipts-in-time-order), and is a page's worth of work however many answers carried the row: a few milliseconds for a page of a row in ten thousand of a million answers, a quarter of a second for all of it. Asked for a span of time over twenty-four segments of a small record it is a few milliseconds, against about one over a single segment, the page of receipts being read through a view of every segment. Whether a host keeps that many segments, and asks that question often enough for it to matter, is open.
 
 
 ## Later
