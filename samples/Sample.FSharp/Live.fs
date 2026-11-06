@@ -3,6 +3,7 @@ namespace Sample.FSharp
 open System
 open System.Threading
 open Scry
+open Scry.Linq
 open Scry.Generated
 
 module Live =

@@ -8,6 +8,7 @@ open TUnit.Assertions
 open TUnit.Assertions.Extensions
 open TUnit.Core
 open Scry
+open Scry.Linq
 open Scry.Generated
 open Sample.FSharp
 

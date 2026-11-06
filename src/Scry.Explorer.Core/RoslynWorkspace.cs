@@ -24,6 +24,7 @@ public sealed class RoslynWorkspace :
         using System.Collections.Generic;
         using Scry.Generated;
         using Scry;
+        using Scry.Linq;
         namespace Scry;
         static class Editor
         {

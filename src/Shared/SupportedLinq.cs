@@ -15,7 +15,7 @@ static class SupportedLinq
     public const string ModelAttribute = "Scry.ScryModelAttribute";
     public const string Attachment = "Scry.ScryAttachment";
     public const string Client = "Scry.ScryClient";
-    public const string Extensions = "Scry.ScryQueryableExtensions";
+    public const string Extensions = "Scry.Linq.ScryQueryableExtensions";
     public const string Batch = "Scry.ScryBatchExtensions";
 
     /// <summary>

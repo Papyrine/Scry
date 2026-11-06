@@ -688,6 +688,7 @@ public class AnalyzerTests
         using System.Threading.Tasks;
         using Scry;
         using Scry.Generated;
+        using Scry.Linq;
 
         namespace Scry
         {
@@ -710,6 +711,14 @@ public class AnalyzerTests
                 public IQueryable<T> Source<T>(string name, string[]? members = null) => null!;
             }
 
+            public static class ScryBatchExtensions
+            {
+                public static IQueryable<T> Enrol<T>(this IQueryable<T> source) => source;
+            }
+        }
+
+        namespace Scry.Linq
+        {
             public static class ScryQueryableExtensions
             {
                 public static Task<List<T>> ToListAsync<T>(this IQueryable<T> source) => null!;
@@ -724,11 +733,6 @@ public class AnalyzerTests
                 public static Task<Dictionary<TKey, T>> ToDictionaryAsync<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector) => null!;
                 public static Task<T> MaxByAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector) => null!;
                 public static Task<T> MinByAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector) => null!;
-            }
-
-            public static class ScryBatchExtensions
-            {
-                public static IQueryable<T> Enrol<T>(this IQueryable<T> source) => source;
             }
         }
 

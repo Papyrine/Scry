@@ -1,6 +1,12 @@
-﻿namespace Scry;
+﻿namespace Scry.Linq;
 
 /// <summary>Async terminal operators that execute a captured Scry query against the server.</summary>
+/// <remarks>
+/// In a namespace of their own, imported only where a query is written: the names are the ones EF
+/// Core's own async terminals have, and a project holding both — a server that hosts its Blazor
+/// client — would otherwise find every <c>ToListAsync</c> ambiguous. The generated <c>ScryQuery</c>
+/// carries a global using for it, so a project that generates a client needs no using of its own.
+/// </remarks>
 public static partial class ScryQueryableExtensions
 {
     /// <summary>Executes the query and returns all rows.</summary>

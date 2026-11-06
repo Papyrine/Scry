@@ -87,7 +87,7 @@ Sample.Model (EF Core + [Queryable])
 
 `Scry.SourceGenerator` is not published on its own — it is packed inside `Scry.Client` as an analyzer, so referencing `Scry.Client` is all a client project needs.
 
-Every package puts its public types in the single `Scry` namespace, so one `using Scry;` covers all of them. The generated query models are the exception — they land in `Scry.Generated`, which keeps names derived from the server model out of Scry's own API surface.
+Every package puts its public types in the single `Scry` namespace, so one `using Scry;` covers all of them. Two exceptions: the generated query models land in `Scry.Generated`, which keeps names derived from the server model out of Scry's own API surface, and the client's async terminals — `ToListAsync`, `FirstOrDefaultAsync` and the rest, whose names EF Core's own terminals share — in `Scry.Linq`. The generated `ScryQuery` imports `Scry.Linq` globally, so a project that generates a client writes nothing; a project that references `Scry.Client` and EF Core together, such as a server hosting its Blazor client, sees neither set of names ambiguous because it never imports `Scry.Linq`.
 
 ## Requirements
 

@@ -396,6 +396,7 @@ public sealed class SnippetExecutor
                  using System.Collections.Generic;
                  using Scry;
                  using Scry.Generated;
+                 using Scry.Linq;
                  namespace Scry;
                  public static class Runner
                  {

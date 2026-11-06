@@ -13,6 +13,7 @@ global using Microsoft.AspNetCore.TestHost;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Playwright;
 global using Scry;
+global using Scry.Linq;
 global using Scry.Generated;
 global using VerifyTests.AngleSharp;
 global using static VerifyTUnit.Verifier;

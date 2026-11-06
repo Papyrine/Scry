@@ -313,7 +313,7 @@ let activeNames (query: ScryQuery) : IObservable<string list> =
     (Queries.activeEmployees query).Live().AsObservable()
     |> Observable.map (fun rows -> rows |> Seq.map _.Name |> List.ofSeq)
 ```
-<sup><a href='/samples/Sample.FSharp/Live.fs#L10-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveObservable' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Live.fs#L11-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveObservable' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

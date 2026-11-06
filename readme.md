@@ -120,7 +120,7 @@ Queries never write. Writes are [commands](docs/commands.md): a class in the mod
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
 
-Every package puts its public types in the single `Scry` namespace, so one `using Scry;` covers all of them. The generated query models are the exception — they land in `Scry.Generated`.
+Every package puts its public types in the single `Scry` namespace, so one `using Scry;` covers all of them. Two exceptions: the generated query models land in `Scry.Generated`, and the client's async terminals (`ToListAsync`, `FirstOrDefaultAsync`, …) in `Scry.Linq`, which the generated client imports on its own and which a project holding EF Core beside `Scry.Client` is never handed uninvited.
 
 
 ## At a glance

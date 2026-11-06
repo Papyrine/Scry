@@ -13,5 +13,6 @@ global using Microsoft.Extensions.Options;
 global using ModelContextProtocol.Client;
 global using ModelContextProtocol.Protocol;
 global using Scry;
+global using Scry.Linq;
 global using Scry.Generated;
 global using TUnit.Assertions.Enums;
