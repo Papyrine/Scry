@@ -21,5 +21,5 @@ public sealed class ScryChanged :
     IEvent
 {
     /// <summary>The change, as <see cref="ScryChange.Serialize"/> wrote it.</summary>
-    public string Payload { get; set; } = "";
+    public string Payload { get; init; } = "";
 }

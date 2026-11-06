@@ -12,20 +12,20 @@ namespace Scry;
 public sealed class MassTransitCommandCompleted
 {
     /// <summary>The command's id, as the client gave it.</summary>
-    public Guid Id { get; set; }
+    public Guid Id { get; init; }
 
     /// <summary>Whether its consumers finished without throwing.</summary>
-    public bool Succeeded { get; set; }
+    public bool Succeeded { get; init; }
 
     /// <summary>What the consumer answered with, as JSON, for a command that has a result.</summary>
-    public string? Result { get; set; }
+    public string? Result { get; init; }
 
     /// <summary>
     /// The rows the consumer said the result was made from, as <see cref="ScryDisclosureRow.Serialize"/>
     /// wrote them. Null where it said none, and from a worker older than this property.
     /// </summary>
-    public string? Rows { get; set; }
+    public string? Rows { get; init; }
 
     /// <summary>Why it failed: only ever what a caller may read.</summary>
-    public string? Error { get; set; }
+    public string? Error { get; init; }
 }
