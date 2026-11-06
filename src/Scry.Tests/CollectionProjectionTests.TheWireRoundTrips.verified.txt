@@ -1,0 +1,91 @@
+﻿{
+  json: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":["Region",{"name":"Skus","value":{"$type":"collection","path":"Lines","predicate":{"$type":"binary","op":"GreaterThan","left":{"$type":"member","path":"Quantity"},"right":{"$type":"const","value":"1","tag":"Int32"}},"selector":{"$type":"member","path":"Sku"}}},{"name":"Tags","value":{"$type":"collection","path":"Tags","selector":{"$type":"element"}}},{"name":"Lines","value":{"$type":"collection","path":"Lines","projection":{"members":["Sku","Price"]}}}]}}]},
+  back: {
+    Version: 1,
+    Root: Order,
+    Pipeline: [
+      {
+        Projection: {
+          Members: [
+            {
+              Name: Region,
+              Value: {
+                Node: {
+                  Path: [
+                    Region
+                  ]
+                }
+              }
+            },
+            {
+              Name: Skus,
+              Value: {
+                Path: [
+                  Lines
+                ],
+                Predicate: {
+                  Op: GreaterThan,
+                  Left: {
+                    Path: [
+                      Quantity
+                    ]
+                  },
+                  Right: {
+                    Value: 1,
+                    Tag: Int32
+                  }
+                },
+                Selector: {
+                  Path: [
+                    Sku
+                  ]
+                }
+              }
+            },
+            {
+              Name: Tags,
+              Value: {
+                Path: [
+                  Tags
+                ],
+                Selector: {}
+              }
+            },
+            {
+              Name: Lines,
+              Value: {
+                Path: [
+                  Lines
+                ],
+                Projection: {
+                  Members: [
+                    {
+                      Name: Sku,
+                      Value: {
+                        Node: {
+                          Path: [
+                            Sku
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      Name: Price,
+                      Value: {
+                        Node: {
+                          Path: [
+                            Price
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

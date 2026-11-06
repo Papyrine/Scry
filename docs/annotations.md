@@ -747,7 +747,7 @@ flowchart TD
     Q2 -- No --> Q3{Member type?}
     Q3 -- Scalar --> S[Exposed as scalar<br/>predicates, ordering, keys,<br/>aggregates, projection leaves]
     Q3 -- Reference nav to an opted-in type,<br/>or a QueryableComplex type --> N[Exposed as navigation<br/>traversable in a member path]
-    Q3 -- Collection with QueryableCollection,<br/>of an opted-in type or a scalar --> C[Exposed as collection<br/>aggregable, never projectable<br/>flattenable unless it holds values]
+    Q3 -- Collection with QueryableCollection,<br/>of an opted-in type or a scalar --> C[Exposed as collection<br/>aggregable, projectable as a list of values<br/>flattenable unless it holds values]
     Q3 -- Anything else --> X
 ```
 
@@ -782,15 +782,15 @@ A property whose type is a collection of another opted-in type is a **collection
 <!-- snippet: queryableCollection -->
 <a id='snippet-queryableCollection'></a>
 ```cs
-// Opted in for aggregation: a client can ask how many lines an order has, or what they total, but
-// can never enumerate them into a result.
+// Opted in: a client can ask how many lines an order has, or what they total, or return the values
+// it names of each line as a list in the row — and nothing deeper than that one list.
 [QueryableCollection]
 public List<OrderLine> Lines { get; set; } = [];
 ```
 <sup><a href='/src/Scry.Tests/TestModel.cs#L427-L432' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-An exposed collection is **aggregable, not projectable**. A client can ask a question about it — `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max`, which the database answers as a correlated subquery — but can never enumerate its rows, project it, traverse through it in a member path, or order by it. Every answer is a scalar, so a response can never carry an unbounded nested collection. See [subqueries](querying.md#collection-subqueries).
+An exposed collection is **aggregable, and projectable one level deep**. A client can ask a question about it — `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max`, which the database answers as a correlated subquery and which can appear anywhere a value can — or return its elements as a list inside the row, each element one value or one flat object of values. It can never be traversed in a member path, ordered by, or nested any deeper than that one list. See [subqueries](querying.md#collection-subqueries) and [projected collections](querying.md#projected-collections).
 
 The element type must itself be opted in. If it carries a [row policy](policies.md) the server refuses to start, naming the member — a policy filters a source and a subquery has none, so aggregating the collection off its owner would count exactly the rows the policy hides. Setting [`CollectionNavigation`](policies.md#collections) on that policy is what unlocks it: `Hide` reads the collection through the policy, so the aggregate counts what a direct query of the element source would have reached.
 

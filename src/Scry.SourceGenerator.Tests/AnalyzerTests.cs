@@ -485,6 +485,27 @@ public class AnalyzerTests
         await Assert.That(Analyze(queries)).IsEmpty();
     }
 
+    // A projected collection is a chain over a sequence inside the projection lambda, and its ToList
+    // is not the synchronous terminal the analyzer reports on a query: it materializes the elements the
+    // translator carries as a collection member.
+    [Test]
+    public async Task AProjectedCollectionIsLeftToTheTranslator()
+    {
+        const string queries =
+            """
+            await Query.Order
+                .Select(_ => new
+                {
+                    _.Id,
+                    Prices = _.Lines.Select(l => l.Price).ToList(),
+                    Lines = _.Lines.Where(l => l.Price > 3).Select(l => new {l.Id, l.Price}).ToArray()
+                })
+                .ToListAsync();
+            """;
+
+        await Assert.That(Analyze(queries)).IsEmpty();
+    }
+
     // Only a lambda a query operator was handed is one. A chain written inside a lambda given to plain
     // LINQ over a plain collection composes a query like any other, and was once skipped as though the
     // Select around it were reading a row.

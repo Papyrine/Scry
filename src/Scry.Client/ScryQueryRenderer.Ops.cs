@@ -223,10 +223,72 @@ partial class QueryRenderer
                     builder.Append(member.Name).Append(" = ");
                     RenderNested(nested, scope);
                     break;
+                case CollectionValue collection:
+                    builder.Append(member.Name).Append(" = ");
+                    RenderCollection(collection, scope);
+                    break;
             }
         }
 
         builder.Append(" }");
+    }
+
+    /// <summary>
+    /// A projected collection re-spelled as the chain it came from: the collection, a <c>Where</c>
+    /// for its predicate, a <c>Select</c> for what each element becomes — unless the elements are the
+    /// values themselves — and the <c>ToList</c> that materializes them.
+    /// </summary>
+    void RenderCollection(CollectionValue collection, Scope scope)
+    {
+        if (scope.Grouped ||
+            collection.Path.Count == 0)
+        {
+            throw Refuse(RenderRefusal.UnsupportedShape);
+        }
+
+        var elementModel = Walk(scope.Model, collection.Path) is { } property
+            ? SensitiveModel.Element(property.PropertyType)
+            : null;
+        var inner = new Scope(scope.NestedParameter, elementModel, Grouped: false, Depth: scope.Depth + 1);
+
+        builder.Append(scope.Parameter).Append('.');
+        AppendPath(collection.Path);
+
+        if (collection.Predicate is { } predicate)
+        {
+            builder.Append(".Where(").Append(inner.Parameter).Append(" => ");
+            RenderNode(predicate, inner);
+            builder.Append(')');
+        }
+
+        switch (collection)
+        {
+            case {Selector: not null, Projection: not null}:
+            case {Selector: null, Projection: null}:
+                throw Refuse(RenderRefusal.UnsupportedShape);
+
+            case {Selector: ElementNode}:
+                break;
+
+            case {Selector: { } selector}:
+                builder.Append(".Select(").Append(inner.Parameter).Append(" => ");
+                RenderNode(selector, inner);
+                builder.Append(')');
+                break;
+
+            case {Projection: { } projection}:
+                if (projection.Members.Any(_ => _.Value is not NodeValue))
+                {
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+                }
+
+                builder.Append(".Select(").Append(inner.Parameter).Append(" => ");
+                RenderProjection(projection, inner);
+                builder.Append(')');
+                break;
+        }
+
+        builder.Append(".ToList()");
     }
 
     // An anonymous-type member, written without its name wherever C# would infer that same name.

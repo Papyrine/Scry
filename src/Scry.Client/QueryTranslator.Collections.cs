@@ -96,6 +96,157 @@ sealed partial class QueryTranslator
     }
 
     /// <summary>
+    /// Translates a projection member that returns a collection navigation's elements —
+    /// <c>_.Lines.Select(l =&gt; l.Sku).ToList()</c>, <c>_.Lines.Where(…).Select(l =&gt; new { l.Sku,
+    /// l.Price }).ToArray()</c>, or <c>_.Tags.ToList()</c> over a collection of values — into a
+    /// <see cref="CollectionValue"/>. Returns null when the expression is not one of these forms, so the
+    /// caller can go on reading it as a value.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately one level: each element becomes a value or a flat object of values, and a member
+    /// of that object that constructs another object, or asks a question of another collection, is
+    /// refused here rather than carried to the server to be refused there.
+    /// </remarks>
+    CollectionValue? TryCollection(Expression expression, ParameterExpression root)
+    {
+        var current = expression;
+
+        // ToList and ToArray only materialize what Select produced, so the wire carries neither.
+        if (current is MethodCallExpression {Object: null, Method.Name: "ToList" or "ToArray", Arguments.Count: 1} materialize)
+        {
+            current = materialize.Arguments[0];
+        }
+
+        LambdaExpression? selector = null;
+        if (current is MethodCallExpression {Object: null, Method.Name: "Select", Arguments.Count: 2} select)
+        {
+            selector = Lambda(select.Arguments[1]);
+            current = select.Arguments[0];
+        }
+
+        Expression? filter = null;
+        if (current is MethodCallExpression {Object: null, Method.Name: "Where", Arguments.Count: 2} where)
+        {
+            filter = where.Arguments[1];
+            current = where.Arguments[0];
+        }
+
+        // Nothing of the three forms was read, or what they read is not a collection the row holds.
+        if (ReferenceEquals(current, expression) ||
+            !IsRootedCollection(current, root))
+        {
+            return null;
+        }
+
+        var path = MemberPath((MemberExpression) current);
+        var element = CollectionElement(current.Type);
+
+        Node? predicate = null;
+        if (filter is not null)
+        {
+            var lambda = Lambda(filter);
+            predicate = Correlated(TranslateExpr(lambda.Body, lambda.Parameters[0]), path);
+        }
+
+        if (selector is null)
+        {
+            if (!IsValue(element))
+            {
+                throw new NotSupportedException(
+                    $"'{string.Join('.', path)}' is a collection of rows, so returning it needs a Select saying what to return of each element — a value, or an object of values.");
+            }
+
+            // The values themselves, which is all a collection of values has to return.
+            return new(path, predicate, new ElementNode());
+        }
+
+        if (selector.Parameters.Count != 1)
+        {
+            throw new NotSupportedException("Select with an index is not supported over a collection the row holds.");
+        }
+
+        var parameter = selector.Parameters[0];
+        if (selector.Body is NewExpression or MemberInitExpression)
+        {
+            var members = new List<ProjectionMember>();
+            foreach (var (name, value) in NestedMembers(selector.Body))
+            {
+                if (value is NewExpression or MemberInitExpression)
+                {
+                    throw new NotSupportedException(
+                        $"'{name}' nests an object inside a projected collection. An element of a projected collection is a value or a flat object of values.");
+                }
+
+                if (members.Any(_ => _.Name == name))
+                {
+                    throw ProjectedTwice(name);
+                }
+
+                members.Add(new(name, new NodeValue(Correlated(TranslateExpr(value, parameter), path))));
+            }
+
+            if (members.Count == 0)
+            {
+                throw new NotSupportedException("An element of a projected collection must have at least one member.");
+            }
+
+            return new(path, predicate, Projection: new(members));
+        }
+
+        return new(path, predicate, Correlated(TranslateExpr(selector.Body, parameter), path));
+    }
+
+    // What an element of a projected collection may be made of: the element's own values, composed
+    // with the operators and functions a predicate is. A further collection — a question asked of
+    // another collection, a membership test against another source — would multiply the request's
+    // cost per element, and is refused here as the server refuses it.
+    static Node Correlated(Node node, IReadOnlyList<string> path)
+    {
+        if (Contains(node, _ => _ is SubqueryNode or InSourceNode))
+        {
+            throw new NotSupportedException(
+                $"An element of '{string.Join('.', path)}' may only carry values read off the element — not a question asked of another collection or source.");
+        }
+
+        return node;
+    }
+
+    static bool Contains(Node node, Func<Node, bool> test)
+    {
+        if (test(node))
+        {
+            return true;
+        }
+
+        return node switch
+        {
+            BinaryNode binary => Contains(binary.Left, test) || Contains(binary.Right, test),
+            UnaryNode unary => Contains(unary.Operand, test),
+            ConditionalNode conditional => Contains(conditional.Test, test) ||
+                                           Contains(conditional.IfTrue, test) ||
+                                           Contains(conditional.IfFalse, test),
+            CallNode call => Contains(call.Target, test) || call.Arguments.Any(_ => Contains(_, test)),
+            CollateNode collate => Contains(collate.Target, test),
+            _ => false
+        };
+    }
+
+    // The element type of a collection navigation as the generated model types it: IReadOnlyList<T>,
+    // or any other IEnumerable<T>.
+    static Type CollectionElement(Type collection)
+    {
+        if (collection.IsArray)
+        {
+            return collection.GetElementType()!;
+        }
+
+        var enumerable = collection.IsGenericType && collection.GetGenericTypeDefinition() == typeof(IEnumerable<>)
+            ? collection
+            : collection.GetInterfaces().First(_ => _.IsGenericType && _.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+        return enumerable.GetGenericArguments()[0];
+    }
+
+    /// <summary>
     /// Translates <c>_.Tags.Contains("urgent")</c> — membership of a collection belonging to the row —
     /// into an <c>Any</c> over its elements. Both the instance form (<c>List&lt;T&gt;.Contains</c>) and
     /// the static form (<c>Enumerable.Contains</c>, which is what the generated model's

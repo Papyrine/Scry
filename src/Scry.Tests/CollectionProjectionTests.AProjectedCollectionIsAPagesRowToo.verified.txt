@@ -1,0 +1,15 @@
+﻿[
+  {
+    Region: North,
+    Skus: [
+      A-1,
+      A-2
+    ]
+  },
+  {
+    Region: North,
+    Skus: [
+      B-1
+    ]
+  }
+]

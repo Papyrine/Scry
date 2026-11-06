@@ -1,0 +1,18 @@
+﻿[
+  {
+    Region: North,
+    Tags: [
+      urgent,
+      export
+    ]
+  },
+  {
+    Region: North,
+    Tags: [
+      export
+    ]
+  },
+  {
+    Region: South
+  }
+]

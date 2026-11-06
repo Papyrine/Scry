@@ -425,8 +425,8 @@ public class Order
     public long Revision { get; set; }
 
     // begin-snippet: queryableCollection
-    // Opted in for aggregation: a client can ask how many lines an order has, or what they total, but
-    // can never enumerate them into a result.
+    // Opted in: a client can ask how many lines an order has, or what they total, or return the values
+    // it names of each line as a list in the row — and nothing deeper than that one list.
     [QueryableCollection]
     public List<OrderLine> Lines { get; set; } = [];
     // end-snippet

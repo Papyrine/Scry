@@ -1721,9 +1721,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var effectiveKeys = seekSafe ? keys : Array.Empty<(Node Key, bool Descending)>();
-        var (selector, shape, binarySlots, keyCount, entities, leftOut) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
+        var (selector, shape, binarySlots, keyCount, entities, leftOut, elements) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
         var projected = ApplySelect(query, selector);
-        var plan = new ProjectionPlan(selector, shape, binarySlots, entities, leftOut);
+        var plan = new ProjectionPlan(selector, shape, binarySlots, entities, leftOut, elements);
 
         // Fetch one extra row to detect a further page without issuing a second COUNT query. Composed
         // through ApplyPaging rather than Queryable.Take so the count is bound, not inlined.
@@ -1899,13 +1899,36 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
             // A binary slot's value leaves as a part and a placeholder holds its position; serialized
             // through ScryJson the placeholder's bytes match the fast writer's hand-written form.
-            node[path[^1]] = binary is not null &&
-                             plan.BinarySlots?[i] == true &&
-                             row[i] is byte[] bytes
-                ? new BinaryPlaceholder(binary.Add(bytes))
-                : row[i];
+            if (binary is not null &&
+                plan.BinarySlots?[i] == true &&
+                row[i] is byte[] bytes)
+            {
+                node[path[^1]] = new BinaryPlaceholder(binary.Add(bytes));
+                continue;
+            }
+
+            // A collection of rows holds one object array per element, named by the plan.
+            if (plan.Elements?[i] is { } names &&
+                row[i] is IEnumerable<object?[]> elements)
+            {
+                node[path[^1]] = elements.Select(_ => Element(names, _)).ToList();
+                continue;
+            }
+
+            node[path[^1]] = row[i];
         }
 
         return root;
+    }
+
+    static Dictionary<string, object?> Element(IReadOnlyList<string> names, object?[] values)
+    {
+        var element = new Dictionary<string, object?>(StringComparer.Ordinal);
+        for (var i = 0; i < names.Count; i++)
+        {
+            element[names[i]] = values[i];
+        }
+
+        return element;
     }
 }

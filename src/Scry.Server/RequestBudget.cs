@@ -184,6 +184,16 @@ static class RequestBudget
                         Track(ref NavigationDepth, nested.Path.Count);
                         Projection(nested.Projection, depth + 1, ref members);
                         break;
+                    case CollectionValue collection:
+                        Track(ref NavigationDepth, collection.Path.Count);
+                        Node(collection.Predicate);
+                        Node(collection.Selector);
+                        if (collection.Projection is { } elements)
+                        {
+                            Projection(elements, depth + 1, ref members);
+                        }
+
+                        break;
                 }
             }
         }

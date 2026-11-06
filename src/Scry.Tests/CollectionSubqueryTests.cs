@@ -1,6 +1,7 @@
 ﻿/// <summary>
-/// Collection navigations are aggregable but never projectable: every question here folds a
-/// collection to a scalar, evaluated by the database as a correlated subquery.
+/// Collection navigations are aggregable: every question here folds a collection to a scalar,
+/// evaluated by the database as a correlated subquery. Returning their elements is
+/// <see cref="CollectionProjectionTests"/>.
 /// </summary>
 public class CollectionSubqueryTests
 {

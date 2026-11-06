@@ -103,6 +103,9 @@ public static class WireFormat
         {
             NodeValue value => Richer(value.Node),
             NestedValue nested => Richer(nested.Projection),
+            CollectionValue collection => Richer(collection.Predicate) ||
+                                          Richer(collection.Selector) ||
+                                          Richer(collection.Projection),
             null => false
         });
 }

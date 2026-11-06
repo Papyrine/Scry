@@ -1,0 +1,23 @@
+﻿[
+  {
+    Region: North,
+    Lines: [
+      {
+        Sku: A-1,
+        Price: 25.00
+      }
+    ]
+  },
+  {
+    Region: North,
+    Lines: [
+      {
+        Sku: B-1,
+        Price: 50.00
+      }
+    ]
+  },
+  {
+    Region: South
+  }
+]
