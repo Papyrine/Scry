@@ -288,14 +288,25 @@ The ordering is the host's to keep, since Scry cannot hold back a send it does n
 
 ## The record
 
-```
-row written ─► capture (per call: canonicalise, hash, collect the rows it was read from)
-            ─► IScryDisclosureSink.Append        ◄── returns only once the batch is durable
-                  ├─ ScryMemoryDisclosureStore   (tests, small hosts)
-                  ├─ ScryDisclosureJournal ─► any sink   (a local write-ahead file, shipped in the background)
-                  └─ SQL outbox table ─► mover ─► segments of tables + the chain
-            ─► IScryDisclosureReader             (the three questions)
-                  └─ Scry.Server.Disclosure.Explorer ─► Scry.Disclosure.Ui (browser)
+```mermaid
+flowchart LR
+    row["row written"] --> capture["capture<br/><i>per call: canonicalise, hash,<br/>collect the rows it was read from</i>"]
+    capture --> append["IScryDisclosureSink.Append<br/><i>returns only once the batch is durable</i>"]
+
+    subgraph stores["stores"]
+        memory["ScryMemoryDisclosureStore<br/><i>tests, small hosts</i>"]
+        journal["ScryDisclosureJournal<br/><i>a local write-ahead file,<br/>shipped in the background</i>"]
+        outbox["SQL outbox table"]
+    end
+
+    append --> memory
+    append --> journal
+    append --> outbox
+    journal --> anySink["any sink"]
+    outbox --> mover["mover"] --> segments["segments of tables<br/>+ the chain"]
+
+    capture --> reader["IScryDisclosureReader<br/><i>the three questions</i>"]
+    reader --> explorer["Scry.Server.Disclosure.Explorer"] --> ui["Scry.Disclosure.Ui<br/><i>browser</i>"]
 ```
 
 | Record | Fields |
@@ -1088,9 +1099,15 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 
 ## Open questions
 
-1. **A span of time over many segments.** Who received a row is read a page at a time from [its receipts in time order](performance.md#a-rows-receipts-in-time-order), and is a page's worth of work however many answers carried the row: a few milliseconds for a page of a row in ten thousand of a million answers, a quarter of a second for all of it. Asked for a span of time over twenty-four segments of a small record it is a few milliseconds where it was one, the page of receipts being read through a view of every segment. Whether a host keeps that many segments, and asks that question often enough for it to matter, is open.
+
+### A span of time over many segments
+
+Who received a row is read a page at a time from [its receipts in time order](performance.md#a-rows-receipts-in-time-order), and is a page's worth of work however many answers carried the row: a few milliseconds for a page of a row in ten thousand of a million answers, a quarter of a second for all of it. Asked for a span of time over twenty-four segments of a small record it is a few milliseconds where it was one, the page of receipts being read through a view of every segment. Whether a host keeps that many segments, and asks that question often enough for it to matter, is open.
 
 
 ## Later
 
-- **Retention by source.** A segment is retired whole, by count or by age, so every source's rows are kept as long as each other's, and a source whose rows may be kept for less time than the rest has no setting of its own. Not built, deliberately for now. Until then, a host whose sources need different periods sets `Keep` or `KeepFor` to the shortest of them, which retires every source's rows that soon, or erases a source's rows as their period ends. Nothing here is in its way: every unit names the source of each row it was read from, so a later version can retire a source's rows within a segment, or keep a source's answers in segments of their own. The in-memory store keeps everything, and shares nothing between answers.
+
+### Retention by source
+
+A segment is retired whole, by count or by age, so every source's rows are kept as long as each other's, and a source whose rows may be kept for less time than the rest has no setting of its own. Not built, deliberately for now. Until then, a host whose sources need different periods sets `Keep` or `KeepFor` to the shortest of them, which retires every source's rows that soon, or erases a source's rows as their period ends. Nothing here is in its way: every unit names the source of each row it was read from, so a later version can retire a source's rows within a segment, or keep a source's answers in segments of their own. The in-memory store keeps everything, and shares nothing between answers.
