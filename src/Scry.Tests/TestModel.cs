@@ -452,8 +452,8 @@ public class Order
 }
 
 /// <summary>
-/// The element type of the one exposed collection. Carries no row policy — a collection of a policied
-/// type is refused at startup, which <see cref="CollectionSubqueryTests"/> pins.
+/// The element type of the one exposed collection. Carries no row policy of its own;
+/// <see cref="PoliciedCollectionTests"/> attaches <see cref="BulkLinesOnlyPolicy"/> to it.
 /// </summary>
 [Queryable]
 public class OrderLine
@@ -735,8 +735,8 @@ public sealed class ActiveOnlyPolicy :
 // end-snippet
 
 /// <summary>
-/// Never attached by default. Registering it proves the startup refusal to expose a collection whose
-/// element type is policied — <see cref="Order.Lines"/> is a collection of <see cref="OrderLine"/>.
+/// Never attached by default. Registering it proves how a collection whose element type is policied
+/// is read — <see cref="Order.Lines"/> is a collection of <see cref="OrderLine"/>.
 /// </summary>
 public sealed class BulkLinesOnlyPolicy :
     IReturnablePolicy<OrderLine>

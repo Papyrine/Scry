@@ -16,9 +16,10 @@ namespace Scry;
 /// than the page size.
 /// </para>
 /// <para>
-/// The element type must itself be opted in, and must not carry a row policy: a policy filters a
-/// source, and a subquery has no source for it to filter, so aggregating over a policied type would
-/// count exactly the rows the policy exists to hide. The server refuses to start otherwise.
+/// The element type must itself be opted in. A row policy it carries filters the collection's
+/// subquery as it filters the element's own source, so an aggregate counts, and a projected
+/// collection returns, only the rows the policy allows — unless the policy's
+/// <c>CollectionNavigation</c> says to refuse the collection, which the server then does at startup.
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property)]

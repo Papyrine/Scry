@@ -7,15 +7,16 @@ namespace Scry;
 public enum DeniedCollectionMode
 {
     /// <summary>
-    /// Exposing the member is a startup failure. The default: an aggregate over a policied collection
-    /// counts what the policy exists to hide unless the subquery is filtered, so the safe answer to a
-    /// host that has not chosen is to refuse rather than to guess which of the two it meant.
+    /// Exposing the member is a startup failure, naming the collection and the fix. For a host that
+    /// would rather a policied collection stayed unexposed than be read through its policy without
+    /// anyone having said so.
     /// </summary>
     Refuse,
 
     /// <summary>
     /// The collection subquery reads through the policy, so denied elements are absent from every
-    /// aggregate over it exactly as they are absent from a query of their own source.
+    /// aggregate over it exactly as they are absent from a query of their own source. The default: it
+    /// is the one answer that discloses nothing, and the one a policy already gives everywhere else.
     /// </summary>
     Hide,
 

@@ -301,22 +301,6 @@ public class CollectionSubqueryTests
         await Assert.That(exception.Message).Contains("requires a predicate");
     }
 
-    [Test]
-    public async Task ExposingACollectionOfAPoliciedTypeIsRefusedAtStartup()
-    {
-        // A policy filters a source; a subquery has none, so counting a policied collection would count
-        // exactly the rows the policy hides. Refused when the schema is built, not at query time.
-        var exception = Assert.ThrowsExactly<Exception>(
-            () => ScryProcessor.Create<TestContext>(
-                options =>
-                {
-                    options.AddPocoSource<Holiday>(_ => Holiday.Seed());
-                    options.AddPolicy<OrderLine, BulkLinesOnlyPolicy>();
-                }));
-
-        await Assert.That(exception.Message).Contains("row policy");
-    }
-
     static ScryClient ClientFor(TestContext context) =>
         new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
 }

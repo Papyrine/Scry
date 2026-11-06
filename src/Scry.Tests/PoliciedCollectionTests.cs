@@ -1,20 +1,58 @@
 /// <summary>
 /// A <c>[QueryableCollection]</c> of a policied type. A subquery has no source of its own, so counting
-/// the collection off the owner would count exactly the rows the policy hides — which is why exposing
-/// one is refused until the policy says how it wants to be read through.
+/// the collection off the owner would count exactly the rows the policy hides — which is why the
+/// collection is read through the policy, unless the policy says it would rather be refused.
 /// </summary>
 public class PoliciedCollectionTests
 {
     [Test]
-    public async Task ExposingOneIsRefusedUntilThePolicySaysHowToReadIt()
+    public async Task ReadingThroughThePolicyIsTheDefault()
     {
-        // The default, and what the server did before there was anything else to say: a policy that has
-        // not been asked the question does not get guessed at.
-        var exception = Assert.ThrowsExactly<Exception>(
-            () => Build(_ => _.AddPolicy<OrderLine, BulkLinesOnlyPolicy>()));
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, Build(_ => _.AddPolicy<OrderLine, BulkLinesOnlyPolicy>()));
 
-        await Assert.That(exception.Message).Contains("Order.Lines");
-        await Assert.That(exception.Message).Contains("CollectionNavigation");
+        // Registered with nothing said about collections, the policy hides: the same answer Hiding()
+        // gives below, and the one a navigation into the type already gave.
+        var rows = await client.Source<Order>("Order")
+            .OrderBy(_ => _.Amount)
+            .Select(_ => new {_.Region, Lines = _.Lines.Count})
+            .ToListAsync();
+
+        await Assert.That(rows.Select(_ => _.Lines)).IsEquivalentTo([0, 1, 1], CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task APolicySetToRefuseIsAStartupFailureNamingTheFix()
+    {
+        var exception = Assert.ThrowsExactly<Exception>(
+            () => Build(_ => _.AddPolicy<OrderLine, BulkLinesOnlyPolicy>(new()
+            {
+                CollectionNavigation = DeniedCollectionMode.Refuse
+            })));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(exception.Message).Contains("'Order.Lines'");
+            await Assert.That(exception.Message).Contains("'OrderLine'");
+            await Assert.That(exception.Message).Contains("'BulkLinesOnlyPolicy'");
+            await Assert.That(exception.Message).Contains("CollectionNavigation = DeniedCollectionMode.Hide");
+        }
+    }
+
+    [Test]
+    public async Task AProjectedCollectionReturnsOnlyTheAllowedElements()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, Build(_ => _.AddPolicy<OrderLine, BulkLinesOnlyPolicy>()));
+
+        // The policy denies the first order's single-quantity line, so returning the lines returns
+        // exactly what a direct query of OrderLine would have.
+        var rows = await client.Source<Order>("Order")
+            .OrderBy(_ => _.Amount)
+            .Select(_ => new {_.Region, Skus = _.Lines.Select(l => l.Sku).ToList()})
+            .ToListAsync();
+
+        await Assert.That(rows.SelectMany(_ => _.Skus)).IsEquivalentTo(["A-1", "B-1"], CollectionOrdering.Matching);
     }
 
     [Test]

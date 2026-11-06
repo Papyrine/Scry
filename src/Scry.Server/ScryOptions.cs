@@ -587,6 +587,23 @@ public sealed class ScryOptions(Type contextType)
     /// type. Like the attribute it also covers every opted-in type deriving from that one, whose own
     /// policies narrow further rather than replace this one.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The policy is composed once at startup as well as per request. <c>EnsureReady</c> — what
+    /// <c>MapScry</c> and <c>MapScryHub</c> run — constructs every policy from a scope made of the
+    /// host's root services, and, unless <see cref="ProbePoliciedNavigations"/> is cleared, calls
+    /// <c>Filter</c> on each once to prove it translates where it is applied: with no HTTP request, no
+    /// principal, and empty headers. A policy, or a service it depends on such as the current user,
+    /// has to tolerate that — answer for an anonymous caller, or defer reading the request until the
+    /// query runs — or the host clears <see cref="ProbePoliciedNavigations"/> and gives up only the
+    /// startup proof.
+    /// </para>
+    /// <para>
+    /// A <c>[QueryableCollection]</c> of <typeparamref name="TEntity"/> is read through the policy, as
+    /// a navigation into it is (<see cref="DeniedRowHandling.CollectionNavigation"/> is
+    /// <see cref="DeniedCollectionMode.Hide"/> by default).
+    /// </para>
+    /// </remarks>
     public void AddPolicy<TEntity, TPolicy>()
         where TPolicy : IReturnablePolicy<TEntity> =>
         AddPolicy<TEntity, TPolicy>(DeniedRowHandling.Default);
@@ -595,6 +612,10 @@ public sealed class ScryOptions(Type contextType)
     /// The same, saying what the policy's denied rows produce rather than taking the hide-everywhere
     /// default. The handling travels with this registration only: a base's policy keeps its own.
     /// </summary>
+    /// <remarks>
+    /// Composed once at startup with no request, as <see cref="AddPolicy{TEntity,TPolicy}()"/>
+    /// describes.
+    /// </remarks>
     public void AddPolicy<TEntity, TPolicy>(DeniedRowHandling handling)
         where TPolicy : IReturnablePolicy<TEntity> =>
         Policies[typeof(TEntity)] = (typeof(TPolicy), handling);

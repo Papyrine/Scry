@@ -810,7 +810,7 @@ sealed partial class Schema
             if (elementPolicies.FirstOrDefault(_ => _.Handling.CollectionNavigation == DeniedCollectionMode.Refuse) is {Policy: not null} refusing)
             {
                 throw new(
-                    $"'{owner.Name}.{member.Name}' is a [QueryableCollection] of '{element.Name}', which carries row policy '{refusing.Policy.Name}'. Aggregating it would count rows that policy hides. Set CollectionNavigation on the policy — Hide reads the collection through it, Error fails a query that would have skipped a denied row — or remove the attribute.");
+                    $"The [QueryableCollection] '{owner.Name}.{member.Name}' holds '{element.Name}' rows, and row policy '{refusing.Policy.Name}' on '{element.Name}' is set to refuse being read through a collection (CollectionNavigation = DeniedCollectionMode.Refuse). Set CollectionNavigation = DeniedCollectionMode.Hide on that policy to read the collection through it, as a navigation into '{element.Name}' is — or Error, to fail a query that would have skipped a denied row — or take [QueryableCollection] off '{owner.Name}.{member.Name}'.");
             }
         }
 

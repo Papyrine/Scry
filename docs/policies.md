@@ -187,7 +187,7 @@ Where that silence is worse than the disclosure, a policy can be told to fail th
 | `RootSingle` — `First`, `Single`, `Last` | the result is empty | HTTP 403 |
 | `RootList` — lists, pages, streams, counts, aggregates | the row is missing | HTTP 403 |
 | `Navigation` — a traversal into the source | the traversal reads null | HTTP 403 |
-| `CollectionNavigation` — a `[QueryableCollection]` of it | `Refuse`: startup failure | HTTP 403 |
+| `CollectionNavigation` — a `[QueryableCollection]` of it | `Hide`: the element is missing from the collection | HTTP 403 |
 
 On the model:
 
@@ -291,18 +291,18 @@ A value type read through a policied traversal is widened to its nullable form, 
 
 ### Collections
 
-A `[QueryableCollection]` of a policied type is a [startup failure](annotations.md#queryablecollection) by default: aggregating a collection off its owner cannot apply a policy — a policy filters a source, and a subquery has none — so exposing it would count exactly the rows the policy hides. It is refused rather than guessed at, because either answer could be the one a deployment wants.
+A `[QueryableCollection]` of a policied type is read **through the policy** by default (`CollectionNavigation = DeniedCollectionMode.Hide`), through the same correlated subquery a reference navigation already uses: `_.Lines.Count()` counts what a direct query of `OrderLine` would have reached, `Sum` totals only those, `SelectMany` flattens to exactly them, and a [projected collection](querying.md#projected-collections) returns exactly them. `Error` fails the request instead — see [What a denied row produces](#what-a-denied-row-produces).
 
-Saying which unlocks it:
+A host that would rather such a collection stayed unexposed can say so per policy:
 
 ```cs
 options.AddPolicy<OrderLine, BulkLinesOnlyPolicy>(new()
 {
-    CollectionNavigation = DeniedCollectionMode.Hide
+    CollectionNavigation = DeniedCollectionMode.Refuse
 });
 ```
 
-`Hide` reads the collection through the same correlated subquery a reference navigation already uses, so `_.Lines.Count()` counts what a direct query of `OrderLine` would have reached, `Sum` totals only those, and `SelectMany` flattens to exactly them. `Error` fails the request instead — see [What a denied row produces](#what-a-denied-row-produces). Any policy in the chain left at `Refuse` refuses the member, since the chain is only as readable as its least permissive link.
+The server then refuses to start, naming the collection (`Order.Lines`), the policy, and the fix (`CollectionNavigation = DeniedCollectionMode.Hide`). Any policy in the chain set to `Refuse` refuses the member, since the chain is only as readable as its least permissive link.
 
 ### The startup probe
 
