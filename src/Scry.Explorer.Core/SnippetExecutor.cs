@@ -396,8 +396,8 @@ public sealed class SnippetExecutor
                  using System.Collections.Generic;
                  using Scry;
                  using Scry.Generated;
-                 using Scry.Linq;
                  namespace Scry;
+                 using Scry.Linq;
                  public static class Runner
                  {
                      public static global::System.Linq.Expressions.LambdaExpression? Lambda;
