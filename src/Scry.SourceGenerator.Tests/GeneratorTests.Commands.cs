@@ -51,11 +51,19 @@ public partial class GeneratorTests
             public Status Status { get; set; }
             public List<string> Tags { get; set; } = [];
             public DateOnly? Starts { get; set; }
+
+            // Optional members, carried as the model declares them: a nullable reference is one on
+            // the client too, so a caller leaves it unset rather than writing `value!`.
+            public string? Nickname { get; set; }
+            public Guid? Team { get; set; }
+            public byte[]? Photo { get; set; }
+            public List<string>? Aliases { get; set; }
         }
 
         public class EmployeeCreated
         {
             public int Id { get; set; }
+            public string? Badge { get; set; }
         }
 
         // Server-only: the generator never reads a command's policy.
@@ -254,6 +262,52 @@ public partial class GeneratorTests
         {
             await Assert.That(commands).Contains("public string Text { get; init; } = null!;");
             await Assert.That(commands).Contains("public int Count { get; init; }");
+        }
+    }
+
+    // A nullable annotation is read from the property's own [Nullable] flag, or from the
+    // [NullableContext] the compiler puts on the class when every member shares one — which is what a
+    // class of nothing but `string?` members carries. Whichever, it is a note to the caller about what
+    // may be left unset, and moves nothing the server reads: the stamp is the same either way.
+    [Test]
+    public async Task ANullableReferenceIsEmittedNullableAndDoesNotAffectTheSchemaStamp()
+    {
+        const string required = """
+            using System.Collections.Generic;
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Command]
+            public class Touch
+            {
+                public string Note { get; set; } = "";
+                public List<string> Tags { get; set; } = [];
+            }
+            """;
+
+        const string optional = """
+            using System.Collections.Generic;
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Command]
+            public class Touch
+            {
+                public string? Note { get; set; }
+                public List<string>? Tags { get; set; }
+            }
+            """;
+
+        var commands = (await GeneratedSources(optional)).Single(_ => _.Contains("public sealed class ScryCommands"));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(commands).Contains("public string? Note { get; init; }");
+            await Assert.That(commands).Contains("public global::System.Collections.Generic.IReadOnlyList<string>? Tags { get; init; }");
+            await Assert.That(commands).DoesNotContain("null!");
+            await Assert.That(await Stamp(optional)).IsEqualTo(await Stamp(required));
         }
     }
 

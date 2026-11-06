@@ -707,6 +707,15 @@ public class ScryGenerator :
     {
         foreach (var property in properties)
         {
+            // A reference the model declares nullable is one here too, with no initializer to suppress:
+            // null is a value the caller may leave it at.
+            if (property.NullableReference)
+            {
+                builder.Append(Obsolete(property.Obsolete, indent: "    "));
+                builder.AppendLine($"    public {property.TypeDisplay}? {CSharpIdentifier.Escape(property.Name)} {{ get; init; }}");
+                continue;
+            }
+
             var initializer = property.NeedsNullDefault ? " = null!;" : "";
             builder.Append(Obsolete(property.Obsolete, indent: "    "));
             builder.AppendLine($"    public {property.TypeDisplay} {CSharpIdentifier.Escape(property.Name)} {{ get; init; }}{initializer}");

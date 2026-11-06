@@ -18,6 +18,8 @@ static class MetadataModelReader
     const string sensitiveAttribute = "Scry.SensitiveAttribute";
     const string flagsAttribute = "System.FlagsAttribute";
     const string commandAttribute = "Scry.CommandAttribute";
+    const string nullableAttribute = "System.Runtime.CompilerServices.NullableAttribute";
+    const string nullableContextAttribute = "System.Runtime.CompilerServices.NullableContextAttribute";
     const string commandIgnoreAttribute = "Scry.CommandIgnoreAttribute";
 
     public static ModelExtract Read(string? dllPath)
@@ -362,7 +364,7 @@ static class MetadataModelReader
             type,
             decoder,
             _ => HasPublicInstanceGetter(reader, _) && HasPublicInstanceSetter(reader, _));
-        foreach (var (property, attributes, arguments) in chain)
+        foreach (var (property, attributes, arguments, declaring) in chain)
         {
             if (HasAttribute(reader, attributes, commandIgnoreAttribute))
             {
@@ -398,7 +400,8 @@ static class MetadataModelReader
                 classified with
                 {
                     Name = name,
-                    Obsolete = ObsoleteOf(reader, attributes, decoder)
+                    Obsolete = ObsoleteOf(reader, attributes, decoder),
+                    NullableReference = classified.NeedsNullDefault && IsAnnotatedNullable(reader, declaring, attributes, decoder)
                 });
         }
 
@@ -453,7 +456,7 @@ static class MetadataModelReader
                     continue;
                 }
 
-                collected.Add(new(property, AlongOverrides(reader, chain, index, property, name), chain[index].Arguments));
+                collected.Add(new(property, AlongOverrides(reader, chain, index, property, name), chain[index].Arguments, chain[index].Type));
             }
 
             levels.Add(collected);
@@ -715,7 +718,7 @@ static class MetadataModelReader
         var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
         var valid = true;
         // Read as the server describes a result: the properties it can read.
-        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder, _ => HasPublicInstanceGetter(reader, _)))
+        foreach (var (property, attributes, arguments, declaring) in PropertiesAlongTheChain(reader, type, decoder, _ => HasPublicInstanceGetter(reader, _)))
         {
             var signature = property.DecodeSignature(decoder, arguments);
             if (signature.ParameterTypes.Length > 0)
@@ -738,7 +741,8 @@ static class MetadataModelReader
                 classified with
                 {
                     Name = propertyName,
-                    Obsolete = ObsoleteOf(reader, attributes, decoder)
+                    Obsolete = ObsoleteOf(reader, attributes, decoder),
+                    NullableReference = classified.NeedsNullDefault && IsAnnotatedNullable(reader, declaring, attributes, decoder)
                 });
         }
 
@@ -948,7 +952,7 @@ static class MetadataModelReader
         // Read as the server reads a query model's members: off the public instance properties, which
         // a declaration with a public setter alone belongs to, then dropping any without a public getter.
         // Both sides have the same declaration claim a name, so both hide the same members.
-        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder, _ => IsPublicInstance(reader, _), discovered))
+        foreach (var (property, attributes, arguments, _) in PropertiesAlongTheChain(reader, type, decoder, _ => IsPublicInstance(reader, _), discovered))
         {
             if (!HasPublicInstanceGetter(reader, property) ||
                 HasAttribute(reader, attributes, queryIgnoreAttribute))
@@ -1382,6 +1386,79 @@ static class MetadataModelReader
     /// A malformed attribute blob is treated as a bare deprecation rather than failing the build,
     /// matching how <see cref="NameArgument"/> handles one.
     /// </remarks>
+    /// <summary>
+    /// Whether a reference-typed property is declared nullable — <c>string?</c>, <c>byte[]?</c>,
+    /// <c>List&lt;string&gt;?</c> — which the compiler records as a <c>[Nullable]</c> flag of 2 on the
+    /// property, or as the <c>[NullableContext]</c> of the type declaring it (and of the types that one
+    /// is nested in) where every member shares the one annotation. Oblivious and unannotated code reads
+    /// as not nullable, which is what every generated member was declared as before.
+    /// </summary>
+    static bool IsAnnotatedNullable(
+        MetadataReader reader,
+        TypeDefinition declaring,
+        IEnumerable<CustomAttributeHandle> attributes,
+        SignatureDecoder decoder)
+    {
+        if (NullableFlag(reader, attributes, nullableAttribute, decoder) is { } own)
+        {
+            return own == annotated;
+        }
+
+        var type = declaring;
+        while (true)
+        {
+            if (NullableFlag(reader, type.GetCustomAttributes(), nullableContextAttribute, decoder) is { } context)
+            {
+                return context == annotated;
+            }
+
+            var outer = type.GetDeclaringType();
+            if (outer.IsNil)
+            {
+                return false;
+            }
+
+            type = reader.GetTypeDefinition(outer);
+        }
+    }
+
+    const byte annotated = 2;
+
+    // The flag a nullability attribute carries: one byte, or — for a type with type arguments or an
+    // element — one per type component, the outermost first, which is the one a member's own
+    // nullability is read from.
+    static byte? NullableFlag(
+        MetadataReader reader,
+        IEnumerable<CustomAttributeHandle> attributes,
+        string attributeName,
+        SignatureDecoder decoder)
+    {
+        foreach (var handle in attributes)
+        {
+            var attribute = reader.GetCustomAttribute(handle);
+            if (AttributeTypeName(reader, attribute) != attributeName)
+            {
+                continue;
+            }
+
+            try
+            {
+                return attribute.DecodeValue(decoder).FixedArguments switch
+                {
+                    [{Value: byte flag}] => flag,
+                    [{Value: ImmutableArray<CustomAttributeTypedArgument<DecodedType>> {Length: > 0} flags}] when flags[0].Value is byte first => first,
+                    _ => null
+                };
+            }
+            catch (BadImageFormatException)
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
     static string? ObsoleteOf(
         MetadataReader reader,
         IEnumerable<CustomAttributeHandle> attributes,
@@ -1562,5 +1639,6 @@ static class MetadataModelReader
     readonly record struct ChainProperty(
         PropertyDefinition Property,
         List<CustomAttributeHandle> Attributes,
-        ImmutableArray<DecodedType> Arguments);
+        ImmutableArray<DecodedType> Arguments,
+        TypeDefinition Declaring);
 }

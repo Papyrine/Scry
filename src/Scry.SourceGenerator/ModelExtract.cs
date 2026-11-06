@@ -115,6 +115,13 @@ record struct SourceInfo(
 /// The command a capability answers for: the <c>bool</c> a targeted command adds to its target, saying
 /// row by row whether the caller may send it. Null on every member the model declares itself.
 /// </param>
+/// <param name="NullableReference">
+/// True for a reference-typed command or result property the model declares nullable — <c>string?</c>,
+/// <c>byte[]?</c>, <c>List&lt;string&gt;?</c> — which is emitted as nullable and without the
+/// <c>null!</c> initializer, so a caller leaves it unset instead of writing <c>value!</c>. Kept apart
+/// from <see cref="TypeDisplay"/>, which the schema stamp is built from: an annotation changes what a
+/// client is told, not what the server accepts.
+/// </param>
 record struct PropertyInfo(
     string Name,
     string TypeDisplay,
@@ -126,7 +133,8 @@ record struct PropertyInfo(
     bool HasBinaryTransfer = false,
     bool IsKey = false,
     bool IsSensitive = false,
-    string? Capability = null);
+    string? Capability = null,
+    bool NullableReference = false);
 
 /// <summary>An enum referenced by a model, re-emitted so the client needs no server reference.</summary>
 /// <summary>
