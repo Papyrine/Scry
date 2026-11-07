@@ -3,6 +3,7 @@ namespace Sample.FSharp
 open System.Linq
 open Microsoft.FSharp.Linq.NullableOperators
 open Scry
+open Scry.Linq
 open Scry.Generated
 
 // begin-snippet: fsharpProjectionType

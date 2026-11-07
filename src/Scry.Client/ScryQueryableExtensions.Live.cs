@@ -1,4 +1,4 @@
-namespace Scry;
+namespace Scry.Linq;
 
 // In this class rather than one of its own: the analyzer tells a Scry terminal from anything else by
 // the type that declares it, and everything these reuse to build a request and read a response is

@@ -236,15 +236,28 @@ sealed class ExpressionBuilder(
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
         var leftOut = new List<bool>();
+        var elements = new List<IReadOnlyList<string>?>();
         if (identified)
         {
             disclosure?.Begin(parameter);
         }
 
-        Flatten(projection, parameter, [], leaves, shape, binary, leftOut: leftOut);
+        Flatten(projection, parameter, [], leaves, shape, binary, leftOut: leftOut, elements: elements);
         var entities = Reached(leaves, identified);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return new(selector, shape, Normalize(binary), entities, Normalize(leftOut));
+        return new(selector, shape, Normalize(binary), entities, Normalize(leftOut), Normalize(elements));
+    }
+
+    // Plans without a collection of rows — the common case — carry null, the one check the writers
+    // branch on.
+    static List<IReadOnlyList<string>?>? Normalize(List<IReadOnlyList<string>?> elements)
+    {
+        if (elements.Any(_ => _ is not null))
+        {
+            return elements;
+        }
+
+        return null;
     }
 
     // How many reads of what the disclosure audit leaves out the planner has seen: a leaf whose
@@ -276,7 +289,7 @@ sealed class ExpressionBuilder(
     /// One materialization then yields both the shaped rows and the last row's key values (for the next
     /// cursor). <c>Shape</c> describes only the leading projection slots.
     /// </summary>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, int KeyCount, IReadOnlyList<DisclosureSlot>? Entities, IReadOnlyList<bool>? LeftOut) BuildPageProjection(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, int KeyCount, IReadOnlyList<DisclosureSlot>? Entities, IReadOnlyList<bool>? LeftOut, IReadOnlyList<IReadOnlyList<string>?>? Elements) BuildPageProjection(
         Projection? projection,
         IReadOnlyList<(Node Key, bool Descending)> keys,
         Type type)
@@ -286,6 +299,7 @@ sealed class ExpressionBuilder(
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
         var leftOut = new List<bool>();
+        var elements = new List<IReadOnlyList<string>?>();
         disclosure?.Begin(parameter);
 
         if (projection is null)
@@ -300,11 +314,12 @@ sealed class ExpressionBuilder(
                 AddLeaf(parameter, meta, member, leaves, leftOut);
                 shape.Add([member.Name]);
                 binary.Add(member.BinaryTransfer);
+                elements.Add(null);
             }
         }
         else
         {
-            Flatten(projection, parameter, [], leaves, shape, binary, leftOut: leftOut);
+            Flatten(projection, parameter, [], leaves, shape, binary, leftOut: leftOut, elements: elements);
         }
 
         // Trailing slots: the ordering-key values, used only to build the next page's cursor. Read
@@ -321,7 +336,7 @@ sealed class ExpressionBuilder(
         // After the cursor's slots, which are found by counting on from the shape's.
         var entities = Reached(leaves);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return (selector, shape, Normalize(binary), keys.Count, entities, Normalize(leftOut));
+        return (selector, shape, Normalize(binary), keys.Count, entities, Normalize(leftOut), Normalize(elements));
     }
 
     /// <summary>
@@ -865,7 +880,8 @@ sealed class ExpressionBuilder(
         List<IReadOnlyList<string>> shape,
         List<bool>? binary = null,
         bool policied = false,
-        List<bool>? leftOut = null)
+        List<bool>? leftOut = null,
+        List<IReadOnlyList<string>?>? elements = null)
     {
         foreach (var member in projection.Members)
         {
@@ -886,19 +902,114 @@ sealed class ExpressionBuilder(
                     leaves.Add(policied ? Widened(leaf) : leaf);
                     shape.Add(jsonPath);
                     binary?.Add(value.Node is MemberNode memberNode && IsBinaryPath(memberNode.Path, root.Type));
+                    elements?.Add(null);
                     break;
 
                 case NestedValue nested:
                     var stepping = Enter(ScryDisclosureFieldUse.Traversed);
                     var navTarget = BuildMemberAccess(root, nested.Path, out var throughPolicy);
                     Leave(stepping);
-                    Flatten(nested.Projection, navTarget, jsonPath, leaves, shape, binary, policied || throughPolicy, leftOut);
+                    Flatten(nested.Projection, navTarget, jsonPath, leaves, shape, binary, policied || throughPolicy, leftOut, elements);
+                    break;
+
+                // A collection the row holds, returned as a list in the slot: the elements the
+                // database answers the correlated subquery with, each a value or an object array
+                // the writer names from the plan. Only a plan that carries those names can hold one.
+                case CollectionValue collection:
+                    if (elements is null)
+                    {
+                        throw new ScryValidationException("A projected collection is not supported in this position.");
+                    }
+
+                    var opening = LeftOutSeen;
+                    leaves.Add(BuildCollection(collection, root, out var names));
+                    leftOut?.Add(LeftOutSeen > opening);
+                    shape.Add(jsonPath);
+                    binary?.Add(false);
+                    elements.Add(names);
                     break;
 
                 default:
                     throw new ScryValidationException("Unsupported projection member.");
             }
         }
+    }
+
+    /// <summary>
+    /// Rebinds a projected collection onto the <see cref="Enumerable"/> calls EF translates into a
+    /// correlated subquery whose rows come back as a list: the collection, narrowed by its predicate,
+    /// with each element selected as one value or as one <c>object[]</c> of values, whose member
+    /// names <paramref name="names"/> carries for the writer.
+    /// </summary>
+    Expression BuildCollection(CollectionValue collection, Expression row, out IReadOnlyList<string>? names)
+    {
+        // The collection's own name is traversed, as a nested object's navigation is: what is returned
+        // is read off its elements, below.
+        var traversing = Enter(ScryDisclosureFieldUse.Traversed);
+        var source = BuildMemberAccess(row, collection.Path);
+        Leave(traversing);
+        var of = disclosure?.LastElement ?? default;
+        var element = Schema.CollectionElement(source.Type) ??
+                      throw new ScryValidationException($"'{string.Join('.', collection.Path)}' is not a collection.");
+
+        if (collection.Predicate is { } filter)
+        {
+            source = Expression.Call(
+                QueryComposition.Close(enumerableWhere, element),
+                source,
+                ElementLambda(filter, element, typeof(bool), ScryDisclosureFieldUse.Read, of));
+        }
+
+        // A collection of values returned whole is the column itself: EF projects a primitive
+        // collection as it is, where a Select of each element back to itself over one faults in its
+        // shaper.
+        if (collection.Predicate is null &&
+            collection.Projection is null &&
+            collection.Selector is ElementNode)
+        {
+            names = null;
+            return source;
+        }
+
+        var parameter = Expression.Parameter(element, "x");
+        if (of.Source is not null)
+        {
+            disclosure?.Element(parameter, of);
+        }
+
+        var returning = Enter(ScryDisclosureFieldUse.Returned);
+        Expression body;
+        if (collection.Projection is { } projection)
+        {
+            var parts = new List<Expression>(projection.Members.Count);
+            var named = new List<string>(projection.Members.Count);
+            foreach (var member in projection.Members)
+            {
+                if (member.Value is not NodeValue value)
+                {
+                    throw new ScryValidationException("An element of a projected collection is a flat object of values.");
+                }
+
+                parts.Add(Box(Build(value.Node, parameter, null)));
+                named.Add(member.Name);
+            }
+
+            body = Expression.NewArrayInit(typeof(object), parts);
+            names = named;
+        }
+        else
+        {
+            body = Build(collection.Selector ?? throw new ScryValidationException("A projected collection needs a selector."), parameter, null);
+            names = null;
+        }
+
+        Leave(returning);
+
+        var selected = Expression.Call(
+            QueryComposition.Close(enumerableSelect, element, body.Type),
+            source,
+            Expression.Lambda(body, parameter));
+        return Expression.Call(QueryComposition.Close(enumerableToList, body.Type), selected);
     }
 
     /// <summary>
@@ -2955,6 +3066,9 @@ sealed class ExpressionBuilder(
 
     static MethodInfo enumerableSelect = typeof(Enumerable).GetMethods()
         .Single(_ => _.Name == "Select" && _.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2);
+
+    static MethodInfo enumerableToList = typeof(Enumerable).GetMethods()
+        .Single(_ => _.Name == "ToList" && _.GetParameters().Length == 1);
 
     static MethodInfo enumerableOrderBy = typeof(Enumerable).GetMethods()
         .Single(_ => _.Name == "OrderBy" && _.GetParameters().Length == 2);

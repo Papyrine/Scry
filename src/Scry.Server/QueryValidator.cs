@@ -528,9 +528,96 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     ValidateProjection(nested.Projection, target, grouped: false, groupKeys: null, depth + nested.Path.Count, ref members);
                     break;
 
+                case CollectionValue collection:
+                    if (grouped)
+                    {
+                        throw Reject("A collection cannot be projected in a grouped Select.");
+                    }
+
+                    if (depth > 0)
+                    {
+                        throw Reject("A collection can only be projected at the top level of a projection, not inside a nested object.");
+                    }
+
+                    ValidateCollection(collection, rootType, ref members);
+                    break;
+
                 default:
                     throw Reject("Unsupported projection member.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Validates a projected collection: the path must reach an aggregable collection, its elements
+    /// are read as a subquery's are — the element's own values, nothing correlated — and exactly one
+    /// of a selector or a flat projection says what each element becomes.
+    /// </summary>
+    void ValidateCollection(CollectionValue collection, Type rootType, ref int members)
+    {
+        var member = ResolvePath(collection.Path, rootType, requireScalar: false, "Projected collection");
+        if (member.Kind != MemberKind.Collection)
+        {
+            throw Reject($"'{string.Join('.', collection.Path)}' is not an aggregable collection.");
+        }
+
+        var element = member.Element ??
+                      throw Reject($"'{string.Join('.', collection.Path)}' is not a collection.");
+
+        if (collection.Predicate is { } predicate)
+        {
+            EnsureUncorrelated(predicate, Host.Subquery);
+            ValidateExpr(predicate, element, depth: 1);
+        }
+
+        switch (collection)
+        {
+            case {Selector: not null, Projection: not null}:
+                throw Reject($"'{string.Join('.', collection.Path)}' is projected with both a selector and an object; an element becomes one or the other.");
+
+            case {Selector: { } selector}:
+                EnsureUncorrelated(selector, Host.Subquery);
+                ValidateScalar(selector, element, "Collection selector", depth: 1);
+                break;
+
+            case {Projection: { } projection}:
+                if (projection.Members.Count == 0)
+                {
+                    throw Reject("An element of a projected collection must have at least one member.");
+                }
+
+                if (Schema.IsScalar(element))
+                {
+                    throw Reject($"'{string.Join('.', collection.Path)}' holds values, not rows, so its element has no members to project. Select the element itself.");
+                }
+
+                var names = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var part in projection.Members)
+                {
+                    if (++members > options.MaxProjectionMembers)
+                    {
+                        throw Reject($"The projection exceeds the maximum of {options.MaxProjectionMembers} members.");
+                    }
+
+                    EnsureUniqueName(names, part.Name);
+                    if (part.Value is not NodeValue value)
+                    {
+                        throw Reject("An element of a projected collection is a flat object of values: it cannot nest an object or another collection.");
+                    }
+
+                    if (!ReadsRow(value.Node))
+                    {
+                        throw Reject("A projection member must read at least one member of the row.");
+                    }
+
+                    EnsureUncorrelated(value.Node, Host.Subquery);
+                    ValidateExpr(value.Node, element, depth: 1);
+                }
+
+                break;
+
+            default:
+                throw Reject($"'{string.Join('.', collection.Path)}' is projected without saying what each element becomes: a selector, or an object of values.");
         }
     }
 
@@ -1709,7 +1796,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         if (projection.Members.Any(_ => _.Value is not NodeValue))
         {
-            throw Reject($"{op} over a Distinct query does not support a nested projection member.");
+            throw Reject($"{op} over a Distinct query does not support a nested or collection projection member.");
         }
 
         if (projection.Members.Count > DistinctRow.ByArity.Length)

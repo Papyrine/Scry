@@ -13,6 +13,13 @@ What a client project needs is the same everywhere, and is covered in [Getting s
   ([The model as a package](model-package.md))
 - a reference to `Scry.Client`, which brings the generator and the MSBuild targets that feed it the path
 
+The async terminals — `ToListAsync`, `FirstOrDefaultAsync`, `CountAsync` and the rest — live in `Scry.Linq` rather than
+`Scry`, since EF Core's own terminals share their names. The generated `ScryQuery.g.cs` carries a `global using` for it, so
+a project that generates a client writes nothing; one that writes queries against a client generated elsewhere — a test
+project over a client's models, an F# project over `Sample.QueryModels` — imports `Scry.Linq` itself. A project that
+references `Scry.Client` and EF Core together, such as a server hosting its Blazor client, never imports it and so sees
+neither set of names ambiguous.
+
 The target framework of the client is its own business. A `net10.0-windows` WPF project reads the same `net10.0` model DLL a
 Blazor project does — the framework in that path is the **model's**, not the client's.
 

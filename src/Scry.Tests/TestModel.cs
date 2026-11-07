@@ -425,8 +425,8 @@ public class Order
     public long Revision { get; set; }
 
     // begin-snippet: queryableCollection
-    // Opted in for aggregation: a client can ask how many lines an order has, or what they total, but
-    // can never enumerate them into a result.
+    // Opted in: a client can ask how many lines an order has, or what they total, or return the values
+    // it names of each line as a list in the row — and nothing deeper than that one list.
     [QueryableCollection]
     public List<OrderLine> Lines { get; set; } = [];
     // end-snippet
@@ -452,8 +452,8 @@ public class Order
 }
 
 /// <summary>
-/// The element type of the one exposed collection. Carries no row policy — a collection of a policied
-/// type is refused at startup, which <see cref="CollectionSubqueryTests"/> pins.
+/// The element type of the one exposed collection. Carries no row policy of its own;
+/// <see cref="PoliciedCollectionTests"/> attaches <see cref="BulkLinesOnlyPolicy"/> to it.
 /// </summary>
 [Queryable]
 public class OrderLine
@@ -735,8 +735,8 @@ public sealed class ActiveOnlyPolicy :
 // end-snippet
 
 /// <summary>
-/// Never attached by default. Registering it proves the startup refusal to expose a collection whose
-/// element type is policied — <see cref="Order.Lines"/> is a collection of <see cref="OrderLine"/>.
+/// Never attached by default. Registering it proves how a collection whose element type is policied
+/// is read — <see cref="Order.Lines"/> is a collection of <see cref="OrderLine"/>.
 /// </summary>
 public sealed class BulkLinesOnlyPolicy :
     IReturnablePolicy<OrderLine>

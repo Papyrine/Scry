@@ -66,7 +66,7 @@ type EmployeeRow =
       Manager: string
       Department: string }
 ```
-<sup><a href='/samples/Sample.FSharp/Queries.fs#L8-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpProjectionType' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Queries.fs#L9-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpProjectionType' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: fsharpQuery -->
@@ -85,7 +85,7 @@ let activeEmployees (query: ScryQuery) =
               Manager = e.Manager.Name
               Department = e.Department.Name })
 ```
-<sup><a href='/samples/Sample.FSharp/Queries.fs#L20-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Queries.fs#L21-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An F# record compiles to a constructor taking every field, and the translator reads member names from constructor parameters, capitalized — the rule a C# record follows ([Projections](querying.md#projections)).
@@ -102,7 +102,7 @@ let headcount (query: ScryQuery) =
         .GroupBy(_.Department.Name)
         .Select(fun g -> {| Headcount = g.Count(); Department = g.Key |})
 ```
-<sup><a href='/samples/Sample.FSharp/Queries.fs#L35-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpAnonymousRecord' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Queries.fs#L36-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpAnonymousRecord' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The compiler sorts an anonymous record's fields by name. Written in another order, it binds each field to a variable first — a `let` per field, in the order written — and constructs the record from the variables, so that the fields still evaluate in the order written. The translator inlines those bindings: a query reads the row and computes nothing else, so reading the bound expression where the variable was read is the same query. The same inlining covers a `let` written by hand:
@@ -120,7 +120,7 @@ let namedLike (query: ScryQuery) (fragment: string) =
         .OrderBy(_.Name)
         .Select(fun e -> {| Id = e.Id; Name = e.Name |})
 ```
-<sup><a href='/samples/Sample.FSharp/Queries.fs#L56-L66' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLet' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Queries.fs#L57-L67' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLet' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Values captured from the enclosing scope are evaluated on the client and sent as constants, as C# closures are. The generated models spell an optional column as `Nullable<int>` rather than `int option`, so it compares through the nullable operators:
@@ -138,7 +138,7 @@ let reportsTo (query: ScryQuery) (managerId: int) (top: int) =
         .Take(top)
         .Select(fun e -> {| Name = e.Name; Status = e.Status |})
 ```
-<sup><a href='/samples/Sample.FSharp/Queries.fs#L44-L54' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpClosure' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Queries.fs#L45-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpClosure' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The terminals are the client's own, so a query runs inside a `task` like any other awaitable, and a terminal taking a predicate of its own translates it the same way:
@@ -157,7 +157,7 @@ let activeEmployeesAsync (query: ScryQuery) =
 let activeCountAsync (query: ScryQuery) =
     query.Employee.CountAsync(_.Active)
 ```
-<sup><a href='/samples/Sample.FSharp/Queries.fs#L68-L79' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpTerminals' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Queries.fs#L69-L80' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpTerminals' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A [live query](live-queries.md) hands over the `IObservable<T>` that ships with .NET, which is the one FSharp.Core's `Observable` module is written against. So F# composes one with no reactive package at all:
@@ -172,7 +172,7 @@ let activeNames (query: ScryQuery) : IObservable<string list> =
     (Queries.activeEmployees query).Live().AsObservable()
     |> Observable.map (fun rows -> rows |> Seq.map _.Name |> List.ofSeq)
 ```
-<sup><a href='/samples/Sample.FSharp/Live.fs#L10-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveObservable' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Live.fs#L11-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveObservable' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Read as a stream it is an `IAsyncEnumerable<T>`, which F# has no `for` over inside a `task`, so the enumerator is pulled by hand:
@@ -197,7 +197,7 @@ let watch (query: ScryQuery) (onAnswer: EmployeeRow list -> unit) (cancel: Cance
                 onAnswer (List.ofSeq answers.Current)
     }
 ```
-<sup><a href='/samples/Sample.FSharp/Live.fs#L19-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Live.fs#L20-L37' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

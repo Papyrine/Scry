@@ -102,6 +102,13 @@ sealed partial class QueryTranslator
             return new NodeValue(TranslateExpr(expression, parameter));
         }
 
+        // A member that enumerates a collection navigation — Titles = _.Divisions.Select(d => d.Title)
+        // .ToList() — returns its elements rather than folding them, as a nested list in the row.
+        if (TryCollection(expression, parameter) is { } collection)
+        {
+            return collection;
+        }
+
         // A member whose value is itself a constructed object is a nested projection into a navigation
         // (e.g. Department = new DepartmentInfo(_.Department.Name)), producing a nested result object.
         // One that reads nothing from the row is not a projection at all — it is a constructed constant

@@ -14,3 +14,4 @@ global using Microsoft.CodeAnalysis.Text;
 global using Microsoft.CodeAnalysis.CSharp.Syntax;
 global using Microsoft.CodeAnalysis.Emit;
 global using Scry;
+global using Scry.Linq;

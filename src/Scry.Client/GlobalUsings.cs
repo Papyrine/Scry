@@ -15,3 +15,4 @@ global using System.Text.Json;
 global using Microsoft.AspNetCore.Components;
 global using Microsoft.Extensions.DependencyInjection;
 global using Scry;
+global using Scry.Linq;

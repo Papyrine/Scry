@@ -1,0 +1,18 @@
+﻿[
+  {
+    Region: North,
+    Doubled: [
+      6,
+      10
+    ]
+  },
+  {
+    Region: North,
+    Doubled: [
+      16
+    ]
+  },
+  {
+    Region: South
+  }
+]

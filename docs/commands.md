@@ -70,7 +70,7 @@ public class EmployeeCreated
 
 A class that was a message before it was a command becomes one by annotating it. The sample's `RepriceOrder` is a message two NServiceBus endpoints already shared, and `[Command(typeof(Order))]` is all it took; the model still references nothing but `Scry.Annotations`.
 
-The generator reads `[Command]` from the model DLL as it reads `[Queryable]`, and emits one class per command, one per result, and a `ScryCommands` facade on the generated `ScryQuery` as `Query.Commands`. A command class a client can construct is emitted with `init` properties; the server's own class is never referenced by the client.
+The generator reads `[Command]` from the model DLL as it reads `[Queryable]`, and emits one class per command, one per result, and a `ScryCommands` facade on the generated `ScryQuery` as `Query.Commands`. A command class a client can construct is emitted with `init` properties, each as nullable as the model declares it — a `string?` or `List<string>?` on the server is one on the client, left unset rather than written as `value!`, while a `string` is required and initialized `null!`; the server's own class is never referenced by the client. The annotation is a note to the caller and moves nothing the server reads, so it leaves the schema stamp as it was.
 
 
 ## Sending one

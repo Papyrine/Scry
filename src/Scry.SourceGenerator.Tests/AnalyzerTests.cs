@@ -485,6 +485,27 @@ public class AnalyzerTests
         await Assert.That(Analyze(queries)).IsEmpty();
     }
 
+    // A projected collection is a chain over a sequence inside the projection lambda, and its ToList
+    // is not the synchronous terminal the analyzer reports on a query: it materializes the elements the
+    // translator carries as a collection member.
+    [Test]
+    public async Task AProjectedCollectionIsLeftToTheTranslator()
+    {
+        const string queries =
+            """
+            await Query.Order
+                .Select(_ => new
+                {
+                    _.Id,
+                    Prices = _.Lines.Select(l => l.Price).ToList(),
+                    Lines = _.Lines.Where(l => l.Price > 3).Select(l => new {l.Id, l.Price}).ToArray()
+                })
+                .ToListAsync();
+            """;
+
+        await Assert.That(Analyze(queries)).IsEmpty();
+    }
+
     // Only a lambda a query operator was handed is one. A chain written inside a lambda given to plain
     // LINQ over a plain collection composes a query like any other, and was once skipped as though the
     // Select around it were reading a row.
@@ -667,6 +688,7 @@ public class AnalyzerTests
         using System.Threading.Tasks;
         using Scry;
         using Scry.Generated;
+        using Scry.Linq;
 
         namespace Scry
         {
@@ -689,6 +711,14 @@ public class AnalyzerTests
                 public IQueryable<T> Source<T>(string name, string[]? members = null) => null!;
             }
 
+            public static class ScryBatchExtensions
+            {
+                public static IQueryable<T> Enrol<T>(this IQueryable<T> source) => source;
+            }
+        }
+
+        namespace Scry.Linq
+        {
             public static class ScryQueryableExtensions
             {
                 public static Task<List<T>> ToListAsync<T>(this IQueryable<T> source) => null!;
@@ -703,11 +733,6 @@ public class AnalyzerTests
                 public static Task<Dictionary<TKey, T>> ToDictionaryAsync<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector) => null!;
                 public static Task<T> MaxByAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector) => null!;
                 public static Task<T> MinByAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector) => null!;
-            }
-
-            public static class ScryBatchExtensions
-            {
-                public static IQueryable<T> Enrol<T>(this IQueryable<T> source) => source;
             }
         }
 

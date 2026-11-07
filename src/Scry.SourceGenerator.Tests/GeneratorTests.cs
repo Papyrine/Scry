@@ -307,6 +307,39 @@
         return VerifyGenerated(model);
     }
 
+    // The shape a client projects a collection from — Select(_ => new Shape(_.Id, _.Title,
+    // _.Divisions.Select(d => d.Title).ToList())) — needs nothing of the generated model beyond the
+    // collection typed as a read-only list of the element's query model, which is what this pins.
+    [Test]
+    public Task ProjectableCollection()
+    {
+        const string model = """
+            using System.Collections.Generic;
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Brief
+            {
+                public int Id { get; set; }
+                public string Title { get; set; } = "";
+                [QueryableCollection] public List<Division> Divisions { get; set; } = [];
+            }
+
+            [Queryable]
+            public class Division
+            {
+                public int Id { get; set; }
+                public string Title { get; set; } = "";
+                public int BriefId { get; set; }
+                public Brief? Brief { get; set; }
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
     [Test]
     public Task NamedSources()
     {

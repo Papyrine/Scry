@@ -74,7 +74,7 @@ It is not a security boundary and cannot become one. The client is assumed hosti
 
 ### Collection subqueries
 
-A collection opted in with [`[QueryableCollection]`](annotations.md#collections) is **aggregable, not projectable**: `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max` over it, answered as a correlated subquery, in any position a value can appear. Its rows can never be enumerated, so a response never carries a nested collection. See [collection subqueries](querying.md#collection-subqueries).
+A collection opted in with [`[QueryableCollection]`](annotations.md#collections) is **aggregable**: `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max` over it, answered as a correlated subquery, in any position a value can appear. See [collection subqueries](querying.md#collection-subqueries). It is also **projectable one level deep**, as a top-level projection member alone: `Lines = _.Lines.Where(…).Select(l => l.Sku).ToList()` returns a list of values, and a `Select` constructing an object returns a list of flat objects of values. Nothing inside the list may be an object, a subquery or another collection. See [projected collections](querying.md#projected-collections).
 
 A collection of **values** — an EF primitive collection, or a JSON array of `[QueryableComplex]` value objects — answers the same set. For a collection of values the element has no members, so the predicate and selector read the element itself, and `Contains` is available as the `Any(_ => _ == value)` it stands for. See [collections of values](querying.md#collections-of-values).
 
@@ -193,7 +193,7 @@ Considered and rejected, for reasons that have not changed.
   Standalone it asks something else: yield one row when the result would otherwise be empty. EF does translate that, so the objection is not that it cannot be carried. It is what arrives. The row is `null` — an absent row, not a row of default values — and a Scry response is a list of projected objects, so it lands as a null element in the client's list. Every row would need a null check before use, to learn the one thing the feature conveys: that the result was empty. An empty list already says that, in the shape the client handles anyway.
 
   The overload that supplies the fallback has nowhere to put it. The wire carries scalar constants, never a constructed row, so there is no way to name what the default should be.
-- `GroupJoin` **projecting** its group, and `SelectMany` with a **result selector**. The first would put a nested collection in a response, which is exactly what keeps collections [aggregable and not projectable](annotations.md#collections); the second would produce a two-rooted row without a join's projection to name the sides. Both have a supported form: aggregate the group, or flatten first and then `Select`.
+- `GroupJoin` **projecting** its group, and `SelectMany` with a **result selector**. The first would put a group's whole rows in a response, where a [projected collection](querying.md#projected-collections) returns only the values a `Select` names; the second would produce a two-rooted row without a join's projection to name the sides. Both have a supported form: aggregate the group, or flatten first and then `Select`.
 
 ### Not gaps
 
@@ -249,7 +249,7 @@ Environmental values — `DateTime.Now`, `Guid.NewGuid()`, `EF.Functions.Random(
 ### The rest, by bucket
 
 - **Bare-scalar and whole-entity projections.** A response is keyed by member name, so a projection [must construct an object](#anonymous-types); a whole-entity projection would return rows unshaped, which the projection contract exists to prevent.
-- **Collection-valued projections** — `Select(_ => new { _.Posts })`, materialized `IGrouping`s, `CROSS APPLY` collections in the result, arbitrary nesting depth. All put a nested collection in a response, which is exactly what keeps collections [aggregable and not projectable](annotations.md#collections).
+- **Unshaped or deeper collection-valued projections** — `Select(_ => new { _.Posts })` without a `Select` saying what each element becomes, materialized `IGrouping`s, `CROSS APPLY` collections in the result, a list inside a list. A [projected collection](querying.md#projected-collections) is one level of values or flat objects, and nothing deeper.
 - **`Cast`, `DefaultIfEmpty`, `SelectMany` result selectors, projected `GroupJoin` groups** — [deliberately left out](#deliberately-left-out).
 - **`SkipWhile`, `TakeWhile`, `Zip`, `Aggregate`, `SequenceEqual`, comparer overloads** — [not gaps](#not-gaps): EF recognizes them and then fails their relational translation.
 - **`Include`, tracking, split queries, `ExecuteUpdate` / `ExecuteDelete`, `FromSql`, table-valued functions, temporal tables, and the `EF.Functions` catalogue** (`Like`, `PatIndex`, full-text, JSON, `DataLength`, vector search, statistical aggregates) — [out of scope](#out-of-scope): server-side surface, and a hostile client is exactly the wrong party to hand it to.

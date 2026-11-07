@@ -14,6 +14,10 @@ public sealed class CreateEmployee
     public Status Status { get; init; }
     public global::System.Collections.Generic.IReadOnlyList<string> Tags { get; init; } = null!;
     public global::System.DateOnly? Starts { get; init; }
+    public string? Nickname { get; init; }
+    public global::System.Guid? Team { get; init; }
+    public byte[]? Photo { get; init; }
+    public global::System.Collections.Generic.IReadOnlyList<string>? Aliases { get; init; }
 }
 
 /// <summary>The 'DeleteEmployee' command, sent through <c>ScryCommands</c>.</summary>
@@ -35,6 +39,7 @@ public sealed class RenameEmployee
 public sealed class EmployeeCreated
 {
     public int Id { get; init; }
+    public string? Badge { get; init; }
 }
 
 /// <summary>The commands this client may send, each answered with its outcome.</summary>

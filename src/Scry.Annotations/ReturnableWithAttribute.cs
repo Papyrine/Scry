@@ -24,8 +24,8 @@ public sealed class ReturnableWithAttribute(Type policy) :
     public DeniedRowMode Navigation { get; set; }
 
     /// <summary>
-    /// What a <c>[QueryableCollection]</c> of this policy's type does. Refusing is the default, so a
-    /// collection of a policied type stays a startup failure until a host says which answer it wants.
+    /// What a <c>[QueryableCollection]</c> of this policy's type does. <see cref="DeniedCollectionMode.Hide"/>
+    /// by default: the collection is read through the policy, as a navigation into the type is.
     /// </summary>
-    public DeniedCollectionMode CollectionNavigation { get; set; }
+    public DeniedCollectionMode CollectionNavigation { get; set; } = DeniedCollectionMode.Hide;
 }

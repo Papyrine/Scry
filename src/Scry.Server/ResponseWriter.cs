@@ -351,6 +351,10 @@ sealed class PlanShapeWriter
         public bool Binary;
         public List<Node>? Children;
         public Dictionary<string, int>? Index;
+
+        // The member names of a projected collection of rows, where the slot holds one object array
+        // per element; null for every other leaf.
+        public JsonEncodedText[]? Elements;
     }
 
     static JsonEncodedText bin = JsonEncodedText.Encode(ScryBinary.PartProperty);
@@ -381,15 +385,16 @@ sealed class PlanShapeWriter
     /// <summary>The writer for a shape, built once per process and shared by every plan of that shape.</summary>
     public static PlanShapeWriter Get(
         IReadOnlyList<IReadOnlyList<string>> shape,
-        IReadOnlyList<bool>? binarySlots)
+        IReadOnlyList<bool>? binarySlots,
+        IReadOnlyList<IReadOnlyList<string>?>? elements = null)
     {
-        var key = new ShapeKey(shape, binarySlots);
+        var key = new ShapeKey(shape, binarySlots, elements);
         if (writers.TryGetValue(key, out var cached))
         {
             return cached;
         }
 
-        var writer = Create(shape, binarySlots);
+        var writer = Create(shape, binarySlots, elements);
         // Counted on the side: ConcurrentDictionary.Count takes every lock in the dictionary, and a
         // miss is what a caller sending new shapes makes every request.
         if (Volatile.Read(ref cachedWriters) < limit &&
@@ -409,16 +414,21 @@ sealed class PlanShapeWriter
     /// as a different shape's: the names are the client's, and a caller who could collide two shapes
     /// would have one projection answered in another's member order.
     /// </summary>
-    readonly struct ShapeKey(IReadOnlyList<IReadOnlyList<string>> shape, IReadOnlyList<bool>? binary) :
+    readonly struct ShapeKey(
+        IReadOnlyList<IReadOnlyList<string>> shape,
+        IReadOnlyList<bool>? binary,
+        IReadOnlyList<IReadOnlyList<string>?>? elements) :
         IEquatable<ShapeKey>
     {
         readonly IReadOnlyList<IReadOnlyList<string>> shape = shape;
         readonly IReadOnlyList<bool>? binary = binary;
+        readonly IReadOnlyList<IReadOnlyList<string>?>? elements = elements;
 
         public bool Equals(ShapeKey other)
         {
             if (shape.Count != other.shape.Count ||
-                binary is null != other.binary is null)
+                binary is null != other.binary is null ||
+                !SameElements(other.elements))
             {
                 return false;
             }
@@ -464,6 +474,53 @@ sealed class PlanShapeWriter
             return true;
         }
 
+        // The element names of a collection of rows are part of the identity too: the same paths
+        // with differently named elements are different writers.
+        bool SameElements(IReadOnlyList<IReadOnlyList<string>?>? other)
+        {
+            if (elements is null ||
+                other is null)
+            {
+                return elements is null == other is null;
+            }
+
+            if (elements.Count != other.Count)
+            {
+                return false;
+            }
+
+            for (var slot = 0; slot < elements.Count; slot++)
+            {
+                var names = elements[slot];
+                var otherNames = other[slot];
+                if (names is null ||
+                    otherNames is null)
+                {
+                    if (names is null != otherNames is null)
+                    {
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                if (names.Count != otherNames.Count)
+                {
+                    return false;
+                }
+
+                for (var i = 0; i < names.Count; i++)
+                {
+                    if (!string.Equals(names[i], otherNames[i], StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
         public override bool Equals(object? obj) =>
             obj is ShapeKey other && Equals(other);
 
@@ -489,13 +546,32 @@ sealed class PlanShapeWriter
                 }
             }
 
+            if (elements is not null)
+            {
+                hash.Add(elements.Count);
+                foreach (var names in elements)
+                {
+                    hash.Add(names?.Count ?? -1);
+                    if (names is null)
+                    {
+                        continue;
+                    }
+
+                    foreach (var name in names)
+                    {
+                        hash.Add(name, StringComparer.Ordinal);
+                    }
+                }
+            }
+
             return hash.ToHashCode();
         }
     }
 
     static PlanShapeWriter Create(
         IReadOnlyList<IReadOnlyList<string>> shape,
-        IReadOnlyList<bool>? binarySlots = null)
+        IReadOnlyList<bool>? binarySlots = null,
+        IReadOnlyList<IReadOnlyList<string>?>? elements = null)
     {
         var root = Branch(new(""));
         for (var slot = 0; slot < shape.Count; slot++)
@@ -522,6 +598,9 @@ sealed class PlanShapeWriter
             leaf.Index = null;
             leaf.Slot = slot;
             leaf.Binary = binarySlots?[slot] == true;
+            leaf.Elements = elements?[slot]?
+                .Select(_ => JsonEncodedText.Encode(JsonNamingPolicy.CamelCase.ConvertName(_)))
+                .ToArray();
         }
 
         return new(root);
@@ -591,10 +670,74 @@ sealed class PlanShapeWriter
                 continue;
             }
 
-            WriteValue(json, row[child.Slot]);
+            if (child.Elements is { } names)
+            {
+                WriteRows(json, names, row[child.Slot], capture);
+                continue;
+            }
+
+            WriteCanonicalValue(json, row[child.Slot], capture);
         }
 
         json.WriteEndObject();
+    }
+
+    // A value as the record holds it: bytes by digest, inside a list too.
+    static void WriteCanonicalValue(Utf8JsonWriter json, object? value, DisclosureCapture capture)
+    {
+        switch (value)
+        {
+            case byte[] bytes:
+                capture.WriteDigest(json, bytes);
+                break;
+            case IList<byte[]?> list:
+                json.WriteStartArray();
+                foreach (var item in list)
+                {
+                    WriteCanonicalValue(json, item, capture);
+                }
+
+                json.WriteEndArray();
+                break;
+            default:
+                WriteValue(json, value);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Writes a projected collection of rows: one object per element, its members named from the plan
+    /// in the order the element's values were selected. Null where the collection was unreachable.
+    /// </summary>
+    static void WriteRows(Utf8JsonWriter json, JsonEncodedText[] names, object? value, DisclosureCapture? capture = null)
+    {
+        if (value is not IEnumerable<object?[]> rows)
+        {
+            json.WriteNullValue();
+            return;
+        }
+
+        json.WriteStartArray();
+        foreach (var element in rows)
+        {
+            json.WriteStartObject();
+            for (var i = 0; i < names.Length; i++)
+            {
+                json.WritePropertyName(names[i]);
+                if (capture is not null)
+                {
+                    WriteCanonicalValue(json, element[i], capture);
+                }
+                else
+                {
+                    WriteValue(json, element[i]);
+                }
+            }
+
+            json.WriteEndObject();
+        }
+
+        json.WriteEndArray();
     }
 
     static void WriteObject(Utf8JsonWriter json, Node node, object?[] row, BinaryPartCollector? binary)
@@ -615,6 +758,10 @@ sealed class PlanShapeWriter
                     json.WriteStartObject();
                     json.WriteNumber(bin, binary.Add(bytes));
                     json.WriteEndObject();
+                }
+                else if (child.Elements is { } names)
+                {
+                    WriteRows(json, names, row[child.Slot]);
                 }
                 else
                 {
@@ -685,6 +832,16 @@ sealed class PlanShapeWriter
                 break;
             case byte[] bytes:
                 json.WriteBase64StringValue(bytes);
+                break;
+            // A projected collection of values, each written as the leaf it would be on its own.
+            case IList list:
+                json.WriteStartArray();
+                foreach (var item in list)
+                {
+                    WriteValue(json, item);
+                }
+
+                json.WriteEndArray();
                 break;
             default:
                 JsonSerializer.Serialize(json, value, value.GetType(), ScryJson.Options);

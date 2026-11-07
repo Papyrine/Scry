@@ -4,9 +4,17 @@ sealed class ProjectionPlan(
     IReadOnlyList<IReadOnlyList<string>> shape,
     IReadOnlyList<bool>? binarySlots = null,
     IReadOnlyList<DisclosureSlot>? entities = null,
-    IReadOnlyList<bool>? builtLeftOut = null)
+    IReadOnlyList<bool>? builtLeftOut = null,
+    IReadOnlyList<IReadOnlyList<string>?>? elements = null)
 {
     public LambdaExpression Selector { get; } = selector;
+
+    /// <summary>
+    /// Per-slot: the member names of a projected collection of rows, whose slot holds one
+    /// <c>object[]</c> per element for the writer to name. Null for every other slot, and null as a
+    /// whole when no slot is one — the common case, and the check the writers branch on.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<string>?>? Elements { get; } = elements;
 
     /// <summary>
     /// Where the keys of the rows each projected row was read from lie, for the disclosure audit: in
@@ -35,7 +43,7 @@ sealed class ProjectionPlan(
     /// the same writer, so the bare assignment is benign.
     /// </remarks>
     public PlanShapeWriter Writer =>
-        field ??= PlanShapeWriter.Get(Shape, BinarySlots);
+        field ??= PlanShapeWriter.Get(Shape, BinarySlots, Elements);
 
     /// <summary>
     /// Whether any written slot could hold a <c>byte[]</c>, which the disclosure audit records by
@@ -204,7 +212,21 @@ sealed class ProjectionPlan(
         return leaf.Type;
     }
 
-    // Anything a byte[] could be standing behind: its own type, and object or an interface it has.
-    static bool MayBeBytes(Type type) =>
-        type.IsAssignableFrom(typeof(byte[]));
+    // Anything a byte[] could be standing behind: its own type, and object or an interface it has. A
+    // projected collection may hold one wherever its element may.
+    static bool MayBeBytes(Type type)
+    {
+        if (type.IsAssignableFrom(typeof(byte[])))
+        {
+            return true;
+        }
+
+        if (type.IsGenericType &&
+            type.GetGenericTypeDefinition() == typeof(List<>))
+        {
+            return MayBeBytes(type.GetGenericArguments()[0]);
+        }
+
+        return false;
+    }
 }

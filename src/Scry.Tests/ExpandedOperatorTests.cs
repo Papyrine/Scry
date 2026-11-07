@@ -1109,7 +1109,7 @@ public class ExpandedOperatorTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception.Message).Contains("nested projection member");
+        await Assert.That(exception.Message).Contains("nested or collection projection member");
     }
 
     static ScryClient ClientFor(TestContext context) =>

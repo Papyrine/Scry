@@ -691,12 +691,13 @@ Everything else travels as an **object** with `name` and `value`: a member renam
 <a id='snippet-wireProjectionValues'></a>
 ```cs
 /// <summary>
-/// The value of a projection member. The set is closed, so a projection member is either an
-/// expression or a nested projection and can be nothing else.
+/// The value of a projection member. The set is closed, so a projection member is an expression, a
+/// nested projection or a projected collection, and can be nothing else.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(NodeValue), "node")]
 [JsonDerivedType(typeof(NestedValue), "nested")]
+[JsonDerivedType(typeof(CollectionValue), "collection")]
 public closed record ProjectionValue;
 
 /// <summary>A projection member backed by an expression (a member path or an aggregate).</summary>
@@ -709,15 +710,16 @@ public sealed record NestedValue(
     Projection Projection) :
     ProjectionValue;
 ```
-<sup><a href='/src/Scry.Wire/Projections/ProjectionValue.cs#L3-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireProjectionValues' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Projections/ProjectionValue.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireProjectionValues' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Produces |
 | --- | --- | --- |
 | `node` | `node: Node` | A scalar leaf, or an aggregate in a grouped select. |
 | `nested` | `path: string` or `string[]`, `projection: Projection` | A nested JSON object built from a navigation. |
+| `collection` | `path: string` or `string[]`, optional `predicate: Node`, and one of `selector: Node` or `projection: Projection` | A JSON array built from a `[QueryableCollection]`: one value per element under `selector`, or one flat object per element under `projection`. |
 
-A projection must have at least one member. Nested projections are not allowed in a grouped select, and nesting depth is capped by `MaxNavigationDepth`.
+A projection must have at least one member. Nested projections are not allowed in a grouped select, and nesting depth is capped by `MaxNavigationDepth`. A `collection` is a top-level member only; its `predicate`, `selector` and `projection` read the collection's element, and none of them may hold a `subquery`, an `inSource`, a `nested` or another `collection`.
 
 
 ## Response

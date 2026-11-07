@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using Scry;
+using Scry.Linq;
 
 namespace Benchmarks;
 

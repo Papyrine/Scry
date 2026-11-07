@@ -7,10 +7,10 @@ namespace Scry;
 /// separately rather than by one setting standing for all four.
 /// </summary>
 /// <remarks>
-/// Every default is the non-disclosing one, which is what the server did before this existed: hide the
-/// row, and refuse a collection of a policied type outright. Raising any of them to
-/// <see cref="DeniedRowMode.Error"/> is a deliberate trade of secrecy for a clear answer — see
-/// <c>docs/security.md</c>.
+/// Every default is the non-disclosing one: hide the row, wherever it is read from — a collection of
+/// the policied type included, which is read through the policy as a navigation into it is. Raising any
+/// of them to <see cref="DeniedRowMode.Error"/> is a deliberate trade of secrecy for a clear answer —
+/// see <c>docs/security.md</c>.
 /// </remarks>
 public sealed record DeniedRowHandling
 {
@@ -26,9 +26,12 @@ public sealed record DeniedRowHandling
     /// <summary>Where a navigation steps into the policied source.</summary>
     public DeniedRowMode Navigation { get; init; }
 
-    /// <summary>Where a <c>[QueryableCollection]</c> aggregates the policied type.</summary>
-    public DeniedCollectionMode CollectionNavigation { get; init; }
+    /// <summary>
+    /// Where a <c>[QueryableCollection]</c> aggregates or returns the policied type. Read through the
+    /// policy by default.
+    /// </summary>
+    public DeniedCollectionMode CollectionNavigation { get; init; } = DeniedCollectionMode.Hide;
 
-    /// <summary>Hide everywhere, refuse collections: what a policy carries unless a host says otherwise.</summary>
+    /// <summary>Hide everywhere: what a policy carries unless a host says otherwise.</summary>
     public static DeniedRowHandling Default { get; } = new();
 }

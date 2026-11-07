@@ -1,6 +1,7 @@
 ﻿/// <summary>
-/// Collection navigations are aggregable but never projectable: every question here folds a
-/// collection to a scalar, evaluated by the database as a correlated subquery.
+/// Collection navigations are aggregable: every question here folds a collection to a scalar,
+/// evaluated by the database as a correlated subquery. Returning their elements is
+/// <see cref="CollectionProjectionTests"/>.
 /// </summary>
 public class CollectionSubqueryTests
 {
@@ -298,22 +299,6 @@ public class CollectionSubqueryTests
             () => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("requires a predicate");
-    }
-
-    [Test]
-    public async Task ExposingACollectionOfAPoliciedTypeIsRefusedAtStartup()
-    {
-        // A policy filters a source; a subquery has none, so counting a policied collection would count
-        // exactly the rows the policy hides. Refused when the schema is built, not at query time.
-        var exception = Assert.ThrowsExactly<Exception>(
-            () => ScryProcessor.Create<TestContext>(
-                options =>
-                {
-                    options.AddPocoSource<Holiday>(_ => Holiday.Seed());
-                    options.AddPolicy<OrderLine, BulkLinesOnlyPolicy>();
-                }));
-
-        await Assert.That(exception.Message).Contains("row policy");
     }
 
     static ScryClient ClientFor(TestContext context) =>

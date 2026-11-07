@@ -1,0 +1,66 @@
+﻿{
+  Version: 1,
+  Root: Order,
+  Pipeline: [
+    {
+      Projection: {
+        Members: [
+          {
+            Name: Region,
+            Value: {
+              Node: {
+                Path: [
+                  Region
+                ]
+              }
+            }
+          },
+          {
+            Name: Lines,
+            Value: {
+              Path: [
+                Lines
+              ],
+              Predicate: {
+                Op: GreaterThan,
+                Left: {
+                  Path: [
+                    Quantity
+                  ]
+                },
+                Right: {
+                  Value: 1,
+                  Tag: Int32
+                }
+              },
+              Projection: {
+                Members: [
+                  {
+                    Name: Sku,
+                    Value: {
+                      Node: {
+                        Path: [
+                          Sku
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    Name: Price,
+                    Value: {
+                      Node: {
+                        Path: [
+                          Price
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

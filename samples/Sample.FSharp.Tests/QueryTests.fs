@@ -9,6 +9,7 @@ open TUnit.Assertions.Extensions
 open TUnit.Core
 open Sample.FSharp
 open Scry
+open Scry.Linq
 open VerifyTUnit
 
 type QueryTests() =

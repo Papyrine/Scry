@@ -248,6 +248,17 @@ static class SensitiveWalk
                         Member(nested.Path, root, projected: true);
                         Projection(nested.Projection, null);
                         break;
+                    case CollectionValue collection:
+                        // The path reaches a collection; what is returned is read off its elements.
+                        Member(collection.Path, root, projected: true);
+                        Expression(collection.Predicate, null);
+                        Expression(collection.Selector, null, projected: true);
+                        if (collection.Projection is { } elements)
+                        {
+                            Projection(elements, null);
+                        }
+
+                        break;
                 }
             }
         }
