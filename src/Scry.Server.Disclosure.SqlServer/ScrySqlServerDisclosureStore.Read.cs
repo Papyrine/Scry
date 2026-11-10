@@ -699,7 +699,7 @@ public sealed partial class ScrySqlServerDisclosureStore
 
             if (close.Outcome != ScryDisclosureOutcome.Retracted)
             {
-                ended.Add(new(entry.Event, close));
+                ended.Add(entry with { Close = close });
             }
         }
 
