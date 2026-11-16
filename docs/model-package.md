@@ -19,7 +19,7 @@ The sample carries a working one: `Sample.ModelPackageClient` is generated from 
 </ItemGroup>
 <PropertyGroup>
   <!-- The model's own target framework, not this project's. -->
-  <ScryModelDll>$(PkgSample_Model)\lib\net10.0\Sample.Model.dll</ScryModelDll>
+  <ScryModelDll>$(PkgSample_Model)\lib\net11.0\Sample.Model.dll</ScryModelDll>
 </PropertyGroup>
 ```
 <sup><a href='/samples/Sample.ModelPackageClient/Sample.ModelPackageClient.csproj#L19-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-modelPackageReference' title='Start of snippet'>anchor</a></sup>
@@ -30,7 +30,7 @@ Each part of the reference does one job:
 - **`ExcludeAssets="all"`** — the package is downloaded for the generator to read, and nothing from it is compiled against or shipped. NuGet applies that to everything the package brings with it, so EF Core and its database provider stay out too. It is the boundary a model project's `ReferenceOutputAssembly="false"` keeps ([The path-not-reference design](source-generator.md#the-path-not-reference-design)). A plain `PackageReference` would make the model a real reference of the client: compiled against, shipped, and for a Blazor WebAssembly client downloaded by every browser along with EF Core.
 - **`PrivateAssets="all"`** — nothing referencing the client inherits the package: not the server that hosts a WebAssembly client, nor anything consuming a client that is itself packed.
 - **`GeneratePathProperty="true"`** — restore defines `$(Pkg…)`, the package's folder in the NuGet cache, named for the package with each `.` as `_`. It is written to `obj/*.nuget.g.props`, which loads before the project body, so `ScryModelDll` can be built from it.
-- **`lib\net10.0`** is the framework the *model* targets — the build the server runs — not the client's.
+- **`lib\net11.0`** is the framework the *model* targets — the build the server runs — not the client's.
 
 No ordering reference is needed: restore puts the DLL in place before anything builds. The generator reads the model again whenever the DLL's content changes ([Why the stamp](source-generator.md#why-the-stamp)), and a package's content changes only with its version.
 
@@ -64,14 +64,14 @@ A client is generated from one assembly, the DLL `ScryModelDll` names, and the s
 - **Every enum an exposed member reads, and every class a command answers with.**
 - **Every marking an override needs.** A member overriding one declared in another assembly repeats the `[QueryIgnore]`, `[Sensitive]`, `[Attachment]`, `[QueryableCollection]`, `[Key]` or `[CommandIgnore]` that declaration carries.
 
-`Scry.Annotations` targets `net10.0`, so a package referencing it does too.
+`Scry.Annotations` targets `net11.0`, so a package referencing it does too.
 
 **Keep `Scry.Server` out of the package.** A policy named by `[ReturnableWith]`, `[AttachmentWith]` or a command's `Policy` lives in the model, so the model depends on `Scry.Server`, and through it on the ASP.NET Core shared framework. `ExcludeAssets` keeps the server's assemblies out of a client, but not that framework reference, which NuGet carries regardless: a Blazor WebAssembly client then fails to build, there being no ASP.NET Core runtime for the browser. Registered in code — `options.AddPolicy<TEntity, TPolicy>()`, with `AddAttachmentPolicy` and `AddCommandPolicy` beside it — a policy lives in the server, and the package depends on nothing but `Scry.Annotations` and EF Core.
 
 
 ## Troubleshooting
 
-**`Scry: the model assembly '\lib\net10.0\…' was not found`, the path starting at the root of a drive.** `$(Pkg…)` was empty: the reference lacks `GeneratePathProperty="true"`, or the property is spelled differently from the one restore generated. `obj/*.nuget.g.props` lists the names it wrote.
+**`Scry: the model assembly '\lib\net11.0\…' was not found`, the path starting at the root of a drive.** `$(Pkg…)` was empty: the reference lacks `GeneratePathProperty="true"`, or the property is spelled differently from the one restore generated. `obj/*.nuget.g.props` lists the names it wrote.
 
 **The client compiles against the model's types, or ships EF Core.** The reference lacks `ExcludeAssets="all"`.
 

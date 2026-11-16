@@ -349,7 +349,8 @@ public class NumericPromotionTests
     {
         // The promotion is only visible as a cast in the SQL, which is what pins the target type itself
         // rather than the answer it happens to produce. EF maps uint to bigint and ulong to
-        // decimal(20,0), so those are the shapes the widened operands take in the query.
+        // decimal(20,0), so those are the shapes the widened operands take in the query. A uint column
+        // widened to long is already a bigint in the table, so EF writes no cast for it.
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
@@ -375,12 +376,12 @@ public class NumericPromotionTests
                     Where(_ => _.Id == _.Quantity)))
             .Snapshot(
                 """
-                WHERE CAST([o].[Quantity] AS bigint) > CAST([o].[Id] AS bigint)
+                WHERE [o].[Quantity] > CAST([o].[Id] AS bigint)
                 WHERE [o].[Amount] > CAST([o].[Quantity] AS decimal(18,2))
                 WHERE CAST([o].[Id] AS decimal(18,2)) < [o].[Amount]
                 WHERE [o].[Discount] > CAST([o].[Id] AS decimal(18,2))
                 WHERE [o].[Sku] > CAST([o].[Quantity] AS decimal(20,0))
-                WHERE CAST([o].[Id] AS bigint) = CAST([o].[Quantity] AS bigint)
+                WHERE CAST([o].[Id] AS bigint) = [o].[Quantity]
                 """);
     }
 

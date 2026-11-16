@@ -13,12 +13,12 @@ A C# class library with no source of its own. It points at the model DLL by path
 <a id='snippet-queryModelsProject'></a>
 ```csproj
 <PropertyGroup>
-  <TargetFramework>net10.0</TargetFramework>
+  <TargetFramework>net11.0</TargetFramework>
   <Nullable>enable</Nullable>
   <ImplicitUsings>enable</ImplicitUsings>
   <IsPackable>false</IsPackable>
   <!-- The server model, pointed at by path. NOT referenced. -->
-  <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
+  <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net11.0\Sample.Model.dll</ScryModelDll>
 </PropertyGroup>
 
 <ItemGroup>

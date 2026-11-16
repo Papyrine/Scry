@@ -418,8 +418,6 @@ public partial class App
         {
             // A later command owns the panes; what this one failed at is no longer what is on screen.
         }
-
-        StateHasChanged();
     }
 
     protected override async Task OnInitializedAsync()
@@ -578,8 +576,6 @@ public partial class App
         {
             // A later command owns the panes; what this one failed at is no longer what is on screen.
         }
-
-        StateHasChanged();
     }
 
     // The outcome, the transport it took, how many rows came back, and how long it took. The method
@@ -637,7 +633,7 @@ public partial class App
             Label = "Run Scry query",
             ContextMenuGroupId = "navigation",
             Keybindings = [(int)KeyMod.CtrlCmd | (int)BlazorMonaco.KeyCode.Enter],
-            Run = _ => InvokeAsync(Run)
+            Run = _ => FromEditor(Run)
         });
 
         await editor.AddAction(new ActionDescriptor
@@ -646,7 +642,7 @@ public partial class App
             Label = "Format Scry query",
             ContextMenuGroupId = "navigation",
             Keybindings = [(int) KeyMod.CtrlCmd | (int) KeyMod.Shift | (int) BlazorMonaco.KeyCode.KeyP],
-            Run = _ => InvokeAsync(Prettify)
+            Run = _ => FromEditor(Prettify)
         });
 
         await editor.AddAction(new ActionDescriptor
@@ -662,6 +658,19 @@ public partial class App
         await MoveCaretToEnd();
         await TryRegister();
     }
+
+    /// <summary>
+    /// Runs a command the editor's keybinding or context menu asked for, and renders once it is done.
+    /// The same command bound to a button needs no render of its own, since the framework renders after
+    /// every event it dispatched; a Monaco action is not one of those, so without this its result would
+    /// sit unseen until something else rendered.
+    /// </summary>
+    Task FromEditor(Func<Task> command) =>
+        InvokeAsync(async () =>
+        {
+            await command();
+            StateHasChanged();
+        });
 
     /// <summary>
     /// Puts the caret at the end of the query. Text that arrives without anyone typing it — the sample the
@@ -730,7 +739,6 @@ public partial class App
         if (!QueryPrinter.TryFormat(code, out var formatted, out var problem))
         {
             error = problem;
-            StateHasChanged();
             return;
         }
 
@@ -740,8 +748,6 @@ public partial class App
             await editor.SetValue(formatted);
             await MoveCaretToEnd();
         }
-
-        StateHasChanged();
     }
 
     Task CopyQuery() =>
@@ -832,7 +838,7 @@ public partial class App
                 Label = "Show Scry SQL",
                 ContextMenuGroupId = "navigation",
                 Keybindings = [(int) KeyMod.CtrlCmd | (int) KeyMod.Shift | (int) BlazorMonaco.KeyCode.KeyQ],
-                Run = _ => InvokeAsync(ShowSql)
+                Run = _ => FromEditor(ShowSql)
             });
         }
 

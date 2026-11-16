@@ -4,17 +4,17 @@
          assembly, so a non-Windows build of the samples solution succeeds rather than failing here.
          CI is windows-latest, so this guard is for a local build on another OS. -->
     <IsWindows>$([MSBuild]::IsOSPlatform('Windows'))</IsWindows>
-    <TargetFramework Condition="'$(IsWindows)' == 'true'">net10.0-windows</TargetFramework>
-    <TargetFramework Condition="'$(IsWindows)' == 'false'">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(IsWindows)' == 'true'">net11.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(IsWindows)' == 'false'">net11.0</TargetFramework>
     <OutputType Condition="'$(IsWindows)' == 'true'">WinExe</OutputType>
     <UseWindowsForms>$(IsWindows)</UseWindowsForms>
     <EnableDefaultItems>$(IsWindows)</EnableDefaultItems>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
-    <!-- The server model, pointed at by path. NOT referenced. The net10.0 here is the model's target
-         framework, not this project's: a net10.0-windows client still reads a net10.0 model. -->
-    <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
+    <!-- The server model, pointed at by path. NOT referenced. The net11.0 here is the model's target
+         framework, not this project's: a net11.0-windows client still reads a net11.0 model. -->
+    <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net11.0\Sample.Model.dll</ScryModelDll>
   </PropertyGroup>
 
   <ItemGroup>

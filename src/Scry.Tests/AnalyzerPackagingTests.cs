@@ -17,7 +17,7 @@ using System.Reflection.PortableExecutable;
 /// </remarks>
 public class AnalyzerPackagingTests
 {
-    // Scry.Client targets net10.0 only, and the first .NET 10 SDK ships Roslyn 5.0, so no consumer
+    // Scry.Client's oldest target is net10.0, and the first .NET 10 SDK ships Roslyn 5.0, so no consumer
     // has an older compiler than this. Raising it drops SDK feature bands that worked before.
     static readonly Version oldestCompiler = new(5, 0);
 

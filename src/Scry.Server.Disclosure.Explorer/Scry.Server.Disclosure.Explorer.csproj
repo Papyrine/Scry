@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>Scry</RootNamespace>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
     <Description>An opt-in browser explorer over the Scry disclosure audit: ask who received a row, what a caller received, and whether a caller ever received a member, with every question recorded.</Description>
-    <DisclosureUiPublishDir>$(MSBuildThisFileDirectory)..\Scry.Disclosure.Ui\bin\$(Configuration)\net10.0\publish\wwwroot</DisclosureUiPublishDir>
+    <DisclosureUiPublishDir>$(MSBuildThisFileDirectory)..\Scry.Disclosure.Ui\bin\$(Configuration)\net11.0\publish\wwwroot</DisclosureUiPublishDir>
   </PropertyGroup>
   <ItemGroup>
     <!-- What the explorer answers is worth asserting without a browser: the questions over a test
@@ -42,7 +42,7 @@
              Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="..\Scry.Disclosure.Ui\Scry.Disclosure.Ui.csproj"
              Targets="Publish"
-             Properties="Configuration=$(Configuration);TargetFramework=net10.0" />
+             Properties="Configuration=$(Configuration);TargetFramework=net11.0" />
     <ItemGroup>
       <_ScryDisclosureUiFile Include="$(DisclosureUiPublishDir)\**\*.*"
                              Exclude="$(DisclosureUiPublishDir)\**\*.br;$(DisclosureUiPublishDir)\**\*.gz" />

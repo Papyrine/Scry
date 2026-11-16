@@ -3,10 +3,23 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
-  <ItemGroup>
+  <!-- The query explorer's page cannot run on net11 (see the note on Microsoft.CodeAnalysis below), so it
+       and what it hosts build for net10 too: Scry.Wire and Scry.Client target both, and
+       Scry.Explorer.Core/.Ui/.Tests net10 alone. The 11.0.0 packages carry no net10 build, so a net10
+       build takes the 10.0.x line instead. Pinned because PackageUpdate does not look at target
+       frameworks: it would move these to 11.0.0 and fail the restore. NuGet audit still reports one
+       that falls behind a security fix, and that is the time to bump it. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.15" Pinned="true" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.15" Pinned="true" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.15" Pinned="true" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0'">
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="11.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="11.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="11.0.0" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="11.0.0" />
     <!-- Scry.Client.SignalR's one dependency. The server half needs none: a hub is the shared framework's. -->
@@ -26,7 +39,6 @@
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.64.1" />
     <!-- Scry.Server.Mcp's one dependency: the official MCP SDK's streamable-HTTP server. -->
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0" />
     <PackageVersion Include="Delta.EF" Version="10.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="11.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="11.0.0" />
@@ -45,13 +57,17 @@
          required for QueryTranslator's Expression.Compile), which is exactly where the intrinsic breaks.
 
          That intrinsic is fixed by dotnet/runtime#124538 (issue dotnet/runtime#124477) and ships in .NET 11
-         — but do NOT reach for net11 as the way out. Verified against 11.0.0-preview.6: the barrier crash is
+         — but do NOT reach for net11 as the way out for the explorer's page, which is why it alone stays on
+         net10 while the rest of the tree is on net11. Verified against 11.0.0 (GA): the barrier crash is
          gone, and Roslyn still cannot run in the browser, for two further reasons, both filed:
            dotnet/roslyn#84615    AdhocWorkspace.AddProject takes a blocking SemaphoreSlim.Wait, which net11
                                   rejects on single-threaded wasm. Reproduces on 5.3.0 too, so pinning is no
-                                  defence — the explorer cannot even construct its workspace.
-           dotnet/runtime#131311  WasmEnableThreads=true, the documented way to permit blocking waits, makes
-                                  the net11 runtime fail to start at all.
+                                  defence — the explorer cannot even construct its workspace. No switch gets
+                                  round it: that runtime's CoreLib compiles IsMultithreadingSupported to a
+                                  constant false, and SemaphoreSlim.WaitCore throws on it unconditionally.
+           dotnet/runtime#128601  WasmEnableThreads=true, the documented way to permit blocking waits: the
+                                  runtime loads (cross-origin isolated, with its workers), and Blazor then
+                                  never renders. Filed as #131311, closed as a duplicate of this one.
          Stay on net10 + 5.3.0 until both are resolved.
 
          Mind the blind spot common to all three: the in-process Roslyn layer (Scry.Explorer.Tests, desktop

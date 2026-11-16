@@ -10,7 +10,7 @@
   -->
   <PropertyGroup>
     <RootNamespace>Scry</RootNamespace>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
@@ -21,8 +21,8 @@
     <WasmFingerprintAssets>false</WasmFingerprintAssets>
     <!-- Every time on the page is shown in UTC and every number as an invariant one (Show.cs), so it
          needs neither the globalization data nor the time zone database. Leaving out the time zone
-         database relinks the runtime, which needs the wasm-tools-net10 workload (-net10 because the
-         SDK is a major ahead of the target), and the relink drops the native code nothing calls:
+         database relinks the runtime, which needs the wasm-tools workload, and the relink drops the
+         native code nothing calls:
          _framework is 5.5 MB rather than 7.2.
          Not AOT-compiled: that makes it 18 MB, to speed up a page that renders tables of JSON. -->
     <InvariantGlobalization>true</InvariantGlobalization>

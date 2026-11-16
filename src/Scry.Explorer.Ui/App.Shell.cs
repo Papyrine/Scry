@@ -437,7 +437,6 @@ public partial class App
     {
         refetching = true;
         ready = false;
-        StateHasChanged();
         try
         {
             var json = await Http.GetStringAsync("introspect");
@@ -463,7 +462,6 @@ public partial class App
         {
             refetching = false;
             ready = workspace is not null && registered;
-            StateHasChanged();
         }
     }
 

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
     <RootNamespace>Scry</RootNamespace>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
@@ -30,7 +30,6 @@
          had no way to know about. -->
     <Compile Include="..\Shared\SensitiveWalk.cs" Link="SensitiveWalk.cs" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="HttpMultipart" PrivateAssets="all" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
@@ -53,10 +52,13 @@
   </ItemGroup>
   <!-- The generator multi-targets (netstandard2.0;net10.0) and we pack both flavours, but the
        ProjectReference above only forces the net10.0 inner build (TFM negotiation picks the flavour
-       compatible with this net10.0 project). Build the generator's outer build so the netstandard2.0
-       DLL exists before pack — regardless of solution build vs. direct dotnet pack. -->
+       nearest each of this project's). Build the generator's outer build so the netstandard2.0
+       DLL exists before pack — regardless of solution build vs. direct dotnet pack. This project's
+       inner builds carry TargetFramework as a global property, which the MSBuild task would hand on
+       and so build the generator for a framework it does not target; hence RemoveProperties. -->
   <Target Name="BuildSourceGeneratorAllTfms" BeforeTargets="Build;Pack">
     <MSBuild Projects="..\Scry.SourceGenerator\Scry.SourceGenerator.csproj"
-             Properties="Configuration=$(Configuration)" />
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework" />
   </Target>
 </Project>

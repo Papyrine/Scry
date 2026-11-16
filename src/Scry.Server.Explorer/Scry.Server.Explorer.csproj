@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>Scry</RootNamespace>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
     <Description>An opt-in, browser-Roslyn query explorer (GraphiQL-style) for the Scry server API: write LINQ with IntelliSense, inspect the wire request, and run it.</Description>
+    <!-- net10.0: the explorer page stays a major behind the rest; see the note on Microsoft.CodeAnalysis
+         in Directory.Packages.props. -->
     <ExplorerUiPublishDir>$(MSBuildThisFileDirectory)..\Scry.Explorer.Ui\bin\$(Configuration)\net10.0\publish\wwwroot</ExplorerUiPublishDir>
   </PropertyGroup>
   <ItemGroup>

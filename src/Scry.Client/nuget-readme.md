@@ -8,7 +8,7 @@ This package also ships the Scry source generator, so a client project needs onl
 <a id='snippet-clientModelPath'></a>
 ```csproj
 <!-- The server model, pointed at by path. NOT referenced. -->
-<ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
+<ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net11.0\Sample.Model.dll</ScryModelDll>
 ```
 <sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

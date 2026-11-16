@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
-    <NoWarn>CS1591;NU1608;NU1109;PolyfillTargetsForNuget</NoWarn>
+    <!-- BL0016 (new in .NET 11) wants every JS interop call inside a try/catch. -->
+    <NoWarn>CS1591;NU1608;NU1109;PolyfillTargetsForNuget;BL0016</NoWarn>
     <Version>0.3.0</Version>
     <LangVersion>preview</LangVersion>
     <AssemblyVersion>1.0.0</AssemblyVersion>

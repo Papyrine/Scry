@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-$dll = Join-Path $root "samples/Sample.Model/bin/$Configuration/net10.0/Sample.Model.dll"
+$dll = Join-Path $root "samples/Sample.Model/bin/$Configuration/net11.0/Sample.Model.dll"
 $central = Join-Path $root 'samples/Directory.Packages.props'
 $hashes = ($dll, $model, $central, $PSCommandPath | ForEach-Object { (Get-FileHash $_ -Algorithm SHA256).Hash }) -join ''
 $stream = [System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($hashes))

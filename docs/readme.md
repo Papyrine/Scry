@@ -91,8 +91,9 @@ Every package puts its public types in the single `Scry` namespace, so one `usin
 
 ## Requirements
 
-- .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, `Scry.Server.Explorer`, `Scry.Server.Delta`, and the SignalR, backplane and bus packages.
-- `Scry.Annotations` targets `net10.0`, so a model project referencing it targets `net10.0` or later.
+- .NET 11 (`net11.0`) for `Scry.Server`, `Scry.Server.Explorer`, `Scry.Server.Delta`, and the SignalR, backplane and bus packages.
+- `Scry.Wire` and `Scry.Client` target both `net10.0` and `net11.0`.
+- `Scry.Annotations` targets `net11.0`, so a model project referencing it targets `net11.0` or later.
 - EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor WebAssembly and light in a desktop or console app.
 
 

@@ -20,7 +20,7 @@ project over a client's models, an F# project over `Sample.QueryModels` — impo
 references `Scry.Client` and EF Core together, such as a server hosting its Blazor client, never imports it and so sees
 neither set of names ambiguous.
 
-The target framework of the client is its own business. A `net10.0-windows` WPF project reads the same `net10.0` model DLL a
+The target framework of the client is its own business. A `net11.0-windows` WPF project reads the same `net11.0` model DLL a
 Blazor project does — the framework in that path is the **model's**, not the client's.
 
 The rest of this page is what differs between hosts.
