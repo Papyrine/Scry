@@ -24,10 +24,13 @@ namespace Scry;
 /// <para>
 /// <b>Length is bounded, so this form is not always available.</b> 8 KB is the usual server and proxy
 /// limit on a whole request line, and what exceeds it is rejected by whichever hop is strictest — as a
-/// 414 or a 400, varying by deployment. The budget a client stays inside of is the server's, carried on
-/// every response in <see cref="WireFormat.UrlLimitHeader"/>; <see cref="MaxLength"/> is what a sender
-/// uses until it has heard one. A query that does not fit is asked with <c>POST</c>, whose body has no
-/// such limit.
+/// 414 or a 400, varying by deployment, or as a 404 from IIS's request filtering, whose default for a
+/// query string alone is 2048. The budget a client stays inside of is the server's, carried on every
+/// response in <see cref="WireFormat.UrlLimitHeader"/>; <see cref="MaxLength"/> is what a sender uses
+/// until it has heard one. A query that does not fit is asked with <c>POST</c>, whose body has no such
+/// limit. A hop that refuses less than the server advertised answers without that header, which is how
+/// a sender tells its refusal from the server's: the query is then re-asked with <c>POST</c>, and
+/// nothing as long is asked as a URL again.
 /// </para>
 /// <para>
 /// <b>What a URL exposes.</b> Everything in the request — including the constants a filter compares

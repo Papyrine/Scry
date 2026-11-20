@@ -19,7 +19,7 @@ Three consequences worth stating plainly:
 
 **The request travels in the URL, not in content on the GET.** A body would carry any query at any size, and it cannot be used. A browser refuses to send one — the Fetch standard forbids content on `GET`, which rules it out for a WASM client and for the explorer. A desktop or console client is not held to that rule, but the next reason applies everywhere. An intermediary is permitted to drop the content of a `GET`: what reaches the server is then still a well-formed request — same method, same URL — carrying nothing to execute, so the server answers 400 and the client that sent a complete request cannot tell that from a rejection it caused itself. The failure is silent, depends on infrastructure the client cannot see, and does not reproduce locally. A URL survives every hop by construction.
 
-**A URL has a ceiling, so `POST` stays mapped.** 8 KB is the usual server and proxy limit on a whole request line, and what exceeds it is rejected by whichever hop is strictest, as a 414 or a 400 depending on the deployment. `QueryUrl.MaxLength` is set well below that; a query over it is sent as a body exactly as before, with no cache involvement. An `IN` list is the easiest way to get there — a few hundred ids is enough.
+**A URL has a ceiling, so `POST` stays mapped.** 8 KB is the usual server and proxy limit on a whole request line, and what exceeds it is rejected by whichever hop is strictest, as a 414 or a 400 depending on the deployment — or as a 404 from IIS, whose request filtering refuses a query string past 2,048 characters by default. `QueryUrl.MaxLength` is set well below the usual limit; a query over it is sent as a body exactly as before, with no cache involvement. An `IN` list is the easiest way to get there — a few hundred ids is enough.
 
 **A URL is logged.** Everything in the request, including the constants a filter compares against, lands in the access log of every hop and in the `Referer` of whatever the page does next. A query whose constants are sensitive on their own — an account number, a person's id — is one to keep on `POST` regardless of length.
 
@@ -39,15 +39,19 @@ flowchart TD
     L -- Yes --> G["GET endpoint?q=encoded"]
     G --> R{What came back}
     R -- "405 Method Not Allowed" --> Z[Budget to 0<br/>for the life of the client]
+    R -- "400, 404, 414 or 431<br/>without Scry-Url-Limit" --> X["A hop in front refused the length:<br/>budget under it for the life of the client"]
     R -- "400 carrying RequiresBody" --> Y["The server marks something sensitive<br/>this client did not know about"]
     Z --> P
+    X --> P
     Y --> P
     R -- Anything else --> D[Answered]
 ```
 
-The two retries are what a *stale* client does — one built before the budget dropped to `0`, or before a member was marked. Neither needs a redeploy to start behaving: the 405 and the flag each say what to do instead, and the query still returns, one round trip later. A client in step with its server takes neither branch.
+The 405 and the flag are what a *stale* client meets — one built before the budget dropped to `0`, or before a member was marked. Neither needs a redeploy to start behaving: each says what to do instead, and the query still returns, one round trip later. A client in step with its server takes neither branch.
 
-Both are bounded to one retry, and only ever from a URL to a body.
+The third is a server that was told wrong about the hops in front of it: it advertises a budget some proxy, load balancer or IIS's request filtering does not honour. Every response Scry writes carries `Scry-Url-Limit`, its own rejections included, so a refusal without it never reached the server, and the statuses a hop gives a URL too long for it say what it was. The client re-asks that query as a body and holds its budget under the refused length from then on, where the server's advertisement can no longer raise it; shorter queries keep the URL form and their caching. A 401 or 403 carries no header either, but a body would be refused the same way, so it is left as it is. Raise the hop's limit or lower [`QueryUrlLimit`](server.md#options) to save the first round trip of each client.
+
+All three are bounded to one retry per query, and only ever from a URL to a body.
 
 
 

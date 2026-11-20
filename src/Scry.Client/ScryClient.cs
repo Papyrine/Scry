@@ -196,6 +196,46 @@ public sealed partial class ScryClient
         return $"{endpoint}?{QueryUrl.Parameter}={encoded}";
     }
 
+    /// <summary>
+    /// The longest encoded query worth asking as a URL again, when <paramref name="response"/> refused
+    /// the URL <paramref name="encoded"/> was sent in; null when it answered the query, or refused it
+    /// for a reason a body would not get past.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A 405 is routing saying no GET route is mapped, so no URL is worth asking at all.
+    /// </para>
+    /// <para>
+    /// Otherwise the refusal has to have come from in front of the server, which every Scry response
+    /// rules out by carrying <see cref="WireFormat.UrlLimitHeader"/>, its own rejections included. Of
+    /// what does not carry it, only the statuses a hop gives a URL too long for it count: 414 and 431,
+    /// a 400 from a server that folds the two into it, and a 404, which is how IIS's request filtering
+    /// answers a query string or URL past its limit (404.15 and 404.14, the substatus never reaching
+    /// the client). A 401 or a 403 from authentication in front of the endpoint carries no header
+    /// either, and is left alone: the same query as a body would be refused the same way.
+    /// </para>
+    /// </remarks>
+    static int? UrlCeiling(HttpResponseMessage response, string encoded)
+    {
+        var status = (int) response.StatusCode;
+        if (status == 405)
+        {
+            return 0;
+        }
+
+        if (response.Headers.Contains(WireFormat.UrlLimitHeader))
+        {
+            return null;
+        }
+
+        if (status is 400 or 404 or 414 or 431)
+        {
+            return encoded.Length - 1;
+        }
+
+        return null;
+    }
+
     // A custom transport has nowhere to put a header, so a query that asked for one cannot be honoured.
     // Refusing keeps WithHeader from looking like it worked on a client that never sent it.
     static void RefuseHeaders(ScryCall? call)
@@ -290,9 +330,17 @@ public sealed partial class ScryClient
     /// being told out of band. Zero asks everything as a body.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Learned rather than configured because the number describes the hops between a client and its
     /// server, which only the server end is in a position to know. It is kept for the life of the
     /// client, which is why <c>AddScryClient</c> registers one per scope rather than per injection.
+    /// </para>
+    /// <para>
+    /// A server that was told wrong is corrected from below. A URL refused before it reached Scry — a
+    /// 400, 404, 414 or 431 carrying no <see cref="WireFormat.UrlLimitHeader"/>, such as IIS's 404 for
+    /// a query string past its request filtering limit — is re-asked as a body, and this drops under
+    /// its length, where the server's budget can no longer raise it. A 405 drops it to zero.
+    /// </para>
     /// </remarks>
     public int QueryUrlLimit { get; private set; } = QueryUrl.MaxLength;
 
@@ -323,11 +371,13 @@ public sealed partial class ScryClient
     // on several threads, and the event is promised at most once.
     int staleRaised;
 
-    // Whether a GET was ever answered 405. Kept apart from the advertised budget: a server that maps no
-    // GET route says so through a header on every response, but a gateway in front of one that does
+    // The longest encoded query the hops in front of the server have let through, learned from their
+    // refusals: zero once a GET was answered 405, and one shorter than a URL that was refused before it
+    // reached Scry. Kept apart from the advertised budget, which is held under it: a server that maps
+    // no GET route says so through a header on every response, but a gateway in front of one that does
     // says nothing, and the budget it re-advertises would otherwise re-open the URL form for every
     // query to be refused again.
-    bool urlRefused;
+    int ingressLimit = int.MaxValue;
 
     internal async Task<QueryResponse> SendAsync(QueryRequest request, ScryCall? call, Cancel cancel)
     {
@@ -379,7 +429,9 @@ public sealed partial class ScryClient
             int.TryParse(limits.FirstOrDefault(), CultureInfo.InvariantCulture, out var limit) &&
             limit >= 0)
         {
-            QueryUrlLimit = limit;
+            // Never past what a refusal proved: the server can only say what it was told about the hops
+            // in front of it, and a refusal is those hops saying otherwise
+            QueryUrlLimit = Math.Min(limit, ingressLimit);
         }
     }
 
@@ -641,8 +693,7 @@ public sealed partial class ScryClient
         // Decided before anything is encoded: a query bound to a body, a budget of zero, or bytes
         // already past it need no base64, which a large membership set would otherwise spend a
         // browser's heap on for nothing.
-        var encoded = !urlRefused &&
-                      !RequiresBody(request) &&
+        var encoded = !RequiresBody(request) &&
                       QueryUrl.CouldFit(utf8.Length, QueryUrlLimit)
             ? QueryUrl.Encode(utf8)
             : null;
@@ -650,18 +701,19 @@ public sealed partial class ScryClient
         var asUrl = encoded is not null && QueryUrl.WithinLimit(encoded, QueryUrlLimit);
         var response = await Send(asUrl);
 
-        // A server that maps no GET route answers one from its routing table, so the reply carries
-        // neither a budget to learn from nor a body to read — this client would otherwise keep asking
-        // the same way and keep being refused the same way. The status says exactly what to do instead,
-        // so it is done once: the budget drops to zero for the life of the client, and the query is
-        // re-asked as a body. Only ever this direction, and only ever once.
+        // A URL refused by routing or by a hop in front of the server carries neither a budget to learn
+        // from nor a body to read — this client would otherwise keep asking the same way and keep being
+        // refused the same way. So the query is re-asked as a body, and nothing as long is asked as a
+        // URL again for the life of the client: none at all after a 405, which says no URL form is
+        // mapped here, and none this long after a refusal that never reached Scry. Only ever this
+        // direction, and only ever once per query.
         // Whether the attempt was a URL is what this client decided, not what the response says: a
         // handler need not set RequestMessage on what it returns, and only the client knows what it sent.
         if (asUrl &&
-            (int) response.StatusCode == 405)
+            UrlCeiling(response, encoded!) is { } ceiling)
         {
-            urlRefused = true;
-            QueryUrlLimit = 0;
+            ingressLimit = Math.Min(ingressLimit, ceiling);
+            QueryUrlLimit = Math.Min(QueryUrlLimit, ingressLimit);
             asUrl = false;
             response.Dispose();
             response = await Send(url: false);
@@ -712,7 +764,7 @@ public sealed partial class ScryClient
                     Content = JsonBody(utf8)
                 };
 
-            // The hooks run once per query, on the first attempt. A re-send after a 405 or a
+            // The hooks run once per query, on the first attempt. A re-send after a refused URL or a
             // requires-body refusal is the same query asked again, so it carries the same headers:
             // a value a hook mints — a request id, an idempotency key — is then the same on both.
             if (configured is null)

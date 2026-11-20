@@ -562,10 +562,18 @@ public class SidecarTests
     [Test]
     public async Task ErrorResponseRecordsTheServersError()
     {
+        // Carrying the budget every Scry response does: a 400 without it is a hop in front of the server
+        // refusing the URL, which the client re-asks as a body
         var (store, client) = Stubbed(
             _ => new(HttpStatusCode.BadRequest)
             {
-                Content = JsonContent(JsonSerializer.Serialize(new ScryError("nope"), ScryJson.Options))
+                Content = JsonContent(JsonSerializer.Serialize(new ScryError("nope"), ScryJson.Options)),
+                Headers =
+                {
+                    {
+                        WireFormat.UrlLimitHeader, "4096"
+                    }
+                }
             });
 
         await Assert.ThrowsExactlyAsync<ScryRequestException>(
