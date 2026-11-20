@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- BL0016 (new in .NET 11) wants every JS interop call inside a try/catch. -->
     <NoWarn>CS1591;NU1608;NU1109;PolyfillTargetsForNuget;BL0016</NoWarn>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <LangVersion>preview</LangVersion>
     <AssemblyVersion>1.0.0</AssemblyVersion>
     <Description>Scry lets a .NET client write strongly-typed LINQ against a server-side EF Core model, serialize it, and execute it server-side with allow-list enforcement.</Description>
