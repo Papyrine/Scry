@@ -30,7 +30,7 @@
     <PackageVersion Include="Verify.Bunit" Version="14.1.0" />
     <PackageVersion Include="Verify.Playwright" Version="3.3.0" />
     <PackageVersion Include="Verify.Http" Version="9.0.0" />
-    <PackageVersion Include="DiffEngine" Version="21.2.0" />
+    <PackageVersion Include="DiffEngine" Version="21.2.1" />
     <!-- Under central package management the F# SDK drops its implicit FSharp.Core reference, so the
          F# projects reference it by hand and the version lives here like any other. -->
     <PackageVersion Include="FSharp.Core" Version="11.0.101" />
