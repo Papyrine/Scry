@@ -11,7 +11,12 @@ export type {
   DateTimeOffset,
   Flags,
   SourceTypes,
-  CommandTypes
+  CommandTypes,
+  CollectionProjection,
+  Shape,
+  Group,
+  Grouping,
+  GroupValues
 } from "./types.ts";
 
 export type {

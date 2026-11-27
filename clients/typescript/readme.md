@@ -1,8 +1,40 @@
 # Scry for TypeScript
 
-A TypeScript client for Scry, in progress. What exists so far is the generator: it reads a server's introspection and writes the types a query is written against, reading the description the way the [query explorer](../../docs/explorer.md) does. Writing and sending queries comes next.
+A TypeScript client for Scry, in progress. What exists so far:
+
+- the generator, which reads a server's introspection and writes the types a query is written against, reading the description the way the [query explorer](../../docs/explorer.md) does;
+- the query builder, which writes the request a C# client sends for the same query, byte for byte.
+
+Sending a request over HTTP and reading its rows back comes next, then streams, live queries and commands. Until then a query is sent through a `Transport` the caller supplies.
 
 The package is private and unpublished.
+
+
+## Writing a query
+
+```ts
+import { createScry, and, eq, startsWith } from "scry-client";
+import { schema, type Sources } from "./scry.generated.ts";
+
+const scry = createScry<Sources>(schema, { transport });
+
+const rows = await scry.employee
+  .where(_ => and(_.active, eq(_.status, "FullTime"), startsWith(_.manager.name, "A")))
+  .orderBy(_ => _.name)
+  .select(_ => ({ name: _.name, manager: _.manager.name, department: { name: _.department.name } }))
+  .toList();
+// { name: string; manager: string | null; department: { name: string | null } }[]
+```
+
+A member is read as a path, so `_.manager.name` is the `Manager.Name` the server reads. Comparison, logic and arithmetic are functions (`eq`, `gt`, `and`, `not`, `add`, `coalesce`, `cond`, `concat`, `isIn` and the rest), as is every function the wire carries (`startsWith`, `year`, `addDays`, `round`, `toDouble`…). A collection is asked about through its own methods: `_.lines.any(l => gt(l.quantity, 1))`, `_.tags.contains("urgent")`. Grouping, joins and set operations follow LINQ's shape: `groupBy(_ => _.region).select(g => ({ key: g.key, total: g.sum(_ => _.amount) }))`.
+
+The types follow the server's pipeline grammar, so an ordering the server would refuse does not compile: `thenBy` follows an ordering, a grouped query projects, nothing filters after a projection, and a terminal's own condition comes before any projection.
+
+A constant is typed by what stands beside it, as C# would type it, so a query sends the bytes the same C# query sends: `gt(_.amount, 90)` sends `90` as a `Decimal` because `Amount` is one. A projected key travels with its first letter capitalized, as a C# member is named, and rows read back under the key as written.
+
+JavaScript's own operators ask nothing of the server, since a member is an expression rather than a value. `>`, `+` and a template literal on one throw. `&&`, `||`, `!` and `? :` cannot be caught at run time: `where(_ => a && b)` would send `b` alone. Turn on `@typescript-eslint/strict-boolean-expressions` for code that writes queries.
+
+`createScry` takes two more options. `defaultProjection: "server"` stops a query projecting nothing from naming the model's members, as a C# source built by hand does, and `stamp: false` leaves the schema stamp off each request.
 
 
 ## Generating a client

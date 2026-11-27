@@ -17,13 +17,78 @@ export interface Expr<T> {
   readonly [expression]: T;
 }
 
+declare const collectionRow: unique symbol;
+
 /**
  * A collection member. It cannot be read as a path: it is asked about through a subquery (any, all,
  * count, sum…) whose function is given each element as `E`, which is a model for a collection of
- * rows and an `Expr` for a collection of values.
+ * rows and an `Expr` for a collection of values. `R` is a row of the collection's model, which a query
+ * flattening it returns.
  */
-export interface Collection<E> {
+export interface Collection<E, R = never> {
   readonly [collection]: E;
+  readonly [collectionRow]?: R;
+  /** The elements a question is about, or a returned collection holds, narrowed once. */
+  where(predicate: (element: E) => Condition): Collection<E, R>;
+  any(predicate?: (element: E) => Condition): Expr<boolean>;
+  all(predicate: (element: E) => Condition): Expr<boolean>;
+  count(predicate?: (element: E) => Condition): Expr<number>;
+  /** Whether a collection of values holds the value. */
+  contains(value: ElementOf<E> | Expr<ElementOf<E>>): Expr<boolean>;
+  /** The selector reads each element; over a collection of values it may be left out. */
+  sum<T = ElementOf<E>>(selector?: (element: E) => Expr<T>): Expr<T>;
+  average<T = ElementOf<E>>(selector?: (element: E) => Expr<T>): Expr<Average<T>>;
+  min<T = ElementOf<E>>(selector?: (element: E) => Expr<T>): Expr<T>;
+  max<T = ElementOf<E>>(selector?: (element: E) => Expr<T>): Expr<T>;
+  /** The collection returned in a row: what of each element, a value or a flat object of values. */
+  select<P>(selector: (element: E) => P): CollectionProjection<Shape<P>>;
+}
+
+type Condition = Expr<boolean> | Expr<boolean | null>;
+type ElementOf<E> = E extends Expr<infer T> ? T : never;
+type Average<T> = T extends Decimal ? Decimal : number;
+
+declare const projected: unique symbol;
+
+/** A collection returned in a row, each element as `T`. */
+export interface CollectionProjection<T> {
+  readonly [projected]: T;
+}
+
+/** What a projection returns, from the object a `select` function builds. */
+export type Shape<P> =
+  P extends Expr<infer T> ? T :
+  P extends CollectionProjection<infer E> ? E[] :
+  P extends Collection<Expr<infer T>, never> ? T[] :
+  P extends Date | Uint8Array ? P :
+  P extends object ? { -readonly [K in keyof P]: Shape<P[K]> } :
+  P;
+
+/** The rows of one group, folded: what a grouped query's condition and projection read. */
+export interface Group<Q> {
+  count(predicate?: (row: Q) => Condition): Expr<number>;
+  sum<T>(selector: (row: Q) => Expr<T>): Expr<T>;
+  average<T>(selector: (row: Q) => Expr<T>): Expr<Average<T>>;
+  min<T>(selector: (row: Q) => Expr<T>): Expr<T>;
+  max<T>(selector: (row: Q) => Expr<T>): Expr<T>;
+  /** One value of every row, to fold: made distinct, then counted, summed or joined. */
+  values<T>(selector: (row: Q) => Expr<T>): GroupValues<T>;
+}
+
+/** A group of rows and the key it was made by: the key's own expression, or an object of them. */
+export interface Grouping<Q, K> extends Group<Q> {
+  readonly key: K;
+}
+
+export interface GroupValues<T> {
+  distinct(): GroupValues<T>;
+  count(): Expr<number>;
+  sum(): Expr<T>;
+  average(): Expr<Average<T>>;
+  min(): Expr<T>;
+  max(): Expr<T>;
+  /** The values as one string, `separator` between them (string.Join). */
+  join(separator: string): Expr<string | null>;
 }
 
 /**
@@ -33,7 +98,7 @@ export interface Collection<E> {
 export type Optional<M> = {
   readonly [K in keyof M]: M[K] extends Expr<infer T>
     ? Expr<T | null>
-    : M[K] extends Collection<unknown>
+    : M[K] extends Collection<unknown, unknown>
       ? M[K]
       : Optional<M[K]>;
 };

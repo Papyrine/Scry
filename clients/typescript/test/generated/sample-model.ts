@@ -38,7 +38,7 @@ export interface DepartmentQuery {
   readonly id: scry.Expr<number>;
   readonly name: scry.Expr<string>;
   readonly logo: scry.Expr<Uint8Array>;
-  readonly employees: scry.Collection<EmployeeQuery>;
+  readonly employees: scry.Collection<EmployeeQuery, EmployeeRow>;
 }
 
 /** Department, as a row comes back from a query that projects nothing. */
@@ -198,92 +198,50 @@ export const schema = {
     "asset": {
       "name": "Asset",
       "kind": "Entity",
-      "model": "AssetQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name"
-      ]
+      "model": "AssetQueryModel"
     },
     "building": {
       "name": "Building",
       "kind": "Entity",
-      "model": "BuildingQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Floors"
-      ]
+      "model": "BuildingQueryModel"
     },
     "department": {
       "name": "Department",
       "kind": "Entity",
-      "model": "DepartmentQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Logo"
-      ]
+      "model": "DepartmentQueryModel"
     },
     "employee": {
       "name": "Employee",
       "kind": "Entity",
-      "model": "EmployeeQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Status",
-        "Active",
-        "Created",
-        "ManagerId",
-        "DepartmentId",
-        "Password",
-        "CanDeleteEmployee",
-        "CanRenameEmployee",
-        "CanSetEmployeeActive"
-      ]
+      "model": "EmployeeQueryModel"
     },
     "employeeSummary": {
       "name": "EmployeeSummary",
       "kind": "View",
-      "model": "EmployeeSummaryQueryModel",
-      "defaultProjection": [
-        "Department",
-        "Headcount"
-      ]
+      "model": "EmployeeSummaryQueryModel"
     },
     "holiday": {
       "name": "Holiday",
       "kind": "Poco",
-      "model": "HolidayQueryModel",
-      "defaultProjection": [
-        "Name",
-        "Date"
-      ]
+      "model": "HolidayQueryModel"
     },
     "order": {
       "name": "Order",
       "kind": "Entity",
-      "model": "OrderQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Region",
-        "Amount",
-        "CanRepriceOrder"
-      ]
+      "model": "OrderQueryModel"
     },
     "vehicle": {
       "name": "Vehicle",
       "kind": "Entity",
-      "model": "VehicleQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Wheels"
-      ]
+      "model": "VehicleQueryModel"
     }
   },
   "models": {
     "AssetQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -309,6 +267,11 @@ export const schema = {
     },
     "BuildingQueryModel": {
       "base": "AssetQueryModel",
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Floors"
+      ],
       "members": {
         "floors": {
           "name": "Floors",
@@ -325,6 +288,11 @@ export const schema = {
     "DepartmentQueryModel": {
       "keys": [
         "Id"
+      ],
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Logo"
       ],
       "members": {
         "employees": {
@@ -376,6 +344,19 @@ export const schema = {
     "EmployeeQueryModel": {
       "keys": [
         "Id"
+      ],
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Status",
+        "Active",
+        "Created",
+        "ManagerId",
+        "DepartmentId",
+        "Password",
+        "CanDeleteEmployee",
+        "CanRenameEmployee",
+        "CanSetEmployeeActive"
       ],
       "members": {
         "active": {
@@ -516,6 +497,10 @@ export const schema = {
       }
     },
     "EmployeeSummaryQueryModel": {
+      "defaultProjection": [
+        "Department",
+        "Headcount"
+      ],
       "members": {
         "department": {
           "name": "Department",
@@ -540,6 +525,10 @@ export const schema = {
       }
     },
     "HolidayQueryModel": {
+      "defaultProjection": [
+        "Name",
+        "Date"
+      ],
       "members": {
         "date": {
           "name": "Date",
@@ -564,6 +553,12 @@ export const schema = {
       }
     },
     "OrderQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Region",
+        "Amount",
+        "CanRepriceOrder"
+      ],
       "members": {
         "amount": {
           "name": "Amount",
@@ -620,6 +615,11 @@ export const schema = {
     },
     "VehicleQueryModel": {
       "base": "AssetQueryModel",
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Wheels"
+      ],
       "members": {
         "wheels": {
           "name": "Wheels",

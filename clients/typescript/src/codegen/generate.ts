@@ -89,7 +89,7 @@ class Generator {
     }
 
     for (const bcl of bclEnums) {
-      this.#enums.set(bcl.display, { name: bcl.name, info: enumInfo(bcl) });
+      this.#enums.set(bcl.display, { name: bcl.name, info: { ...enumInfo(bcl), system: bcl.display.slice("global::".length) } });
     }
 
     this.#known = {
@@ -290,7 +290,6 @@ class Generator {
       name: source.name,
       kind: source.kind,
       model: source.model,
-      defaultProjection: this.#scalars(source.model),
       ...optional("obsolete", source.obsolete)
     };
   }
@@ -306,6 +305,7 @@ class Generator {
       ...flag("sensitive", type.isSensitive),
       ...optional("keys", type.keys),
       ...optional("obsolete", type.obsolete),
+      defaultProjection: this.#scalars(type.model),
       members
     };
   }
@@ -402,7 +402,8 @@ class Generator {
     }
 
     if (display.element.kind === "model") {
-      return `scry.Collection<${stemOf(display.element.model)}Query>`;
+      const stem = stemOf(display.element.model);
+      return `scry.Collection<${stem}Query, ${stem}Row>`;
     }
 
     if (display.element.kind === "value") {

@@ -60,6 +60,12 @@ export interface ModelInfo {
   /** The members forming the row's key, by server name, for a model carrying an attachment. */
   readonly keys?: readonly string[];
   readonly obsolete?: string;
+  /**
+   * What a query writing no projection projects when its rows are this model, by server name: the
+   * scalar members, a base's first, in the order the model declares them. Every client sends the same
+   * list, so every one sends the same request.
+   */
+  readonly defaultProjection: readonly string[];
   /** The members this model declares, by TypeScript name; a base's are on the base. */
   readonly members: { readonly [name: string]: MemberInfo };
 }
@@ -70,12 +76,6 @@ export interface SourceInfo {
   readonly kind: string;
   /** The model a row of this source is, a key of `ScrySchema.models`. */
   readonly model: string;
-  /**
-   * What a query writing no projection projects, by server name: the scalar members, a base's first,
-   * in the order the model declares them. Every client sends the same list, so every one sends the
-   * same request.
-   */
-  readonly defaultProjection: readonly string[];
   readonly obsolete?: string;
 }
 
@@ -86,6 +86,11 @@ export interface EnumInfo {
   readonly constants: readonly string[];
   readonly flags: boolean;
   readonly underlying: string;
+  /**
+   * The base class library type, for an enum that is one rather than the model's own: `System.DayOfWeek`
+   * travels as its number where every other enum travels by name.
+   */
+  readonly system?: string;
 }
 
 export interface CommandInfo {

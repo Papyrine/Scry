@@ -252,6 +252,24 @@
     "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\"},{\"region\":\"South\"}]}"
   },
   {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Tags = _.Tags.ToList()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Tags\",\"value\":{\"$type\":\"collection\",\"path\":\"Tags\",\"selector\":{\"$type\":\"element\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"tags\":[\"urgent\",\"export\"]},{\"region\":\"North\",\"tags\":[\"export\"]},{\"region\":\"South\",\"tags\":[]}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Lines = _.Lines.Where(l => l.Quantity > 1).Select(l => new {l.Sku, l.Quantity}).ToList()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Lines\",\"value\":{\"$type\":\"collection\",\"path\":\"Lines\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"member\",\"path\":\"Quantity\"},\"right\":{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}},\"projection\":{\"members\":[\"Sku\",\"Quantity\"]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"lines\":[{\"sku\":\"A-1\",\"quantity\":2}]},{\"region\":\"North\",\"lines\":[{\"sku\":\"B-1\",\"quantity\":5}]},{\"region\":\"South\",\"lines\":[]}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Prices = _.Lines.Select(l => l.Price * 2m).ToList()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Prices\",\"value\":{\"$type\":\"collection\",\"path\":\"Lines\",\"selector\":{\"$type\":\"binary\",\"op\":\"Multiply\",\"left\":{\"$type\":\"member\",\"path\":\"Price\"},\"right\":{\"$type\":\"const\",\"value\":\"2\",\"tag\":\"Decimal\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"prices\":[50.0000,100.0000]},{\"region\":\"North\",\"prices\":[100.0000]},{\"region\":\"South\",\"prices\":[]}]}"
+  },
+  {
     "group": "Grouping",
     "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount), Rows = _.Count()}).ToListAsync()",
     "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"}]},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Key\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Region\"}}},{\"name\":\"Total\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}},{\"name\":\"Rows\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Count\"}}}]}}]}",

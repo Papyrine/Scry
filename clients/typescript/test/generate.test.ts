@@ -26,15 +26,15 @@ for (const fixture of fixtures) {
 // The rule ModelSynthesizer and the C# generator both follow, so a query projecting nothing sends the
 // same projection from every client.
 test("a query projecting nothing projects a base's scalars first, then its own, in declared order", () => {
-  assert.deepEqual(schema.sources.vehicle.defaultProjection, ["Id", "Name", "Wheels"]);
+  assert.deepEqual(schema.models.VehicleQueryModel.defaultProjection, ["Id", "Name", "Wheels"]);
   assert.deepEqual(
-    schema.sources.employee.defaultProjection,
+    schema.models.EmployeeQueryModel.defaultProjection,
     ["Id", "Name", "Status", "Perks", "Active", "ManagerId", "DepartmentId", "Avatar"]);
 });
 
 test("a query projecting nothing projects no navigation, collection or attachment", () => {
   // Contract carries an attachment, Document, between Name and its capability.
-  assert.deepEqual(schema.sources.contract.defaultProjection, ["Id", "Name", "CanSealContract"]);
+  assert.deepEqual(schema.models.ContractQueryModel.defaultProjection, ["Id", "Name", "CanSealContract"]);
 });
 
 test("a member is described under its TypeScript name, with the name it travels under", () => {

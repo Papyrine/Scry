@@ -227,7 +227,7 @@ export interface EmployeeQuery {
   readonly department: scry.Optional<DepartmentQuery>;
   readonly avatar: scry.Expr<Uint8Array>;
   readonly address: scry.Optional<AddressQuery>;
-  readonly previousAddresses: scry.Collection<AddressQuery>;
+  readonly previousAddresses: scry.Collection<AddressQuery, AddressRow>;
   readonly workstation: scry.Optional<WorkstationQuery>;
 }
 
@@ -247,7 +247,7 @@ export interface EmployeeRow {
 export interface FleetQuery {
   readonly id: scry.Expr<number>;
   readonly name: scry.Expr<string>;
-  readonly machines: scry.Collection<MachineQuery>;
+  readonly machines: scry.Collection<MachineQuery, MachineRow>;
 }
 
 /** Fleet, as a row comes back from a query that projects nothing. */
@@ -324,7 +324,7 @@ export interface OrderQuery {
   readonly grade: scry.Expr<string>;
   readonly code: scry.Expr<string>;
   readonly audited: scry.Expr<string>;
-  readonly lines: scry.Collection<OrderLineQuery>;
+  readonly lines: scry.Collection<OrderLineQuery, OrderLineRow>;
   readonly tags: scry.Collection<scry.Expr<string>>;
   readonly scores: scry.Collection<scry.Expr<number>>;
   readonly priorities: scry.Collection<scry.Expr<Priority>>;
@@ -609,292 +609,142 @@ export const schema = {
     "announcement": {
       "name": "Announcement",
       "kind": "Entity",
-      "model": "AnnouncementQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Published",
-        "Pinned"
-      ]
+      "model": "AnnouncementQueryModel"
     },
     "asset": {
       "name": "Asset",
       "kind": "Entity",
-      "model": "AssetQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name"
-      ]
+      "model": "AssetQueryModel"
     },
     "building": {
       "name": "Building",
       "kind": "Entity",
-      "model": "BuildingQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Floors"
-      ]
+      "model": "BuildingQueryModel"
     },
     "callback": {
       "name": "Callback",
       "kind": "Entity",
-      "model": "CallbackQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Url",
-        "Status",
-        "Retry"
-      ]
+      "model": "CallbackQueryModel"
     },
     "contract": {
       "name": "Contract",
       "kind": "Entity",
-      "model": "ContractQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "CanSealContract"
-      ]
+      "model": "ContractQueryModel"
     },
     "department": {
       "name": "Department",
       "kind": "Entity",
-      "model": "DepartmentQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name"
-      ]
+      "model": "DepartmentQueryModel"
     },
     "departmentHeadcount": {
       "name": "DepartmentHeadcount",
       "kind": "View",
-      "model": "DepartmentHeadcountQueryModel",
-      "defaultProjection": [
-        "Department",
-        "Headcount"
-      ]
+      "model": "DepartmentHeadcountQueryModel"
     },
     "employee": {
       "name": "Employee",
       "kind": "Entity",
-      "model": "EmployeeQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Status",
-        "Perks",
-        "Active",
-        "ManagerId",
-        "DepartmentId",
-        "Avatar"
-      ]
+      "model": "EmployeeQueryModel"
     },
     "fleet": {
       "name": "Fleet",
       "kind": "Entity",
-      "model": "FleetQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name"
-      ]
+      "model": "FleetQueryModel"
     },
     "heavyPress": {
       "name": "HeavyPress",
       "kind": "Entity",
-      "model": "HeavyPressQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "FleetId",
-        "Tonnage",
-        "Certified"
-      ]
+      "model": "HeavyPressQueryModel"
     },
     "holiday": {
       "name": "Holiday",
       "kind": "Poco",
-      "model": "HolidayQueryModel",
-      "defaultProjection": [
-        "Name",
-        "Date"
-      ]
+      "model": "HolidayQueryModel"
     },
     "invoice": {
       "name": "Invoice",
       "kind": "Entity",
-      "model": "InvoiceQueryModel",
-      "defaultProjection": [
-        "CreatedBy",
-        "Id",
-        "Number",
-        "Notes",
-        "Reviewer"
-      ]
+      "model": "InvoiceQueryModel"
     },
     "machine": {
       "name": "Machine",
       "kind": "Entity",
-      "model": "MachineQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "FleetId"
-      ]
+      "model": "MachineQueryModel"
     },
     "order": {
       "name": "Order",
       "kind": "Entity",
-      "model": "OrderQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Region",
-        "Amount",
-        "Quantity",
-        "Sku",
-        "Placed",
-        "Discount",
-        "Grade",
-        "Code",
-        "Audited"
-      ]
+      "model": "OrderQueryModel"
     },
     "orderLine": {
       "name": "OrderLine",
       "kind": "Entity",
-      "model": "OrderLineQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Sku",
-        "Quantity",
-        "Price",
-        "Units",
-        "OrderId"
-      ]
+      "model": "OrderLineQueryModel"
     },
     "post": {
       "name": "Post",
       "kind": "Entity",
-      "model": "PostQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Published"
-      ]
+      "model": "PostQueryModel"
     },
     "press": {
       "name": "Press",
       "kind": "Entity",
-      "model": "PressQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "FleetId",
-        "Tonnage"
-      ]
+      "model": "PressQueryModel"
     },
     "publicHoliday": {
       "name": "PublicHoliday",
       "kind": "Poco",
-      "model": "PublicHolidayQueryModel",
-      "defaultProjection": [
-        "Name",
-        "Date",
-        "Region"
-      ]
+      "model": "PublicHolidayQueryModel"
     },
     "region": {
       "name": "Region",
       "kind": "Entity",
-      "model": "SalesRegionQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name"
-      ]
+      "model": "SalesRegionQueryModel"
     },
     "regionSummary": {
       "name": "RegionSummary",
       "kind": "View",
       "model": "RegionSummaryQueryModel",
-      "defaultProjection": [
-        "Region",
-        "Total"
-      ],
       "obsolete": ""
     },
     "shift": {
       "name": "Shift",
       "kind": "Entity",
-      "model": "ShiftQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Duration",
-        "Day",
-        "Start",
-        "Stamped",
-        "Signature",
-        "CanRenameShift"
-      ]
+      "model": "ShiftQueryModel"
     },
     "signedContract": {
       "name": "SignedContract",
       "kind": "Entity",
-      "model": "SignedContractQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "CanSealContract",
-        "Signer"
-      ]
+      "model": "SignedContractQueryModel"
     },
     "sitting": {
       "name": "Sitting",
       "kind": "Entity",
-      "model": "SittingQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "DayOfWeek",
-        "Recess",
-        "Clock"
-      ]
+      "model": "SittingQueryModel"
     },
     "ticket": {
       "name": "Ticket",
       "kind": "Entity",
-      "model": "TicketQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "IsOpen",
-        "Token"
-      ]
+      "model": "TicketQueryModel"
     },
     "vehicle": {
       "name": "Vehicle",
       "kind": "Entity",
-      "model": "VehicleQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Wheels"
-      ]
+      "model": "VehicleQueryModel"
     },
     "yard": {
       "name": "Yard",
       "kind": "Entity",
-      "model": "YardQueryModel",
-      "defaultProjection": [
-        "Id",
-        "Name",
-        "Site"
-      ]
+      "model": "YardQueryModel"
     }
   },
   "models": {
     "AddressQueryModel": {
       "sensitive": true,
+      "defaultProjection": [
+        "City",
+        "Country"
+      ],
       "members": {
         "city": {
           "name": "City",
@@ -920,6 +770,12 @@ export const schema = {
     },
     "AnnouncementQueryModel": {
       "base": "PostQueryModel",
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Published",
+        "Pinned"
+      ],
       "members": {
         "pinned": {
           "name": "Pinned",
@@ -934,6 +790,10 @@ export const schema = {
       }
     },
     "AssetQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -959,6 +819,11 @@ export const schema = {
     },
     "BuildingQueryModel": {
       "base": "AssetQueryModel",
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Floors"
+      ],
       "members": {
         "floors": {
           "name": "Floors",
@@ -973,6 +838,12 @@ export const schema = {
       }
     },
     "CallbackQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Url",
+        "Status",
+        "Retry"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -1020,6 +891,11 @@ export const schema = {
       "keys": [
         "Id"
       ],
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "CanSealContract"
+      ],
       "members": {
         "canSealContract": {
           "name": "CanSealContract",
@@ -1062,6 +938,10 @@ export const schema = {
       }
     },
     "DepartmentQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -1086,6 +966,10 @@ export const schema = {
       }
     },
     "DepartmentHeadcountQueryModel": {
+      "defaultProjection": [
+        "Department",
+        "Headcount"
+      ],
       "members": {
         "department": {
           "name": "Department",
@@ -1111,6 +995,16 @@ export const schema = {
       }
     },
     "EmployeeQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Status",
+        "Perks",
+        "Active",
+        "ManagerId",
+        "DepartmentId",
+        "Avatar"
+      ],
       "members": {
         "active": {
           "name": "Active",
@@ -1231,6 +1125,10 @@ export const schema = {
       }
     },
     "FleetQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -1263,6 +1161,13 @@ export const schema = {
     },
     "HeavyPressQueryModel": {
       "base": "PressQueryModel",
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "FleetId",
+        "Tonnage",
+        "Certified"
+      ],
       "members": {
         "certified": {
           "name": "Certified",
@@ -1277,6 +1182,10 @@ export const schema = {
       }
     },
     "HolidayQueryModel": {
+      "defaultProjection": [
+        "Name",
+        "Date"
+      ],
       "members": {
         "date": {
           "name": "Date",
@@ -1301,6 +1210,13 @@ export const schema = {
       }
     },
     "InvoiceQueryModel": {
+      "defaultProjection": [
+        "CreatedBy",
+        "Id",
+        "Number",
+        "Notes",
+        "Reviewer"
+      ],
       "members": {
         "createdBy": {
           "name": "CreatedBy",
@@ -1376,6 +1292,11 @@ export const schema = {
       }
     },
     "MachineQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "FleetId"
+      ],
       "members": {
         "fleetId": {
           "name": "FleetId",
@@ -1410,6 +1331,18 @@ export const schema = {
       }
     },
     "OrderQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Region",
+        "Amount",
+        "Quantity",
+        "Sku",
+        "Placed",
+        "Discount",
+        "Grade",
+        "Code",
+        "Audited"
+      ],
       "members": {
         "amount": {
           "name": "Amount",
@@ -1551,6 +1484,14 @@ export const schema = {
       }
     },
     "OrderLineQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Sku",
+        "Quantity",
+        "Price",
+        "Units",
+        "OrderId"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -1622,6 +1563,11 @@ export const schema = {
       }
     },
     "PostQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Published"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -1657,6 +1603,12 @@ export const schema = {
     },
     "PressQueryModel": {
       "base": "MachineQueryModel",
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "FleetId",
+        "Tonnage"
+      ],
       "members": {
         "tonnage": {
           "name": "Tonnage",
@@ -1672,6 +1624,11 @@ export const schema = {
     },
     "PublicHolidayQueryModel": {
       "base": "HolidayQueryModel",
+      "defaultProjection": [
+        "Name",
+        "Date",
+        "Region"
+      ],
       "members": {
         "region": {
           "name": "Region",
@@ -1687,6 +1644,10 @@ export const schema = {
     },
     "RegionSummaryQueryModel": {
       "obsolete": "",
+      "defaultProjection": [
+        "Region",
+        "Total"
+      ],
       "members": {
         "region": {
           "name": "Region",
@@ -1711,6 +1672,10 @@ export const schema = {
       }
     },
     "SalesRegionQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -1735,6 +1700,16 @@ export const schema = {
       }
     },
     "ShiftQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Duration",
+        "Day",
+        "Start",
+        "Stamped",
+        "Signature",
+        "CanRenameShift"
+      ],
       "members": {
         "canRenameShift": {
           "name": "CanRenameShift",
@@ -1824,6 +1799,12 @@ export const schema = {
       "keys": [
         "Id"
       ],
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "CanSealContract",
+        "Signer"
+      ],
       "members": {
         "signer": {
           "name": "Signer",
@@ -1838,6 +1819,13 @@ export const schema = {
       }
     },
     "SittingQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "DayOfWeek",
+        "Recess",
+        "Clock"
+      ],
       "members": {
         "alternates": {
           "name": "Alternates",
@@ -1902,6 +1890,12 @@ export const schema = {
       }
     },
     "TicketQueryModel": {
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "IsOpen",
+        "Token"
+      ],
       "members": {
         "id": {
           "name": "Id",
@@ -1947,6 +1941,11 @@ export const schema = {
     },
     "VehicleQueryModel": {
       "base": "AssetQueryModel",
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Wheels"
+      ],
       "members": {
         "wheels": {
           "name": "Wheels",
@@ -1961,6 +1960,11 @@ export const schema = {
       }
     },
     "WorkstationQueryModel": {
+      "defaultProjection": [
+        "Room",
+        "Extension",
+        "Badge"
+      ],
       "members": {
         "badge": {
           "name": "Badge",
@@ -1998,6 +2002,11 @@ export const schema = {
     },
     "YardQueryModel": {
       "base": "FleetQueryModel",
+      "defaultProjection": [
+        "Id",
+        "Name",
+        "Site"
+      ],
       "members": {
         "site": {
           "name": "Site",
@@ -2025,7 +2034,8 @@ export const schema = {
         "2"
       ],
       "flags": false,
-      "underlying": "int"
+      "underlying": "int",
+      "system": "System.DateTimeKind"
     },
     "DayOfWeek": {
       "values": [
@@ -2047,7 +2057,8 @@ export const schema = {
         "6"
       ],
       "flags": false,
-      "underlying": "int"
+      "underlying": "int",
+      "system": "System.DayOfWeek"
     },
     "HttpStatusCode": {
       "values": [
@@ -2189,7 +2200,8 @@ export const schema = {
         "511"
       ],
       "flags": false,
-      "underlying": "int"
+      "underlying": "int",
+      "system": "System.Net.HttpStatusCode"
     },
     "Perks": {
       "values": [

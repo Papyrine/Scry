@@ -114,7 +114,12 @@ public partial class WireShapeTests
         await Wire(_ => _.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.Address.Country}).ToListAsync()),
         await Wire(_ => _.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N" : "S", _.Amount - (_.Discount ?? 0m))).ToListAsync()),
         await Wire(_ => _.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}"}).ToListAsync()),
-        await Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync())
+        await Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync()),
+        // A collection the row holds, returned in it: its values as they are, its rows filtered and each
+        // made an object, and a value computed from each.
+        await Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region, Tags = _.Tags.ToList()}).ToListAsync()),
+        await Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Where(l => l.Quantity > 1).Select(l => new {l.Sku, l.Quantity}).ToList()}).ToListAsync()),
+        await Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region, Prices = _.Lines.Select(l => l.Price * 2m).ToList()}).ToListAsync())
     ];
 
     [Test]
@@ -340,9 +345,10 @@ public partial class WireShapeTests
     ];
 
     /// <summary>
-    /// The corpus above only guards what it covers. Every operator and every expression node the wire
-    /// declares has to appear in a request some client LINQ here produced, or a construct added to the
-    /// vocabulary would travel with nothing recording the bytes it travels as.
+    /// The corpus above only guards what it covers. Every operator, every expression node and every
+    /// kind of projected value the wire declares has to appear in a request some client LINQ here
+    /// produced, or a construct added to the vocabulary would travel with nothing recording the bytes it
+    /// travels as.
     /// </summary>
     [Test]
     public async Task EveryOperatorAndNodeIsSnapshotted()
@@ -351,6 +357,7 @@ public partial class WireShapeTests
 
         var missing = Declared(typeof(QueryOp))
             .Concat(Declared(typeof(Node)))
+            .Concat(Declared(typeof(ProjectionValue)))
             .Where(_ => !used.Contains(_))
             .ToList();
 
