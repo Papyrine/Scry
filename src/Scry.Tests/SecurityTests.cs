@@ -588,6 +588,67 @@ public class SecurityTests
         await Assert.That(exception.Message).Contains("'NAME' is named more than once");
     }
 
+    // A reader tells a stream marker and a binary placeholder from a row by a leading '$'. No C#
+    // identifier starts with one, but a client in another language, or an agent, can send one.
+    [Test]
+    [Arguments("$scry")]
+    [Arguments("$bin")]
+    [Arguments("$name")]
+    public async Task RejectsAProjectionNameStartingWithADollar(string name)
+    {
+        await using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [new SelectOp(new([new(name, new NodeValue(new MemberNode(["Name"])))]))]);
+
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+
+        await Assert.That(exception.Message).Contains($"'{name}' starts with '$'");
+    }
+
+    // Inside a nested object a '$bin' member would read as the placeholder for a binary part.
+    [Test]
+    public async Task RejectsANestedProjectionNameStartingWithADollar()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(
+                    new(
+                    [
+                        new(
+                            "Manager",
+                            new NestedValue(["Manager"], new([new("$bin", new NodeValue(new MemberNode(["Name"])))])))
+                    ]))
+            ]);
+
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+
+        await Assert.That(exception.Message).Contains("'$bin' starts with '$'");
+    }
+
+    [Test]
+    public async Task RejectsAJoinResultNameStartingWithADollar()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new JoinOp(
+                    "Department",
+                    JoinKind.Inner,
+                    new MemberNode(["DepartmentId"]),
+                    new MemberNode(["Id"]),
+                    null,
+                    [new("$scry", JoinSide.Outer, ["Name"])])
+            ]);
+
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+
+        await Assert.That(exception.Message).Contains("'$scry' starts with '$'");
+    }
+
     [Test]
     public async Task RejectsAJoinResultNamingAMemberTwice()
     {
