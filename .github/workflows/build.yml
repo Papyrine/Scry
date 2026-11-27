@@ -153,6 +153,37 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  # The TypeScript client, checked against the fixtures the .NET suites keep as snapshots. It reads
+  # only what is committed, so it needs neither .NET nor a database and runs beside the build rather
+  # than after it; a fixture the build would change fails there, as a snapshot.
+  typescript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: clients/typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: clients/typescript/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # The compiler is also the check on what the generated types say: test/types.ts holds
+      # assertions that only compile while they hold.
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
   # Trusted publishing: no stored API key. nuget.org validates GitHub's OIDC token against the
   # policy naming this repository and this workflow file, and returns a key good for an hour.
   publish:

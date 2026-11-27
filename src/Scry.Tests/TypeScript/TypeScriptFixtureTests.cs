@@ -16,7 +16,7 @@ public partial class TypeScriptFixtureTests
 {
     [Test]
     public Task Wire() =>
-        Verify(TypeScriptVocabulary.Render(), "ts")
+        Verify(TypeScriptVocabulary.Render(), "mts")
             .UseFileName("wire")
             .NotInline();
 
@@ -109,6 +109,64 @@ public partial class TypeScriptFixtureTests
         Verify(JsonSerializer.Serialize(SharedProcessor.Instance.Describe(), indented), "json")
             .UseFileName("introspection")
             .NotInline();
+
+    /// <summary>
+    /// The enums of the base class library a member may be typed as, described as introspection
+    /// describes a model's own. Introspection names one only by its display, since a C# client
+    /// already has it; a client in another language has to be told its values.
+    /// </summary>
+    [Test]
+    public Task BclEnums()
+    {
+        var table = typeof(ScryProcessor).Assembly.GetType("BclEnums", throwOnError: true)!;
+        var types = (Type[]) table.GetField("types", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+
+        var json = Document(writer =>
+        {
+            writer.WriteStartArray();
+            foreach (var type in types)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("display", $"global::{type.FullName}");
+                writer.WriteString("name", type.Name);
+                writer.WriteStartArray("values");
+                foreach (var name in Enum.GetNames(type))
+                {
+                    writer.WriteStringValue(name);
+                }
+
+                writer.WriteEndArray();
+                writer.WriteStartArray("constants");
+                foreach (var value in Enum.GetValuesAsUnderlyingType(type))
+                {
+                    writer.WriteStringValue(Convert.ToString(value, CultureInfo.InvariantCulture));
+                }
+
+                writer.WriteEndArray();
+                writer.WriteBoolean("isFlags", type.IsDefined(typeof(FlagsAttribute), inherit: false));
+                writer.WriteString("underlying", Underlying(type));
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        });
+
+        return Verify(json, "json")
+            .UseFileName("bcl-enums")
+            .NotInline();
+    }
+
+    // As introspection spells an enum's underlying type. Every listed enum is an int today; another
+    // would need its keyword here.
+    static string Underlying(Type type)
+    {
+        if (Enum.GetUnderlyingType(type) == typeof(int))
+        {
+            return "int";
+        }
+
+        throw new($"'{type.Name}' is backed by '{Enum.GetUnderlyingType(type)}', which has no keyword here.");
+    }
 
     /// <summary>
     /// What <see cref="JsonNamingPolicy.CamelCase"/> makes of a name, which is how every row writes its
