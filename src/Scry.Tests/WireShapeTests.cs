@@ -43,6 +43,12 @@ public partial class WireShapeTests
         var prefix = "A";
         string[] regions = ["North", "West"];
         var avatar = new byte[] {0x01, 0x02, 0x03};
+        var active = true;
+        // Past what an int holds, so the member is widened to meet it.
+        var beyondInt = 5_000_000_000L;
+        var token = new Guid("5f2b8a3c-1d4e-4f60-9a7b-8c9d0e1f2a3b");
+        // Every kind of character the wire's encoder escapes, and some it writes as they are.
+        var escapes = "quote \" backslash \\ <tag> & 'apos' + é 漢 👪 \u2028 \u0001 \t";
 
         return
         [
@@ -65,6 +71,13 @@ public partial class WireShapeTests
             await Wire(_ => _.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
             await Wire(_ => _.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxValue).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
             await Wire(_ => _.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            await Wire(_ => _.Source<Order>("Order").Where(_ => _.Id < beyondInt).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            await Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Active == active).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            await Wire(_ => _.Source<Shift>("Shift").Where(_ => _.Day >= new Date(2026, 1, 1)).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            await Wire(_ => _.Source<Ticket>("Ticket").Where(_ => _.Token != token).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            // A client in another language sends the same bytes only if it escapes a constant, and a
+            // projected name, exactly as the wire's encoder does.
+            await Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Name != escapes).Select(_ => new {Größe = _.Name}).ToListAsync()),
             // A comparison asking for a case sensitivity names the intent; the collation implementing
             // it is the server's, so no request can put a collation of its own choosing into the SQL.
             await Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComparison.OrdinalIgnoreCase)).Select(_ => new NameRow(_.Name)).ToListAsync()),
@@ -374,21 +387,29 @@ public partial class WireShapeTests
     }
 
     static async Task<IEnumerable<Entry>> Corpus() =>
+        (await Groups()).SelectMany(_ => _.Entries);
+
+    /// <summary>
+    /// The corpus, each group named as its test is. <c>TypeScriptFixtureTests</c> writes the same
+    /// requests out as exact bytes for a client in another language to match, so a shape added here
+    /// reaches that client too.
+    /// </summary>
+    internal static async Task<IReadOnlyList<(string Group, Entry[] Entries)>> Groups() =>
     [
-        .. await FilterShapes(),
-        .. await OrderingShapes(),
-        .. await ProjectionShapes(),
-        .. await GroupingShapes(),
-        .. await JoinShapes(),
-        .. await SetShapes(),
-        .. await CollectionShapes(),
-        .. await HierarchyShapes(),
-        .. await TerminalShapes(),
-        .. await StringShapes(),
-        .. await TemporalShapes(),
-        .. await MathShapes(),
-        .. await ConversionShapes(),
-        .. await BinaryShapes()
+        (nameof(Filtering), await FilterShapes()),
+        (nameof(Ordering), await OrderingShapes()),
+        (nameof(Projection), await ProjectionShapes()),
+        (nameof(Grouping), await GroupingShapes()),
+        (nameof(Joins), await JoinShapes()),
+        (nameof(SetOperations), await SetShapes()),
+        (nameof(Collections), await CollectionShapes()),
+        (nameof(Hierarchy), await HierarchyShapes()),
+        (nameof(Terminals), await TerminalShapes()),
+        (nameof(StringFunctions), await StringShapes()),
+        (nameof(TemporalFunctions), await TemporalShapes()),
+        (nameof(MathFunctions), await MathShapes()),
+        (nameof(ConversionFunctions), await ConversionShapes()),
+        (nameof(BinaryFunctions), await BinaryShapes())
     ];
 
     static IEnumerable<string> Declared(Type wireBase) =>
@@ -396,8 +417,9 @@ public partial class WireShapeTests
             .GetCustomAttributes<JsonDerivedTypeAttribute>()
             .Select(_ => (string) _.TypeDiscriminator!);
 
-    // ReSharper disable once NotAccessedPositionalProperty.Local
-    record Entry(string Query, string Wire);
+    // The request is kept beside its snapshot for what is done with it past this class: written
+    // compact, and answered.
+    internal record Entry(string Query, string Wire, QueryRequest Request);
 
     /// <summary>
     /// Runs the query against a transport that records what it was handed and stops before sending, so
@@ -425,7 +447,7 @@ public partial class WireShapeTests
 
         await Assert.That(sent).IsNotNull().Because(text);
 
-        return new(Label(text), JsonSerializer.Serialize(sent, indented));
+        return new(Label(text), JsonSerializer.Serialize(sent, indented), sent!);
     }
 
     /// <summary>

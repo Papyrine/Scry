@@ -1,0 +1,138 @@
+﻿[
+  {
+    "name": "A list, as a body",
+    "method": "POST",
+    "path": "/api/query",
+    "requestBody": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}},{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Aaron\"},{\"name\":\"Alice\"},{\"name\":\"Carol\"}],\"stamp\":\"{stamp}\"}"
+  },
+  {
+    "name": "The same list, as a URL",
+    "method": "GET",
+    "path": "/api/query?q={base64url(requestBody)}",
+    "requestBody": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}},{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-cache, private",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Aaron\"},{\"name\":\"Alice\"},{\"name\":\"Carol\"}],\"stamp\":\"{stamp}\"}"
+  },
+  {
+    "name": "A stream",
+    "method": "POST",
+    "path": "/api/query/stream",
+    "requestBody": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}},{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/x-ndjson",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"$scry\":\"begin\",\"version\":2,\"stamp\":\"{stamp}\"}\n{\"name\":\"Aaron\"}\n{\"name\":\"Alice\"}\n{\"name\":\"Carol\"}\n{\"$scry\":\"end\"}\n"
+  },
+  {
+    "name": "A batch, one entry refused",
+    "method": "POST",
+    "path": "/api/query/batch",
+    "requestBody": "{\"version\":2,\"queries\":[{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}},{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]},{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Revision\"]}}]}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"version\":2,\"results\":[{\"response\":{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Aaron\"},{\"name\":\"Alice\"},{\"name\":\"Carol\"}],\"stamp\":\"{stamp}\"}},{\"error\":\"Property \\u0027Revision\\u0027 is not allow-listed on \\u0027Order\\u0027.\",\"status\":\"BadRequest\",\"code\":\"Validation\"}],\"stamp\":\"{stamp}\"}"
+  },
+  {
+    "name": "A binary member, as multipart",
+    "method": "POST",
+    "path": "/api/query",
+    "requestBody": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Id\"},\"descending\":false},{\"$type\":\"take\",\"count\":2},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",\"Avatar\"]}}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "multipart/mixed; boundary=scry00000000000000000000000000000000",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "bodyBase64": "LS1zY3J5MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDANCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtDQpDb250ZW50LUxlbmd0aDogMw0KDQoBAgMNCi0tc2NyeTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwDQpDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ0KQ29udGVudC1MZW5ndGg6IDANCg0KDQotLXNjcnkwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMA0KQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi9qc29uDQoNCnsidmVyc2lvbiI6Miwia2luZCI6Ikxpc3QiLCJwYXlsb2FkIjpbeyJuYW1lIjoiQWxpY2UiLCJhdmF0YXIiOnsiJGJpbiI6MH19LHsibmFtZSI6IkNhcm9sIiwiYXZhdGFyIjp7IiRiaW4iOjF9fV0sInN0YW1wIjoie3N0YW1wfSJ9DQotLXNjcnkwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMC0tDQo="
+  },
+  {
+    "name": "A binary member, streamed",
+    "method": "POST",
+    "path": "/api/query/stream",
+    "requestBody": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Id\"},\"descending\":false},{\"$type\":\"take\",\"count\":2},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",\"Avatar\"]}}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "multipart/mixed; boundary=scry00000000000000000000000000000000",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "bodyBase64": "LS1zY3J5MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDANCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24veC1uZGpzb24NCg0KeyIkc2NyeSI6ImJlZ2luIiwidmVyc2lvbiI6Miwic3RhbXAiOiJ7c3RhbXB9In0KDQotLXNjcnkwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMA0KQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi9vY3RldC1zdHJlYW0NCkNvbnRlbnQtTGVuZ3RoOiAzDQoNCgECAw0KLS1zY3J5MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDANCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24veC1uZGpzb24NCg0KeyJuYW1lIjoiQWxpY2UiLCJhdmF0YXIiOnsiJGJpbiI6MH19Cg0KLS1zY3J5MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDANCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtDQpDb250ZW50LUxlbmd0aDogMA0KDQoNCi0tc2NyeTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwDQpDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL3gtbmRqc29uDQoNCnsibmFtZSI6IkNhcm9sIiwiYXZhdGFyIjp7IiRiaW4iOjB9fQp7IiRzY3J5IjoiZW5kIn0KDQotLXNjcnkwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMC0tDQo="
+  },
+  {
+    "name": "A refusal",
+    "method": "POST",
+    "path": "/api/query",
+    "requestBody": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Revision\"]}}]}",
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"error\":\"Property \\u0027Revision\\u0027 is not allow-listed on \\u0027Order\\u0027.\",\"code\":\"Validation\"}"
+  },
+  {
+    "name": "A request that does not parse",
+    "method": "POST",
+    "path": "/api/query",
+    "requestBody": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"nope\"}]}",
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"error\":\"Invalid query request: Read unrecognized type discriminator id \\u0027nope\\u0027. Path: $ | LineNumber: 0 | BytePositionInLine: 59.\",\"code\":\"WireFormat\"}"
+  },
+  {
+    "name": "A sensitive comparison, as a URL",
+    "method": "GET",
+    "path": "/api/query?q={base64url(requestBody)}",
+    "requestBody": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Avatar\"},\"right\":{\"$type\":\"const\",\"value\":\"AQID\",\"tag\":\"Bytes\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"error\":\"This query compares a value against a member the model marks sensitive, so it must be sent as a request body rather than in a URL.\",\"code\":\"Validation\",\"requiresBody\":true}"
+  },
+  {
+    "name": "A live query's first event",
+    "method": "POST",
+    "path": "/api/query/subscribe",
+    "requestBody": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}},{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "event: result\nid: {fingerprint}\ndata: {\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Aaron\"},{\"name\":\"Alice\"},{\"name\":\"Carol\"}],\"stamp\":\"{stamp}\"}\n\n"
+  }
+]

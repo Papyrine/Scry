@@ -1,0 +1,1299 @@
+﻿{
+  "version": 2,
+  "maxPageSize": 1000,
+  "sources": [
+    {
+      "name": "Announcement",
+      "kind": "Entity",
+      "model": "AnnouncementQueryModel"
+    },
+    {
+      "name": "Asset",
+      "kind": "Entity",
+      "model": "AssetQueryModel"
+    },
+    {
+      "name": "Building",
+      "kind": "Entity",
+      "model": "BuildingQueryModel"
+    },
+    {
+      "name": "Callback",
+      "kind": "Entity",
+      "model": "CallbackQueryModel"
+    },
+    {
+      "name": "Contract",
+      "kind": "Entity",
+      "model": "ContractQueryModel"
+    },
+    {
+      "name": "Department",
+      "kind": "Entity",
+      "model": "DepartmentQueryModel"
+    },
+    {
+      "name": "DepartmentHeadcount",
+      "kind": "View",
+      "model": "DepartmentHeadcountQueryModel"
+    },
+    {
+      "name": "Employee",
+      "kind": "Entity",
+      "model": "EmployeeQueryModel"
+    },
+    {
+      "name": "Fleet",
+      "kind": "Entity",
+      "model": "FleetQueryModel"
+    },
+    {
+      "name": "HeavyPress",
+      "kind": "Entity",
+      "model": "HeavyPressQueryModel"
+    },
+    {
+      "name": "Holiday",
+      "kind": "Poco",
+      "model": "HolidayQueryModel"
+    },
+    {
+      "name": "Invoice",
+      "kind": "Entity",
+      "model": "InvoiceQueryModel"
+    },
+    {
+      "name": "Machine",
+      "kind": "Entity",
+      "model": "MachineQueryModel"
+    },
+    {
+      "name": "Order",
+      "kind": "Entity",
+      "model": "OrderQueryModel"
+    },
+    {
+      "name": "OrderLine",
+      "kind": "Entity",
+      "model": "OrderLineQueryModel"
+    },
+    {
+      "name": "Post",
+      "kind": "Entity",
+      "model": "PostQueryModel"
+    },
+    {
+      "name": "Press",
+      "kind": "Entity",
+      "model": "PressQueryModel"
+    },
+    {
+      "name": "PublicHoliday",
+      "kind": "Poco",
+      "model": "PublicHolidayQueryModel"
+    },
+    {
+      "name": "Region",
+      "kind": "Entity",
+      "model": "SalesRegionQueryModel"
+    },
+    {
+      "name": "RegionSummary",
+      "kind": "View",
+      "model": "RegionSummaryQueryModel",
+      "obsolete": ""
+    },
+    {
+      "name": "Shift",
+      "kind": "Entity",
+      "model": "ShiftQueryModel"
+    },
+    {
+      "name": "SignedContract",
+      "kind": "Entity",
+      "model": "SignedContractQueryModel"
+    },
+    {
+      "name": "Sitting",
+      "kind": "Entity",
+      "model": "SittingQueryModel"
+    },
+    {
+      "name": "Ticket",
+      "kind": "Entity",
+      "model": "TicketQueryModel"
+    },
+    {
+      "name": "Vehicle",
+      "kind": "Entity",
+      "model": "VehicleQueryModel"
+    },
+    {
+      "name": "Yard",
+      "kind": "Entity",
+      "model": "YardQueryModel"
+    }
+  ],
+  "types": [
+    {
+      "model": "AddressQueryModel",
+      "members": [
+        {
+          "name": "City",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Country",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "City",
+        "Country"
+      ],
+      "isSensitive": true
+    },
+    {
+      "model": "AnnouncementQueryModel",
+      "members": [
+        {
+          "name": "Pinned",
+          "typeDisplay": "bool",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "base": "PostQueryModel",
+      "declared": [
+        "Pinned"
+      ]
+    },
+    {
+      "model": "AssetQueryModel",
+      "members": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name"
+      ]
+    },
+    {
+      "model": "BuildingQueryModel",
+      "members": [
+        {
+          "name": "Floors",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "base": "AssetQueryModel",
+      "declared": [
+        "Floors"
+      ]
+    },
+    {
+      "model": "CallbackQueryModel",
+      "members": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Retry",
+          "typeDisplay": "global::System.Net.HttpStatusCode?",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Status",
+          "typeDisplay": "global::System.Net.HttpStatusCode",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Url",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Url",
+        "Status",
+        "Retry"
+      ]
+    },
+    {
+      "model": "ContractQueryModel",
+      "members": [
+        {
+          "name": "CanSealContract",
+          "typeDisplay": "bool",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false,
+          "isCapability": true,
+          "command": "SealContract"
+        },
+        {
+          "name": "Document",
+          "typeDisplay": "global::Scry.ScryAttachment",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false,
+          "isAttachment": true,
+          "contentType": "application/pdf"
+        },
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "keys": [
+        "Id"
+      ],
+      "declared": [
+        "Id",
+        "Name",
+        "Document",
+        "CanSealContract"
+      ]
+    },
+    {
+      "model": "DepartmentQueryModel",
+      "members": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name"
+      ]
+    },
+    {
+      "model": "DepartmentHeadcountQueryModel",
+      "members": [
+        {
+          "name": "Department",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Headcount",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false,
+          "obsolete": "Counts open roles too; use the Region rollup."
+        }
+      ],
+      "declared": [
+        "Department",
+        "Headcount"
+      ]
+    },
+    {
+      "model": "EmployeeQueryModel",
+      "members": [
+        {
+          "name": "Active",
+          "typeDisplay": "bool",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Address",
+          "typeDisplay": "AddressQueryModel?",
+          "needsNullDefault": false,
+          "isNavigation": true,
+          "isCollection": false
+        },
+        {
+          "name": "Avatar",
+          "typeDisplay": "byte[]",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false,
+          "isSensitive": true
+        },
+        {
+          "name": "Department",
+          "typeDisplay": "DepartmentQueryModel?",
+          "needsNullDefault": false,
+          "isNavigation": true,
+          "isCollection": false
+        },
+        {
+          "name": "DepartmentId",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Manager",
+          "typeDisplay": "EmployeeQueryModel?",
+          "needsNullDefault": false,
+          "isNavigation": true,
+          "isCollection": false
+        },
+        {
+          "name": "ManagerId",
+          "typeDisplay": "int?",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Perks",
+          "typeDisplay": "Perks",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "PreviousAddresses",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003CAddressQueryModel\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        },
+        {
+          "name": "Status",
+          "typeDisplay": "Status",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Workstation",
+          "typeDisplay": "WorkstationQueryModel?",
+          "needsNullDefault": false,
+          "isNavigation": true,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name",
+        "Status",
+        "Perks",
+        "Active",
+        "ManagerId",
+        "Manager",
+        "DepartmentId",
+        "Department",
+        "Avatar",
+        "Address",
+        "PreviousAddresses",
+        "Workstation"
+      ]
+    },
+    {
+      "model": "FleetQueryModel",
+      "members": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Machines",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003CMachineQueryModel\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name",
+        "Machines"
+      ]
+    },
+    {
+      "model": "HeavyPressQueryModel",
+      "members": [
+        {
+          "name": "Certified",
+          "typeDisplay": "bool",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "base": "PressQueryModel",
+      "declared": [
+        "Certified"
+      ]
+    },
+    {
+      "model": "HolidayQueryModel",
+      "members": [
+        {
+          "name": "Date",
+          "typeDisplay": "global::System.DateOnly",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Name",
+        "Date"
+      ]
+    },
+    {
+      "model": "InvoiceQueryModel",
+      "members": [
+        {
+          "name": "CreatedBy",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Notes",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Number",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Reviewer",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false,
+          "isSensitive": true
+        },
+        {
+          "name": "Tags",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003Cstring\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        },
+        {
+          "name": "Weights",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003Cint\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        }
+      ],
+      "declared": [
+        "CreatedBy",
+        "Id",
+        "Number",
+        "Notes",
+        "Reviewer",
+        "Tags",
+        "Weights"
+      ]
+    },
+    {
+      "model": "MachineQueryModel",
+      "members": [
+        {
+          "name": "FleetId",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name",
+        "FleetId"
+      ]
+    },
+    {
+      "model": "OrderQueryModel",
+      "members": [
+        {
+          "name": "Amount",
+          "typeDisplay": "decimal",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Audited",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Code",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Discount",
+          "typeDisplay": "decimal?",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Grade",
+          "typeDisplay": "char",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Lines",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003COrderLineQueryModel\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        },
+        {
+          "name": "Placed",
+          "typeDisplay": "global::System.DateTime",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Priorities",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003CPriority\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        },
+        {
+          "name": "Quantity",
+          "typeDisplay": "uint",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Region",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Scores",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003Cint\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        },
+        {
+          "name": "Sku",
+          "typeDisplay": "ulong",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Tags",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003Cstring\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        }
+      ],
+      "declared": [
+        "Id",
+        "Region",
+        "Amount",
+        "Quantity",
+        "Sku",
+        "Placed",
+        "Discount",
+        "Grade",
+        "Code",
+        "Audited",
+        "Lines",
+        "Tags",
+        "Scores",
+        "Priorities"
+      ]
+    },
+    {
+      "model": "OrderLineQueryModel",
+      "members": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Order",
+          "typeDisplay": "OrderQueryModel?",
+          "needsNullDefault": false,
+          "isNavigation": true,
+          "isCollection": false
+        },
+        {
+          "name": "OrderId",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Price",
+          "typeDisplay": "decimal",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Quantity",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Sku",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Units",
+          "typeDisplay": "short",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Sku",
+        "Quantity",
+        "Price",
+        "Units",
+        "OrderId",
+        "Order"
+      ]
+    },
+    {
+      "model": "PostQueryModel",
+      "members": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Published",
+          "typeDisplay": "bool",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name",
+        "Published"
+      ]
+    },
+    {
+      "model": "PressQueryModel",
+      "members": [
+        {
+          "name": "Tonnage",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "base": "MachineQueryModel",
+      "declared": [
+        "Tonnage"
+      ]
+    },
+    {
+      "model": "PublicHolidayQueryModel",
+      "members": [
+        {
+          "name": "Region",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "base": "HolidayQueryModel",
+      "declared": [
+        "Region"
+      ]
+    },
+    {
+      "model": "RegionSummaryQueryModel",
+      "members": [
+        {
+          "name": "Region",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Total",
+          "typeDisplay": "decimal",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "obsolete": "",
+      "declared": [
+        "Region",
+        "Total"
+      ]
+    },
+    {
+      "model": "SalesRegionQueryModel",
+      "members": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name"
+      ]
+    },
+    {
+      "model": "ShiftQueryModel",
+      "members": [
+        {
+          "name": "CanRenameShift",
+          "typeDisplay": "bool",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false,
+          "isCapability": true,
+          "command": "RenameShift"
+        },
+        {
+          "name": "Day",
+          "typeDisplay": "global::System.DateOnly",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Duration",
+          "typeDisplay": "global::System.TimeSpan",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Signature",
+          "typeDisplay": "byte[]",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Stamped",
+          "typeDisplay": "global::System.DateTimeOffset",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Start",
+          "typeDisplay": "global::System.TimeOnly",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name",
+        "Duration",
+        "Day",
+        "Start",
+        "Stamped",
+        "Signature",
+        "CanRenameShift"
+      ]
+    },
+    {
+      "model": "SignedContractQueryModel",
+      "members": [
+        {
+          "name": "Signer",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "base": "ContractQueryModel",
+      "keys": [
+        "Id"
+      ],
+      "declared": [
+        "Signer"
+      ]
+    },
+    {
+      "model": "SittingQueryModel",
+      "members": [
+        {
+          "name": "Alternates",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003Cglobal::System.DayOfWeek\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": true
+        },
+        {
+          "name": "Clock",
+          "typeDisplay": "global::System.DateTimeKind",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "DayOfWeek",
+          "typeDisplay": "global::System.DayOfWeek",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Recess",
+          "typeDisplay": "global::System.DayOfWeek?",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name",
+        "DayOfWeek",
+        "Recess",
+        "Clock",
+        "Alternates"
+      ]
+    },
+    {
+      "model": "TicketQueryModel",
+      "members": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "IsOpen",
+          "typeDisplay": "bool",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Token",
+          "typeDisplay": "global::System.Guid",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Id",
+        "Name",
+        "IsOpen",
+        "Token"
+      ]
+    },
+    {
+      "model": "VehicleQueryModel",
+      "members": [
+        {
+          "name": "Wheels",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "base": "AssetQueryModel",
+      "declared": [
+        "Wheels"
+      ]
+    },
+    {
+      "model": "WorkstationQueryModel",
+      "members": [
+        {
+          "name": "Badge",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false,
+          "isSensitive": true
+        },
+        {
+          "name": "Extension",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false,
+          "isSensitive": true
+        },
+        {
+          "name": "Room",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "declared": [
+        "Room",
+        "Extension",
+        "Badge"
+      ]
+    },
+    {
+      "model": "YardQueryModel",
+      "members": [
+        {
+          "name": "Site",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "base": "FleetQueryModel",
+      "declared": [
+        "Site"
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "Perks",
+      "values": [
+        "None",
+        "Parking",
+        "Gym",
+        "Remote"
+      ],
+      "constants": [
+        "0",
+        "1",
+        "2",
+        "4"
+      ],
+      "isFlags": true,
+      "underlying": "int"
+    },
+    {
+      "name": "Priority",
+      "values": [
+        "Low",
+        "High"
+      ],
+      "constants": [
+        "0",
+        "1"
+      ],
+      "underlying": "int"
+    },
+    {
+      "name": "Status",
+      "values": [
+        "FullTime",
+        "PartTime",
+        "Contractor"
+      ],
+      "constants": [
+        "0",
+        "1",
+        "2"
+      ],
+      "underlying": "int"
+    }
+  ],
+  "commands": [
+    {
+      "name": "CreateShift",
+      "properties": [
+        {
+          "name": "Day",
+          "typeDisplay": "global::System.DateOnly",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Perks",
+          "typeDisplay": "global::System.Collections.Generic.IReadOnlyList\u003CPerks\u003E",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "result": {
+        "name": "ShiftCreated",
+        "properties": [
+          {
+            "name": "Id",
+            "typeDisplay": "int",
+            "needsNullDefault": false,
+            "isNavigation": false,
+            "isCollection": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "RenameShift",
+      "properties": [
+        {
+          "name": "Id",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        },
+        {
+          "name": "Name",
+          "typeDisplay": "string",
+          "needsNullDefault": true,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "target": "Shift",
+      "keys": [
+        "Id"
+      ],
+      "obsolete": "Shifts are renamed through the rota."
+    },
+    {
+      "name": "SealContract",
+      "properties": [
+        {
+          "name": "ContractId",
+          "typeDisplay": "int",
+          "needsNullDefault": false,
+          "isNavigation": false,
+          "isCollection": false
+        }
+      ],
+      "target": "Contract",
+      "keys": [
+        "ContractId"
+      ]
+    }
+  ],
+  "queryEndpoint": "/api/query",
+  "queryUrlLimit": 4096,
+  "sqlPreview": false,
+  "schemaStamp": "{scrubbed stamp}"
+}

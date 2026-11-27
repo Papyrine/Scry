@@ -746,6 +746,176 @@ _ => _.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Se
   ]
 }
 
+_ => _.Source<Order>("Order").Where(_ => _.Id < beyondInt).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "binary",
+        "op": "LessThan",
+        "left": {
+          "$type": "member",
+          "path": "Id"
+        },
+        "right": {
+          "$type": "const",
+          "value": "5000000000",
+          "tag": "Int64"
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          "Region",
+          "Amount"
+        ]
+      }
+    }
+  ]
+}
+
+_ => _.Source<Employee>("Employee").Where(_ => _.Active == active).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "binary",
+        "op": "Equal",
+        "left": {
+          "$type": "member",
+          "path": "Active"
+        },
+        "right": {
+          "$type": "const",
+          "value": "true",
+          "tag": "Boolean"
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          "Name"
+        ]
+      }
+    }
+  ]
+}
+
+_ => _.Source<Shift>("Shift").Where(_ => _.Day >= new Date(2026, 1, 1)).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "binary",
+        "op": "GreaterThanOrEqual",
+        "left": {
+          "$type": "member",
+          "path": "Day"
+        },
+        "right": {
+          "$type": "const",
+          "value": "2026-01-01",
+          "tag": "DateOnly"
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          "Name"
+        ]
+      }
+    }
+  ]
+}
+
+_ => _.Source<Ticket>("Ticket").Where(_ => _.Token != token).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Ticket",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "binary",
+        "op": "NotEqual",
+        "left": {
+          "$type": "member",
+          "path": "Token"
+        },
+        "right": {
+          "$type": "const",
+          "value": "5f2b8a3c-1d4e-4f60-9a7b-8c9d0e1f2a3b",
+          "tag": "Guid"
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          "Name"
+        ]
+      }
+    }
+  ]
+}
+
+_ => _.Source<Employee>("Employee").Where(_ => _.Name != escapes).Select(_ => new {Größe = _.Name}).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "binary",
+        "op": "NotEqual",
+        "left": {
+          "$type": "member",
+          "path": "Name"
+        },
+        "right": {
+          "$type": "const",
+          "value": "quote \u0022 backslash \\ \u003Ctag\u003E \u0026 \u0027apos\u0027 \u002B \u00E9 \u6F22 \uD83D\uDC6A \u2028 \u0001 \t",
+          "tag": "String"
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Gr\u00F6\u00DFe",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": "Name"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
 _ => _.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComparison.OrdinalIgnoreCase)).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,

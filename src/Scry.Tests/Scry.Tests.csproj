@@ -17,6 +17,9 @@
          regenerates /readme.md and /docs/*.md from their .source.md counterparts. -->
     <PackageReference Include="MarkdownSnippets.MsBuild" PrivateAssets="all" />
     <PackageReference Include="DiffEngine" />
+    <!-- For TypeScriptFixtureTests.Framings alone, which records what each HTTP endpoint answers
+         over the test model: the framings a client in another language has to read. -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
     <ProjectReference Include="..\Scry.Annotations\Scry.Annotations.csproj" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
