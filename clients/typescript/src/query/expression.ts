@@ -25,6 +25,39 @@ export class Scope {
     return model;
   }
 
+  /** A member, through the model's bases, by the name it travels under: its name in a query, and it. */
+  memberNamed(model: string, wire: string): [string, MemberInfo] {
+    let current: string | undefined = model;
+    while (current !== undefined) {
+      const described = this.model(current);
+      for (const [name, member] of Object.entries(described.members)) {
+        if (member.name === wire) {
+          return [name, member];
+        }
+      }
+
+      current = described.base;
+    }
+
+    throw new Error(`${model} has no member '${wire}'.`);
+  }
+
+  /** Whether a row of the model holds anything marked sensitive, itself or a member. */
+  marks(model: string): boolean {
+    let current: string | undefined = model;
+    while (current !== undefined) {
+      const described = this.model(current);
+      if (described.sensitive === true ||
+          Object.values(described.members).some(_ => _.sensitive === true)) {
+        return true;
+      }
+
+      current = described.base;
+    }
+
+    return false;
+  }
+
   /** A member, through the model's bases, by the name a query was written with. */
   member(model: string, name: string): MemberInfo | undefined {
     let current: string | undefined = model;

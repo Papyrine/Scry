@@ -1,0 +1,123 @@
+// Against a running Sample.WebServer, when SCRY_SERVER names it (http://localhost:5249, say):
+// the model generated from the server's own introspection, queries sent over HTTP, and the rows the
+// server answers read back. Skipped otherwise, since the TypeScript suite needs no server of its own.
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { and, createScry, eq, gt, httpTransport, isIn, ne, schemaStatus, startsWith, toUpper } from "../src/index.ts";
+import { readDescription } from "../src/codegen/cli.ts";
+import { generate } from "../src/codegen/generate.ts";
+import type { Sources } from "./generated/sample-model.ts";
+import * as committed from "./generated/sample-model.ts";
+
+const server = process.env["SCRY_SERVER"];
+const skip = server === undefined ? "Set SCRY_SERVER to a running Sample.WebServer to run these." : false;
+
+// The model as this server describes it now, generated and loaded the way an app's build would.
+async function live(): Promise<typeof committed> {
+  const directory = await mkdtemp(join(tmpdir(), "scry-live-"));
+  try {
+    const file = join(directory, "model.ts");
+    await writeFile(file, generate(await readDescription(`${server}/scry/introspect`), { runtime: "scry-client", from: "the live server" }));
+    return await import(pathToFileURL(file).href) as typeof committed;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+const methods: string[] = [];
+
+async function client() {
+  const { schema } = await live();
+  const fetch: typeof globalThis.fetch = (input, init) => {
+    methods.push(init?.method ?? "GET");
+    return globalThis.fetch(input, init);
+  };
+  return createScry<Sources>(schema, { transport: httpTransport({ endpoint: `${server}/api/query`, fetch }) });
+}
+
+test("rows a query projecting nothing returns read as the model's", { skip }, async () => {
+  const scry = await client();
+  const rows = await scry.employee.orderBy(_ => _.id).toList();
+
+  assert.ok(rows.length > 0);
+  const [first] = rows;
+  assert.equal(typeof first!.id, "number");
+  assert.equal(typeof first!.name, "string");
+  assert.equal(typeof first!.active, "boolean");
+  assert.match(first!.created, /^\d{4}-\d{2}-\d{2}$/);
+  assert.deepEqual(schemaStatus(scry).stale, false);
+});
+
+test("a filtered, ordered projection through a navigation", { skip }, async () => {
+  const scry = await client();
+  const rows = await scry.employee
+    .where(_ => and(_.active, startsWith(_.name, "A")))
+    .orderBy(_ => _.name)
+    .select(_ => ({ name: _.name, manager: _.manager.name, department: { name: toUpper(_.department.name) } }))
+    .toList();
+
+  assert.ok(rows.length > 0);
+  for (const row of rows) {
+    assert.ok(row.name.startsWith("A"), row.name);
+    assert.equal(row.department.name, row.department.name?.toUpperCase());
+  }
+});
+
+test("scalars, a grouping and a page", { skip }, async () => {
+  const scry = await client();
+  const count = await scry.employee.count();
+  const totals = await scry.order.groupBy(_ => _.region).select(g => ({ region: g.key, total: g.sum(_ => _.amount), orders: g.count() })).toList();
+  const first = await scry.employee.orderBy(_ => _.id).select(_ => ({ id: _.id })).page(2);
+
+  assert.equal(typeof count, "number");
+  assert.ok(count > 0);
+  assert.ok(totals.length > 0);
+  for (const total of totals) {
+    assert.match(total.total, /^\d+(\.\d+)?$/);
+  }
+
+  assert.equal(first.items.length, Math.min(2, count));
+  if (first.hasMore) {
+    assert.equal(typeof first.cursor, "string");
+    const next = await scry.employee.orderBy(_ => _.id).select(_ => ({ id: _.id })).page(2, first.cursor);
+    assert.ok(next.items.every(_ => _.id > first.items.at(-1)!.id));
+  }
+});
+
+test("a short query travels as a URL, and one comparing a sensitive member as a body", { skip }, async () => {
+  const scry = await client();
+  methods.length = 0;
+  await scry.order.where(_ => _.tags.contains("urgent")).select(_ => ({ id: _.id })).toList();
+  await scry.employee.where(_ => ne(_.password, "guess")).select(_ => ({ id: _.id })).toList();
+
+  assert.deepEqual(methods, ["GET", "POST"]);
+});
+
+test("a value looked up in another source, and the rows a join returns", { skip }, async () => {
+  const scry = await client();
+  const inDepartment = await scry.employee.where(_ => isIn(_.departmentId, scry.department.where(_ => gt(_.id, 0)), _ => _.id)).count();
+  const joined = await scry.employee.join(scry.department, _ => _.departmentId, _ => _.id, (employee, department) => ({ employee: employee.name, department: department.name })).toList();
+
+  assert.ok(inDepartment > 0);
+  assert.ok(joined.length > 0);
+  assert.ok(joined.every(_ => typeof _.department === "string"));
+});
+
+test("a client generated against another model hears of it once", { skip }, async () => {
+  const told: string[] = [];
+  const scry = createScry<Sources>(committed.schema, {
+    transport: httpTransport({ endpoint: `${server}/api/query` }),
+    onSchemaStale: _ => told.push(_.server)
+  });
+
+  await scry.employee.count();
+  await scry.employee.where(_ => eq(_.active, true)).count();
+
+  assert.equal(told.length, 1);
+  assert.equal(schemaStatus(scry).stale, true);
+});

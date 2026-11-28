@@ -115,22 +115,24 @@ export type Decimal = Branded<string, "Decimal">;
 export type Guid = Branded<string, "Guid">;
 
 /**
- * A date and time with no offset, as its round-trip text: `2026-09-03T00:00:00.0000000`, with a
- * trailing `Z` where it is UTC. A wall clock rather than an instant, which is why it is not a `Date`:
- * reading one as a `Date` would place it in the reader's zone.
+ * A date and time with no offset, as text. A request writes it in the round-trip form,
+ * `2026-09-03T00:00:00.0000000` with a trailing `Z` where it is UTC; a row carries it as the server's
+ * serializer writes it, `2026-09-03T00:00:00`, a fraction only where there is one. A wall clock
+ * rather than an instant, which is why it is not a `Date`: reading one as a `Date` would place it in
+ * the reader's zone.
  */
 export type DateTime = Branded<string, "DateTime">;
 
 /** A date, as `2026-09-03`. */
 export type DateOnly = Branded<string, "DateOnly">;
 
-/** A time of day, as `05:06:07.1230000`. */
+/** A time of day: `05:06:07.1230000` in a request, `05:06:07.123` in a row. */
 export type TimeOnly = Branded<string, "TimeOnly">;
 
-/** An elapsed time, as `01:02:03.4560000`, with a day count in front past a day. */
+/** An elapsed time, as `01:02:03.4560000`, with a day count in front past a day and a fraction only where there is one. */
 export type TimeSpan = Branded<string, "TimeSpan">;
 
-/** A date and time with its offset, as `2026-03-04T05:06:07.1230000+02:00`. */
+/** A date and time with its offset: `2026-03-04T05:06:07.1230000+02:00` in a request, the fraction only where there is one in a row. */
 export type DateTimeOffset = Branded<string, "DateTimeOffset">;
 
 /**

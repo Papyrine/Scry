@@ -3,26 +3,46 @@
 // query; a terminal builds the request and sends it.
 
 import type {
+  EnumAlias,
   InSourceNode,
   JoinMember,
   JoinOp,
   Node,
   QueryOp,
   QueryRequest,
-  QueryResponse,
   ResultKind,
   SetKind,
   SetOp
 } from "../wire.ts";
-import type { ScrySchema } from "../runtime/schema.ts";
+import type { Scalar, ScrySchema, ValueInfo } from "../runtime/schema.ts";
+import { serializeRequest } from "../request/json.ts";
+import { parseJson, RawNumber, type Json } from "../response/json.ts";
+import { Decoder, valuePlan, type Plan, type PlanMember } from "../response/decode.ts";
+import { ScryRequestError, ScryStaleClientError, ScryWireError } from "../errors.ts";
 import type * as scry from "../runtime/types.ts";
 import { requiredVersion } from "../request/version.ts";
 import { Collection, Expression, Grouping, Scope, groupKey, row, type GroupKey, type Side } from "./expression.ts";
 import { projectionOf, wireName } from "./projection.ts";
 
+/** What a transport is handed beside the request. */
+export interface RequestContext {
+  /** The request serialized: the bytes it travels as. */
+  readonly json: string;
+  /** It reads a member the model marks sensitive, so it travels as a body. */
+  readonly sensitive: boolean;
+  /** The longest URL the description says the server wants, until a response says otherwise. */
+  readonly urlLimit: number;
+}
+
+/** A response's JSON as the server wrote it, and the schema stamp a header carried with it. */
+export interface Answer {
+  readonly text: string;
+  readonly stamp?: string;
+}
+
 /** Sends a request and answers with the server's response. */
 export interface Transport {
-  query(request: QueryRequest): Promise<QueryResponse>;
+  query(request: QueryRequest, context: RequestContext): Promise<Answer>;
 }
 
 export interface ScryOptions {
@@ -35,6 +55,11 @@ export interface ScryOptions {
   readonly defaultProjection?: "model" | "server";
   /** Whether each request carries the description's schema stamp, as a generated C# client's do. */
   readonly stamp?: boolean;
+  /**
+   * Told once, the first time a response shows the server's model is not the one this client was
+   * generated from: time to generate again, or to reload a deployed app.
+   */
+  readonly onSchemaStale?: (stamps: { readonly client: string; readonly server: string }) => void;
 }
 
 /** A page of rows, and what resumes after it. */
@@ -139,12 +164,43 @@ class Client {
   readonly schema: ScrySchema;
   readonly options: ScryOptions;
   readonly scope: Scope;
+  serverStamp: string | undefined;
+  #told = false;
 
   constructor(schema: ScrySchema, options: ScryOptions) {
     this.schema = schema;
     this.options = options;
     this.scope = new Scope(schema);
   }
+
+  // Told once rather than per response: a chatty app would otherwise be told on every query for as
+  // long as the drift lasts.
+  observe(stamp: string | undefined): void {
+    if (stamp === undefined) {
+      return;
+    }
+
+    this.serverStamp = stamp;
+    if (this.#told ||
+        stamp === this.schema.stamp) {
+      return;
+    }
+
+    this.#told = true;
+    this.options.onSchemaStale?.({ client: this.schema.stamp, server: stamp });
+  }
+}
+
+const clients = new WeakMap<object, Client>();
+
+/** The schema stamps of a client and of the server it last heard from, and whether they differ. */
+export function schemaStatus(scry: object): { readonly client: string; readonly server: string | undefined; readonly stale: boolean } {
+  const client = clients.get(scry);
+  if (client === undefined) {
+    throw new Error("Not a client createScry made.");
+  }
+
+  return { client: client.schema.stamp, server: client.serverStamp, stale: client.serverStamp !== undefined && client.serverStamp !== client.schema.stamp };
 }
 
 type Stage = "rows" | "ordered" | "grouped" | "projected" | "final";
@@ -160,6 +216,8 @@ interface State {
   readonly group: GroupKey | undefined;
   /** It reads a member the model marks sensitive. */
   readonly sensitive: boolean;
+  /** What its rows are once reshaped; until then, the model's. */
+  readonly plan: Plan | undefined;
 }
 
 export function createScry<S>(schema: ScrySchema, options: ScryOptions = {}): Scry<S> {
@@ -175,11 +233,13 @@ export function createScry<S>(schema: ScrySchema, options: ScryOptions = {}): Sc
         ops: [],
         stage: "rows",
         group: undefined,
-        sensitive: false
+        sensitive: false,
+        plan: undefined
       })
     });
   }
 
+  clients.set(sources, client);
   return sources as Scry<S>;
 }
 
@@ -322,12 +382,12 @@ class Query {
     if (this.#state.stage === "grouped") {
       const grouping = new Grouping(scope, this.#state.model!, this.#state.group!);
       const built = projectionOf((projection as (_: unknown) => unknown)(grouping), true, scope);
-      return this.#next({ $type: "select", projection: built.projection }, "projected", { model: undefined }, built.sensitive);
+      return this.#next({ $type: "select", projection: built.projection }, "projected", { model: undefined, plan: built.plan }, built.sensitive);
     }
 
     this.#expect(["rows", "ordered"], "select()");
     const built = projectionOf((projection as (_: unknown) => unknown)(this.#row()), false, scope);
-    return this.#next({ $type: "select", projection: built.projection }, "projected", { model: undefined }, built.sensitive);
+    return this.#next({ $type: "select", projection: built.projection }, "projected", { model: undefined, plan: built.plan }, built.sensitive);
   }
 
   distinct(): Query {
@@ -374,7 +434,7 @@ class Query {
       built = (result as (outer: unknown, inner: unknown) => unknown)(outerRow, innerRow);
     }
 
-    const [members, sensitive] = joinMembers(built, kind);
+    const [members, sensitive, plan] = joinMembers(built, kind);
     const side = sidePipeline(inner.state.ops, "the inner side of a join");
     const op: JoinOp = {
       $type: "join",
@@ -386,7 +446,7 @@ class Query {
       result: members,
       ...(side.ops === undefined ? {} : { innerOps: side.ops })
     };
-    return this.#next(op, "final", { model: undefined }, sensitive || outer.sensitive || innerJoined.sensitive || inner.state.sensitive);
+    return this.#next(op, "final", { model: undefined, plan }, sensitive || outer.sensitive || innerJoined.sensitive || inner.state.sensitive);
   }
 
   #combine(kind: SetKind, otherQuery: unknown): Query {
@@ -430,21 +490,24 @@ class Query {
   // Terminals.
 
   toRequest(): QueryRequest {
-    return this.#request([]);
+    return this.#prepare([]).request;
   }
 
   toList(): Promise<unknown> {
-    return this.#send([], "List");
+    return this.#send([], "List", rows => ({ kind: "array", element: rows }));
   }
 
-  #element(op: "first" | "single" | "last", orDefault: boolean, predicate: ((_: never) => unknown) | undefined): Promise<unknown> {
+  async #element(op: "first" | "single" | "last", orDefault: boolean, predicate: ((_: never) => unknown) | undefined): Promise<unknown> {
     let terminal: QueryOp = { $type: op, orDefault };
+    let sensitive = false;
     if (predicate !== undefined) {
       this.#expect(["rows", "ordered"], `A condition on ${op}()`);
-      terminal = { $type: op, orDefault, predicate: this.#expression(predicate, "A condition").node };
+      const condition = this.#expression(predicate, "A condition");
+      terminal = { $type: op, orDefault, predicate: condition.node };
+      sensitive = condition.sensitive;
     }
 
-    return this.#send([terminal], "Single");
+    return present(await this.#send([terminal], "Single", rows => rows, sensitive), orDefault);
   }
 
   first(predicate?: (_: never) => unknown): Promise<unknown> {
@@ -471,8 +534,8 @@ class Query {
     return this.#element("last", true, predicate);
   }
 
-  elementAt(index: number): Promise<unknown> {
-    return this.#send([{ $type: "skip", count: index }, { $type: "first", orDefault: false }], "Single");
+  async elementAt(index: number): Promise<unknown> {
+    return present(await this.#send([{ $type: "skip", count: index }, { $type: "first", orDefault: false }], "Single", rows => rows), false);
   }
 
   minBy(key: (_: never) => unknown): Promise<unknown> {
@@ -484,17 +547,27 @@ class Query {
   }
 
   #scalar(op: "count" | "longCount" | "any" | "all", predicate: ((_: never) => unknown) | undefined): Promise<unknown> {
+    let answers: Scalar = "bool";
+    if (op === "count") {
+      answers = "int";
+    }
+
+    if (op === "longCount") {
+      answers = "long";
+    }
+
+    const plan = () => valuePlan({ scalar: answers });
     if (predicate === undefined) {
       if (op === "all") {
         throw new Error("all() asks whether every row meets a condition, so it needs one.");
       }
 
-      return this.#send([{ $type: op }], "Scalar");
+      return this.#send([{ $type: op }], "Scalar", plan);
     }
 
     this.#expect(["rows", "ordered"], `A condition on ${op}()`);
     const condition = this.#expression(predicate, "A condition");
-    return this.#send([{ $type: op, predicate: condition.node }], "Scalar", condition.sensitive);
+    return this.#send([{ $type: op, predicate: condition.node }], "Scalar", plan, condition.sensitive);
   }
 
   count(predicate?: (_: never) => unknown): Promise<unknown> {
@@ -516,7 +589,17 @@ class Query {
   #fold(function_: "Sum" | "Average" | "Min" | "Max", selector: (_: never) => unknown): Promise<unknown> {
     this.#expect(["rows", "ordered"], `${function_.toLowerCase()}()`);
     const selected = this.#expression(selector, "What to fold");
-    return this.#send([{ $type: "aggregate", function: function_, selector: selected.node }], "Scalar", selected.sensitive);
+    let value = selected.value;
+    // An average of whole numbers is a double, as C#'s Average is; of decimals or floats, one of those.
+    if (function_ === "Average" &&
+        value !== undefined &&
+        "scalar" in value &&
+        value.scalar !== "decimal" &&
+        value.scalar !== "float") {
+      value = { scalar: "double" };
+    }
+
+    return this.#send([{ $type: "aggregate", function: function_, selector: selected.node }], "Scalar", () => valuePlan(value), selected.sensitive);
   }
 
   sum(selector: (_: never) => unknown): Promise<unknown> {
@@ -540,44 +623,47 @@ class Query {
       $type: "page",
       ...(size === undefined ? {} : { size }),
       ...(cursor === undefined ? {} : { cursor })
-    }], "Page");
+    }], "Page", rows => ({
+      kind: "object",
+      members: [
+        { key: "items", wire: "Items", plan: { kind: "array", element: rows } },
+        { key: "hasMore", wire: "HasMore", plan: valuePlan({ scalar: "bool" }) },
+        { key: "cursor", wire: "Cursor", plan: valuePlan({ scalar: "string" }), optional: true }
+      ]
+    }));
   }
 
-  /** @internal Whether the request reads a member the model marks sensitive. */
-  get sensitive(): boolean {
-    return this.#state.sensitive;
-  }
-
-  #request(terminal: readonly QueryOp[]): QueryRequest {
+  // The request a terminal sends, whether it reads anything sensitive, and what its rows are.
+  #prepare(terminal: readonly QueryOp[]): { request: QueryRequest; sensitive: boolean; rows: Plan } {
     const pipeline = [...this.#state.ops];
     const last = terminal.at(-1);
-    const leading = terminal.slice(0, -1);
-    pipeline.push(...leading);
-    this.#addDefaultProjection(pipeline, last);
+    pipeline.push(...terminal.slice(0, -1));
+    const projected = this.#addDefaultProjection(pipeline, last);
     if (last !== undefined) {
       pipeline.push(last);
     }
 
     const { client } = this.#state;
-    const request: QueryRequest = { version: requiredVersion(pipeline), root: this.#state.root, pipeline };
-    if (client.options.stamp === false) {
-      return request;
+    let request: QueryRequest = { version: requiredVersion(pipeline), root: this.#state.root, pipeline };
+    if (client.options.stamp !== false) {
+      request = { ...request, stamp: client.schema.stamp };
     }
 
-    return { ...request, stamp: client.schema.stamp };
+    return { request, sensitive: this.#state.sensitive || projected.sensitive, rows: this.#state.plan ?? projected.plan };
   }
 
   // A query writing no projection asks for the model's scalar members by name, as the C# client's
   // AddDefaultProjection does, so the rows come back keyed by the names this client knows.
-  #addDefaultProjection(pipeline: QueryOp[], terminal: QueryOp | undefined): void {
+  #addDefaultProjection(pipeline: QueryOp[], terminal: QueryOp | undefined): { plan: Plan; sensitive: boolean } {
     const { client, model } = this.#state;
-    if (client.options.defaultProjection === "server" ||
-        model === undefined) {
-      return;
+    if (model === undefined) {
+      return { plan: valuePlan(undefined), sensitive: false };
     }
 
-    const members = client.scope.model(model).defaultProjection;
-    if (members.length === 0 ||
+    const described = client.scope.model(model);
+    const members = described.defaultProjection;
+    if (client.options.defaultProjection === "server" ||
+        members.length === 0 ||
         terminal?.$type === "count" ||
         terminal?.$type === "longCount" ||
         terminal?.$type === "any" ||
@@ -585,30 +671,114 @@ class Query {
         terminal?.$type === "aggregate" ||
         ((terminal?.$type === "first" || terminal?.$type === "single" || terminal?.$type === "last") && terminal.predicate !== undefined) ||
         pipeline.some(_ => _.$type === "select" || _.$type === "groupBy" || _.$type === "join" || _.$type === "set")) {
-      return;
+      // The server projects the row itself, and a row it returns whole may hold anything marked.
+      return { plan: { kind: "model", model }, sensitive: client.scope.marks(model) };
     }
 
     pipeline.push({
       $type: "select",
       projection: { members: members.map(_ => ({ name: _, value: { $type: "node", node: { $type: "member", path: [_] } } })) }
     });
+
+    const planned: PlanMember[] = [];
+    let sensitive = described.sensitive === true;
+    for (const wire of members) {
+      const [key, member] = client.scope.memberNamed(model, wire);
+      sensitive ||= member.sensitive === true;
+      let value: ValueInfo | undefined;
+      if (member.shape.kind === "value") {
+        value = member.shape.value;
+      }
+
+      planned.push({ key, wire, plan: valuePlan(value) });
+    }
+
+    return { plan: { kind: "object", members: planned }, sensitive };
   }
 
-  async #send(terminal: readonly QueryOp[], kind: ResultKind, sensitive = false): Promise<unknown> {
-    const request = this.#request(terminal);
-    const transport = this.#state.client.options.transport;
+  async #send(terminal: readonly QueryOp[], kind: ResultKind, payload: (rows: Plan) => Plan, sensitive = false): Promise<unknown> {
+    const { client } = this.#state;
+    const prepared = this.#prepare(terminal);
+    const transport = client.options.transport;
     if (transport === undefined) {
-      throw new Error("This client has no transport to send its requests with.");
+      throw new Error("This client has no transport to send its requests with: give createScry one, such as httpTransport().");
     }
 
-    void sensitive;
-    const response = await transport.query(request);
-    if (response.kind !== kind) {
-      throw new Error(`The server answered a ${kind} query with a ${response.kind}.`);
+    let answer: Answer;
+    try {
+      answer = await transport.query(prepared.request, {
+        json: serializeRequest(prepared.request),
+        sensitive: prepared.sensitive || sensitive,
+        urlLimit: client.schema.queryUrlLimit
+      });
+    } catch (error) {
+      if (error instanceof ScryRequestError) {
+        client.observe(error.serverStamp);
+        if (error.code === "StaleClient") {
+          throw new ScryStaleClientError(error.message);
+        }
+      }
+
+      throw error;
     }
 
-    return response.payload;
+    client.observe(answer.stamp);
+    const envelope = parseJson(answer.text);
+    if (typeof envelope !== "object" ||
+        envelope === null ||
+        Array.isArray(envelope) ||
+        envelope instanceof RawNumber ||
+        !Object.hasOwn(envelope, "payload")) {
+      throw new ScryWireError("The response is not a query's answer.");
+    }
+
+    if (envelope["kind"] !== kind) {
+      throw new ScryWireError(`The server answered a ${kind} query with ${JSON.stringify(envelope["kind"])}.`);
+    }
+
+    const stamp = envelope["stamp"];
+    if (typeof stamp === "string") {
+      client.observe(stamp);
+    }
+
+    return new Decoder(client.scope, aliases(envelope["enumAliases"])).decode(envelope["payload"]!, payload(prepared.rows));
   }
+}
+
+// What an element terminal answers: its row, or none, which only an OrDefault one may answer with.
+function present(row: unknown, orDefault: boolean): unknown {
+  if (row === null &&
+      !orDefault) {
+    throw new Error("The sequence contains no elements.");
+  }
+
+  return row;
+}
+
+// The renames a response describes for a client generated before them.
+function aliases(json: Json | undefined): EnumAlias[] | undefined {
+  if (!Array.isArray(json)) {
+    return undefined;
+  }
+
+  const read: EnumAlias[] = [];
+  for (const alias of json) {
+    if (typeof alias !== "object" ||
+        alias === null ||
+        Array.isArray(alias) ||
+        alias instanceof RawNumber) {
+      continue;
+    }
+
+    const { enumName, valueName, previousNames } = alias;
+    if (typeof enumName === "string" &&
+        typeof valueName === "string" &&
+        Array.isArray(previousNames)) {
+      read.push({ enumName, valueName, previousNames: previousNames.filter(_ => typeof _ === "string") });
+    }
+  }
+
+  return read;
 }
 
 function asQuery(value: unknown, what: string): Query {
@@ -654,7 +824,7 @@ function joinKey(value: unknown): Expression {
 }
 
 // A join's result names a member of either row, or over a group join an aggregate of the group.
-function joinMembers(value: unknown, kind: JoinOp["kind"]): [JoinMember[], boolean] {
+function joinMembers(value: unknown, kind: JoinOp["kind"]): [JoinMember[], boolean, Plan] {
   if (typeof value !== "object" ||
       value === null ||
       value instanceof Expression) {
@@ -662,6 +832,7 @@ function joinMembers(value: unknown, kind: JoinOp["kind"]): [JoinMember[], boole
   }
 
   const members: JoinMember[] = [];
+  const planned: PlanMember[] = [];
   let sensitive = false;
   for (const [key, member] of Object.entries(value)) {
     if (!(member instanceof Expression)) {
@@ -670,6 +841,7 @@ function joinMembers(value: unknown, kind: JoinOp["kind"]): [JoinMember[], boole
 
     sensitive ||= member.sensitive;
     const name = wireName(key);
+    planned.push({ key, wire: name, plan: valuePlan(member.value) });
     if (kind === "Group" &&
         member.node.$type === "aggregate") {
       const { $type: _, ...aggregate } = member.node;
@@ -689,7 +861,7 @@ function joinMembers(value: unknown, kind: JoinOp["kind"]): [JoinMember[], boole
     throw new Error("A join must project at least one member.");
   }
 
-  return [members, sensitive];
+  return [members, sensitive, { kind: "object", members: planned }];
 }
 
 // The other side of a join or a set operation: its filters cross as one predicate every server reads,

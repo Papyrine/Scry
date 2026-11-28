@@ -2,8 +2,11 @@
 // with, and the request each sends.
 
 export * from "./runtime/index.ts";
-export { createScry } from "./query/query.ts";
-export type { Final, Grouped, Ordered, Page, Projected, Rows, Scry, ScryOptions, Transport } from "./query/query.ts";
+export { createScry, schemaStatus } from "./query/query.ts";
+export type { Answer, Final, Grouped, Ordered, Page, Projected, RequestContext, Rows, Scry, ScryOptions, Transport } from "./query/query.ts";
+export { httpTransport } from "./http.ts";
+export type { HttpOptions } from "./http.ts";
+export { ScryPermissionError, ScryRequestError, ScryStaleClientError, ScryWireError } from "./errors.ts";
 export {
   add,
   and,

@@ -3,11 +3,33 @@
 A TypeScript client for Scry, in progress. What exists so far:
 
 - the generator, which reads a server's introspection and writes the types a query is written against, reading the description the way the [query explorer](../../docs/explorer.md) does;
-- the query builder, which writes the request a C# client sends for the same query, byte for byte.
+- the query builder, which writes the request a C# client sends for the same query, byte for byte;
+- the HTTP transport, and the reader that turns each answer back into what the query said it returns.
 
-Sending a request over HTTP and reading its rows back comes next, then streams, live queries and commands. Until then a query is sent through a `Transport` the caller supplies.
+Streams, live queries, commands, binary parts and attachments come next.
 
 The package is private and unpublished.
+
+
+## Sending a query
+
+```ts
+const scry = createScry<Sources>(schema, {
+  transport: httpTransport({ endpoint: "https://example.test/api/query", headers: () => ({ Authorization: token() }) }),
+  onSchemaStale: ({ client, server }) => console.warn(`Generated against ${client}; the server is on ${server}.`)
+});
+```
+
+A request travels as a URL when it fits the server's budget and reads nothing sensitive, which lets a cache between the client and the server keep the answer, and as a body otherwise. The budget is learned from every response (`Scry-Url-Limit`). A URL refused before it reached the server (a 400, 404, 414 or 431 without that header) is asked again as a body, and nothing as long is asked as a URL again; a 405 turns the URL form off; a refusal saying the request must travel as a body is asked again as one. This is the C# client's behaviour.
+
+Each answer is read by a plan the query builds alongside its projection, so every value arrives as its type says:
+
+- a `long` as a `bigint` and a `decimal` as its exact text, read from the number's own text rather than a JavaScript number;
+- bytes from base64 to a `Uint8Array`;
+- an enum checked against the model, a value renamed since the client was generated mapped back through the aliases the response carries, and one with no name in the model failing as a stale client;
+- each row keyed by the names the query wrote.
+
+A refusal throws `ScryRequestError` with the server's status, `code` and message; `ScryPermissionError` and `ScryStaleClientError` are told apart. A body cut off part way, or an answer of another kind than the terminal asked for, throws `ScryWireError` rather than returning a short answer. `schemaStatus(scry)` says which stamps the client and the server are on.
 
 
 ## Writing a query
@@ -87,6 +109,12 @@ npm run check
 ```
 
 `check` type-checks, which also runs the assertions in `test/types.ts`, and runs the tests. The tests read fixtures the .NET side keeps as snapshots in `src/Scry.Tests/TypeScript` — the wire vocabulary, the test model's description, the request corpus — so a change there reaches this client as a failing test.
+
+`test/server.test.ts` runs against a running `Sample.WebServer` when `SCRY_SERVER` names it, generating the model from the server's own introspection; it is skipped otherwise.
+
+```bash
+SCRY_SERVER=http://localhost:5249 node --test test/server.test.ts
+```
 
 What is generated for the two fixture descriptions is committed under `test/generated`. After changing the generator, or after the .NET side accepts a new description, write it again and review the difference:
 

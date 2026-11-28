@@ -5,11 +5,16 @@
 import type { CollectionValue, Node, Projection, ProjectionMember } from "../wire.ts";
 import { camelCase } from "../runtime/naming.ts";
 import { Collection, CollectionProjection, Expression, isRow, operand, type Scope } from "./expression.ts";
+import { valuePlan, type Plan, type PlanMember } from "../response/decode.ts";
 
 export interface Built {
   readonly projection: Projection;
   readonly sensitive: boolean;
+  /** What the rows it returns are, to read them back by. */
+  readonly plan: Plan;
 }
+
+type Member = { value: ProjectionMember["value"]; sensitive: boolean; plan: Plan };
 
 /**
  * The name a key travels under: its first letter a capital, as a C# member's is, so a query sends the
@@ -77,10 +82,13 @@ export function projectionOf(value: unknown, grouped: boolean, scope: Scope): Bu
   }
 
   const members: ProjectionMember[] = [];
+  const planned: PlanMember[] = [];
   let sensitive = false;
   for (const [key, member] of entries(value)) {
     const built = memberValue(member, grouped, scope, key);
-    members.push({ name: wireName(key), value: built.value });
+    const wire = wireName(key);
+    members.push({ name: wire, value: built.value });
+    planned.push({ key, wire, plan: built.plan });
     sensitive ||= built.sensitive;
   }
 
@@ -88,12 +96,12 @@ export function projectionOf(value: unknown, grouped: boolean, scope: Scope): Bu
     throw new Error("A projection needs at least one member.");
   }
 
-  return { projection: { members }, sensitive };
+  return { projection: { members }, sensitive, plan: { kind: "object", members: planned } };
 }
 
-function memberValue(value: unknown, grouped: boolean, scope: Scope, key: string): { value: ProjectionMember["value"]; sensitive: boolean } {
+function memberValue(value: unknown, grouped: boolean, scope: Scope, key: string): Member {
   if (value instanceof Expression) {
-    return { value: { $type: "node", node: value.node }, sensitive: value.sensitive };
+    return { value: { $type: "node", node: value.node }, sensitive: value.sensitive, plan: valuePlan(value.value) };
   }
 
   if (isRow(value)) {
@@ -118,12 +126,12 @@ function memberValue(value: unknown, grouped: boolean, scope: Scope, key: string
   }
 
   const constant = operand(value, undefined, "argument", scope);
-  return { value: { $type: "node", node: constant.node }, sensitive: false };
+  return { value: { $type: "node", node: constant.node }, sensitive: false, plan: valuePlan(undefined) };
 }
 
 // An object inside the row reads one navigation, which the member paths it reads all share: they are
 // rebased onto it, and the object travels as a nested projection into it.
-function nested(value: Record<string, unknown>, key: string): { value: ProjectionMember["value"]; sensitive: boolean } {
+function nested(value: Record<string, unknown>, key: string): Member {
   const members: [string, Expression][] = [];
   for (const [name, member] of entries(value)) {
     if (!(member instanceof Expression)) {
@@ -155,11 +163,12 @@ function nested(value: Record<string, unknown>, key: string): { value: Projectio
         members: members.map(([name, member]) => ({ name: wireName(name), value: { $type: "node", node: stripPrefix(member.node, prefix.length) } }))
       }
     },
-    sensitive: members.some(([, member]) => member.sensitive)
+    sensitive: members.some(([, member]) => member.sensitive),
+    plan: { kind: "object", members: members.map(([name, member]) => ({ key: name, wire: wireName(name), plan: valuePlan(member.value) })) }
   };
 }
 
-function collection(value: Collection | CollectionProjection, key: string): { value: ProjectionMember["value"]; sensitive: boolean } {
+function collection(value: Collection | CollectionProjection, key: string): Member {
   let source: Collection;
   let selected: unknown;
   if (value instanceof CollectionProjection) {
@@ -183,7 +192,7 @@ function collection(value: Collection | CollectionProjection, key: string): { va
 
   if (selected instanceof Expression) {
     sensitive ||= selected.sensitive;
-    return { value: { ...result, selector: correlated(selected.node, source.path) }, sensitive };
+    return { value: { ...result, selector: correlated(selected.node, source.path) }, sensitive, plan: { kind: "array", element: valuePlan(selected.value) } };
   }
 
   if (!plain(selected)) {
@@ -191,12 +200,14 @@ function collection(value: Collection | CollectionProjection, key: string): { va
   }
 
   const members: ProjectionMember[] = [];
+  const planned: PlanMember[] = [];
   for (const [name, member] of entries(selected)) {
     if (!(member instanceof Expression)) {
       throw new Error(`'${key}.${name}': an element of a projected collection is a value or a flat object of values.`);
     }
 
     members.push({ name: wireName(name), value: { $type: "node", node: correlated(member.node, source.path) } });
+    planned.push({ key: name, wire: wireName(name), plan: valuePlan(member.value) });
     sensitive ||= member.sensitive;
   }
 
@@ -204,7 +215,11 @@ function collection(value: Collection | CollectionProjection, key: string): { va
     throw new Error(`An element of '${key}' needs at least one member.`);
   }
 
-  return { value: { ...result, projection: { members } }, sensitive };
+  return {
+    value: { ...result, projection: { members } },
+    sensitive,
+    plan: { kind: "array", element: { kind: "object", members: planned } }
+  };
 }
 
 // An element carries what it reads off itself: never a question asked of another collection or source.
