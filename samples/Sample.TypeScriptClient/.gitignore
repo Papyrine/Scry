@@ -1,0 +1,3 @@
+node_modules/
+# Generated from the server's description, as an app's build generates it: npm run generate.
+src/scry.generated.ts

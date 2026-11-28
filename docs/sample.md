@@ -15,6 +15,7 @@
 | `Sample.QueryModels` | A C# class library holding the generator's output for the sample model, for clients in other languages. |
 | `Sample.FSharp` | An F# client writing queries through `Sample.QueryModels`. See [F#](fsharp.md). |
 | `Sample.FSharp.Tests` | The F# queries run through the server, hosted in-process, with the requests and rows snapshotted. |
+| `Sample.TypeScriptClient` | The console client's queries in TypeScript, over a model generated from the server's introspection, and each employee's photo opened. Outside the solution: a Node project. See [TypeScript](typescript.md). |
 | `Sample.RedisServer`, `Sample.MessagePipeServer` | A minimal server each, for running twice: a [backplane](#live-queries-across-more-than-one-process) carrying changes from one node to the other. |
 | `Sample.NServiceBusServer`, `Sample.NServiceBusWorker` | The same over NServiceBus, plus a worker whose handler writes from another process. |
 | `Sample.DisclosureServer` | A host with the [disclosure audit](#a-record-of-what-was-sent) on: a record of everything it sends, kept in SQL Server, and the explorer over that record. |

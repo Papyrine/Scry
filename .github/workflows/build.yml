@@ -171,7 +171,9 @@ jobs:
         with:
           node-version: 26
           cache: npm
-          cache-dependency-path: clients/typescript/package-lock.json
+          cache-dependency-path: |
+            clients/typescript/package-lock.json
+            samples/Sample.TypeScriptClient/package-lock.json
 
       - name: Install
         run: npm ci
@@ -183,6 +185,21 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # The sample's model is generated from the server's description, as an app's build generates
+      # it; here from the sample model's committed snapshot, so no server is needed. Type-checking it
+      # compiles every example docs/typescript.md quotes.
+      - name: Install the sample
+        working-directory: samples/Sample.TypeScriptClient
+        run: npm ci
+
+      - name: Generate the sample's model
+        working-directory: samples/Sample.TypeScriptClient
+        run: npm run generate:snapshot
+
+      - name: Type-check the sample
+        working-directory: samples/Sample.TypeScriptClient
+        run: npm run typecheck
 
   # Trusted publishing: no stored API key. nuget.org validates GitHub's OIDC token against the
   # policy naming this repository and this workflow file, and returns a key good for an hour.

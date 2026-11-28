@@ -7,6 +7,9 @@
   "engines": {
     "node": ">=23.6"
   },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "bin": {
     "scry-codegen": "./src/codegen/cli.ts"
   },

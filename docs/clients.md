@@ -150,10 +150,13 @@ go unused as a result; nothing needs disabling for that.
 The generator is a Roslyn generator, so only a C# project runs it. A client in another .NET language references a C# project
 holding the output and nothing else. See [F#](fsharp.md).
 
+A TypeScript client is generated from the server's introspection rather than from the model DLL, and sends the C# client's
+request for the same query. See [TypeScript](typescript.md).
+
 
 ## The samples
 
-`/samples` carries one server and five clients against it, each writing the same query, and each consuming it
+`/samples` carries one server and six clients against it, each writing the same query, and each consuming it
 [live](live-queries.md#consuming-one) in the shape that host would reach for:
 
 | Project | Shape | Live | Commands |
@@ -163,5 +166,6 @@ holding the output and nothing else. See [F#](fsharp.md).
 | `Sample.WpfClient` | `IHttpClientFactory`, one app-lifetime scope, bound to a `DataGrid` | `AsObservable()` into System.Reactive | an `ICommand` whose `CanExecute` is a capability |
 | `Sample.WinFormsClient` | the same registration, bound to a `DataGridView` | the callback, on the UI thread | rename of the selected row, and a list bound to `PendingWork` |
 | `Sample.FSharp` | queries over `Sample.QueryModels`, run by `Sample.FSharp.Tests` | `AsObservable()` into FSharp.Core's `Observable` | a rename, and a hire read through the typed outcome |
+| `Sample.TypeScriptClient` | Node, `httpTransport`, a model generated from the server's introspection, rows written to stdout | `--live`: `subscribe` until Ctrl+C | `--reprice`: the outcome printed, its `completion` awaited |
 
 See [Sample](sample.md) for running them.

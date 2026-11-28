@@ -9,6 +9,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | --- | --- |
 | [Getting started](getting-started.md) | The core project layout, wiring the model, server, and client end to end. |
 | [Client hosts](clients.md) | Blazor WebAssembly, WPF, Windows Forms, console, and service clients — what each needs, and what differs. |
+| [TypeScript](typescript.md) | The TypeScript client: generated from the server's introspection, sending the C# client's bytes, and reading every answer as its type. |
 | [Comparisons](comparisons.md) | Scry against GraphQL, OData, hand-written endpoints, gRPC, and expression-tree serializers — and when to pick one of those instead. |
 | [Annotations](annotations.md) | `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, `[QueryIgnore]`, `[ReturnableWith]`, `[Command]`, and what each exposes. |
 | [Source generator](source-generator.md) | How the model assembly is read by path, the MSBuild wiring, what is emitted, and troubleshooting. |
