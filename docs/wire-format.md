@@ -100,7 +100,7 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 
 ### One spelling per request
 
-A request is read strictly, so that one query has one byte-string — the ETag, the URL form, and the audit fingerprint are all taken over the bytes, and two spellings of one request would be two of each. Enum names are matched **case-sensitively** (`"op":"Equal"`, never `"equal"`); a property named twice in one object is refused rather than last-wins; a member the vocabulary does not name is refused rather than skipped; `version` must be at least 1; and a projection or join result may not carry one name twice. Each of these is a `400` naming the rule.
+A request is read strictly, so that one query has one byte-string — the ETag, the URL form, and the audit fingerprint are all taken over the bytes, and two spellings of one request would be two of each. Enum names are matched **case-sensitively** (`"op":"Equal"`, never `"equal"`); a property named twice in one object is refused rather than last-wins; a member the vocabulary does not name is refused rather than skipped; `version` must be at least 1; and a projection or join result may not carry one name twice, nor a name starting with `$`, which the wire keeps for its own markers. Each of these is a `400` naming the rule.
 
 ### The URL form
 
@@ -835,7 +835,7 @@ A request sent to the [`…/stream` endpoint](server.md#mapping-the-endpoint) co
 
 The rows between the markers are exactly the objects a `list` payload holds, so a reader materializes them the same way. The opening marker carries what a single response carries on the envelope — the version, the schema stamp, and any enum aliases, sent under the same rule as [above](#response).
 
-`$scry` is what tells a marker from a row, and it is always the marker's **first** property, so a reader decides on the first property name alone and never tokenises a row to learn it is one. Projected member names come from the client's own C# identifiers, and `$` cannot start one, so no row can collide with it.
+`$scry` is what tells a marker from a row, and it is always the marker's **first** property, so a reader decides on the first property name alone and never tokenises a row to learn it is one. The server refuses a projected member name that starts with `$`, so no row can collide with it. A C# client could not write one anyway, but a client in a language whose identifiers may start with `$`, or an agent writing the wire by hand, could.
 
 **The closing marker is load-bearing.** A stream commits to a success status before its first row is written, so a failure past that point cannot become a `400` or a `500`. Without an explicit end, a truncated response — a dropped connection, a faulting provider, a killed server — would be indistinguishable from a complete one, and a reader would silently return a short answer. A reader must therefore require the marker and fail without it. A failure the server does notice closes the stream instead with:
 
@@ -1034,8 +1034,8 @@ public static class ScryBinary
     public const string PartContentType = "application/octet-stream";
 
     /// <summary>
-    /// The property a diverted binary value is replaced with in JSON. Projected member names come from
-    /// the client's own C# identifiers, and <c>$</c> cannot start one, so no row can collide with it.
+    /// The property a diverted binary value is replaced with in JSON. The server refuses a projected
+    /// member name that starts with <c>$</c>, so no row can collide with it.
     /// </summary>
     public const string PartProperty = "$bin";
 
@@ -1057,7 +1057,7 @@ Where a diverted value would have been, the JSON carries a **placeholder**:
 { "name": "alpha", "avatar": { "$bin": 0 } }
 ```
 
-`$bin` follows the same collision argument as `$type` and `$scry`: projected member names are C# identifiers, and `$` cannot start one. A `null` value stays inline as JSON `null` and produces no part — a placeholder never exists without its part. Only a projection leaf that is a direct member path resolves to a decorated member; a computed value (a conditional, a coalesce) has no owning member and stays base64, which a reader must continue to accept.
+`$bin` follows the same collision argument as `$type` and `$scry`: the server refuses a projected member name that starts with `$`, at any depth of nesting. A `null` value stays inline as JSON `null` and produces no part — a placeholder never exists without its part. Only a projection leaf that is a direct member path resolves to a decorated member; a computed value (a conditional, a coalesce) has no owning member and stays base64, which a reader must continue to accept.
 
 **Every part precedes the JSON document that references it**, and `n` indexes that document's parts, 0-based in emission order. A reader resolving placeholders while parsing JSON therefore always has the parts in hand. Concretely, per endpoint:
 

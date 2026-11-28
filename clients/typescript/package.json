@@ -1,0 +1,36 @@
+{
+  "name": "scry-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A TypeScript client for Scry: typed queries against generated models, sent as the wire request the C# client sends.",
+  "type": "module",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./vite": "./src/vite.ts"
+  },
+  "bin": {
+    "scry-codegen": "./src/codegen/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "check": "npm run typecheck && npm test",
+    "fixtures": "node scripts/fixtures.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.11",
+    "typescript": "^7.0.2",
+    "vite": "^8.4.0"
+  },
+  "peerDependencies": {
+    "vite": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  }
+}

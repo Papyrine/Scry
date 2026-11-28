@@ -130,8 +130,8 @@ public class BinaryResponseTests
         await Assert.That(exception.Message).Contains("carry only");
     }
 
-    // A member name comes from the caller's own C# identifiers, so a nested projection can never
-    // collide with the placeholder property and is walked as the object it is.
+    // The server refuses a member name that starts with '$', so a nested projection can never collide
+    // with the placeholder property and is walked as the object it is.
     [Test]
     public async Task NestedProjectionIsNotMistakenForAPlaceholder()
     {

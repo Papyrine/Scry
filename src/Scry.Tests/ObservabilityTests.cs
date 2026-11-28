@@ -307,7 +307,7 @@ public class ObservabilityTests
         var listener = new ActivityListener
         {
             ShouldListenTo = _ => _.Name == ScryInstrumentation.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            Sample = (ref _) => ActivitySamplingResult.AllData,
             ActivityStopped = stopped.Add
         };
         ActivitySource.AddActivityListener(listener);

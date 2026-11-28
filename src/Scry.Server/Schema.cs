@@ -218,7 +218,7 @@ sealed partial class Schema
     /// <summary>
     /// The members a command contributes to the stamp: its payload, plus synthetic members naming the
     /// payload properties its target's key is bound to and the class it answers with. Mirrors
-    /// <c>ScryGenerator.StampCommandMembers</c>, byte for byte.
+    /// <c>ModelStamp.StampCommandMembers</c>, byte for byte.
     /// </summary>
     static List<(string, string)> StampCommandMembers(ScryCommandInfo command)
     {
@@ -246,7 +246,7 @@ sealed partial class Schema
     /// <summary>
     /// The members a type contributes to the stamp: its own, plus — for one carrying an attachment —
     /// a synthetic member naming the key that attachment is fetched by. Mirrors
-    /// <c>ScryGenerator.StampMembers</c>; <c>~</c> cannot begin an identifier, so the synthetic name
+    /// <c>ModelStamp.StampMembers</c>; <c>~</c> cannot begin an identifier, so the synthetic name
     /// can never collide with a real member's, and a type without an attachment hashes exactly as it
     /// did before attachments existed.
     /// </summary>
@@ -282,7 +282,7 @@ sealed partial class Schema
     static string Sensitivity(ScryTypeInfo type)
     {
         // Sorted here too, though the members already arrive in name order: the generator meets them
-        // in declaration order, and the joined value is hashed whole. Mirrors ScryGenerator.Sensitivity.
+        // in declaration order, and the joined value is hashed whole. Mirrors ModelStamp.Sensitivity.
         var names = type.Members
             .Where(_ => _.IsSensitive)
             .Select(_ => _.Name)
@@ -430,7 +430,7 @@ sealed partial class Schema
         }
 
         // An attachment is emitted as the handle rather than as the byte[] it is declared as, which is
-        // exactly why — unlike [BinaryTransfer] — it moves the schema stamp. Mirrors ScryGenerator.Display.
+        // exactly why — unlike [BinaryTransfer] — it moves the schema stamp. Mirrors ModelStamp.Display.
         if (member.Kind == MemberKind.Attachment)
         {
             return new(member.Name, "global::Scry.ScryAttachment", NeedsNullDefault: true, IsNavigation: false)

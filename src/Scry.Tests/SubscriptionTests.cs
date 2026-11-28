@@ -746,7 +746,7 @@ public class SubscriptionTests
         var listener = new ActivityListener
         {
             ShouldListenTo = _ => _.Name == ScryInstrumentation.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            Sample = (ref _) => ActivitySamplingResult.AllData,
             ActivityStopped = activity =>
             {
                 lock (stopped)

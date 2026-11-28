@@ -5,7 +5,7 @@ The generator lives in `Scry.SourceGenerator`. It is not a standalone package â€
 
 ## Other languages
 
-The generator is a Roslyn generator, so only a C# project runs it. A client written in another language references a C# project that hosts the output and nothing else. See [F#](fsharp.md) for the F# client in the sample.
+The generator is a Roslyn generator, so only a C# project runs it. A client written in another .NET language references a C# project that hosts the output and nothing else. See [F#](fsharp.md) for the F# client in the sample. A TypeScript client has a generator of its own, which reads the server's introspection rather than the model DLL: see [TypeScript](typescript.md).
 
 
 ## The path-not-reference design

@@ -123,6 +123,26 @@ jobs:
         if: ${{ !cancelled() && steps.pack-model.outcome == 'success' }}
         run: dotnet build samples/Sample.ModelPackageClient -c Release -p:GeneratePackageOnBuild=false
 
+      # The TypeScript client against a real Sample.WebServer, which needs this job's LocalDB: one client
+      # generated from the description the server's build writes, from the one it writes as it starts,
+      # and from its introspection endpoint, the three compared; then the sample run and the client's
+      # server tests. Gated as the steps above are. The typescript job checks everything that needs no
+      # server.
+      - name: Set up Node
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            clients/typescript/package-lock.json
+            samples/Sample.TypeScriptClient/package-lock.json
+            samples/Sample.TypeScriptWeb/package-lock.json
+      - name: Run the TypeScript client end to end
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: ./samples/Sample.TypeScriptClient/integration.ps1 -Configuration Release
+
       - name: Upload test results
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v7
@@ -152,6 +172,71 @@ jobs:
           path: nugets/*.nupkg
           if-no-files-found: warn
           retention-days: 30
+
+  # The TypeScript client, checked against the fixtures the .NET suites keep as snapshots. It reads
+  # only what is committed, so it needs neither .NET nor a database and runs beside the build rather
+  # than after it; a fixture the build would change fails there, as a snapshot.
+  typescript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: clients/typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            clients/typescript/package-lock.json
+            samples/Sample.TypeScriptClient/package-lock.json
+            samples/Sample.TypeScriptWeb/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # The compiler is also the check on what the generated types say: test/types.ts holds
+      # assertions that only compile while they hold.
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # The sample's model is generated from the server's description, as an app's build generates
+      # it; here from the sample model's committed snapshot, so no server is needed. Type-checking it
+      # compiles every example docs/typescript.md quotes.
+      - name: Install the sample
+        working-directory: samples/Sample.TypeScriptClient
+        run: npm ci
+
+      - name: Generate the sample's model
+        working-directory: samples/Sample.TypeScriptClient
+        run: npm run generate:snapshot
+
+      - name: Type-check the sample
+        working-directory: samples/Sample.TypeScriptClient
+        run: npm run typecheck
+
+      # The browser sample, built by Vite from the same committed description, so the plugin generates
+      # its model; then type-checked. Its browser test needs a server, so it runs in the Windows job.
+      - name: Install the browser sample
+        working-directory: samples/Sample.TypeScriptWeb
+        run: npm ci
+
+      - name: Build the browser sample
+        working-directory: samples/Sample.TypeScriptWeb
+        env:
+          SCRY_DESCRIPTION: ../Sample.Tests/UiSnapshotTests.ExplorerIntrospectionEndpoint.verified.txt
+        run: npm run build
+
+      - name: Type-check the browser sample
+        working-directory: samples/Sample.TypeScriptWeb
+        run: npm run typecheck
 
   # Trusted publishing: no stored API key. nuget.org validates GitHub's OIDC token against the
   # policy naming this repository and this workflow file, and returns a key good for an hour.

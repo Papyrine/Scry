@@ -1810,8 +1810,18 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     // one spelling per name, so what a projection asks for is what its row carries. Compared as a row
     // writes them — camel-cased — since two names that differ only in their leading case are one key in
     // every row, which the client's own reader then refuses.
+    //
+    // A leading '$' is the wire's own: a reader tells a stream's marker ($scry) and a binary
+    // placeholder ($bin) from a row by that first property alone. A C# client cannot write such a
+    // name, since no C# identifier starts with one, but a JavaScript identifier can, and so can an
+    // agent writing the wire by hand — and a row named that way would read as a marker.
     static void EnsureUniqueName(HashSet<string> names, string name)
     {
+        if (name.StartsWith('$'))
+        {
+            throw Reject($"Projection member '{name}' starts with '$', which the wire reserves for its own markers.");
+        }
+
         var written = JsonNamingPolicy.CamelCase.ConvertName(name);
         if (!names.Add(written))
         {

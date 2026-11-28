@@ -24,8 +24,8 @@ public static class ScryBinary
     public const string PartContentType = "application/octet-stream";
 
     /// <summary>
-    /// The property a diverted binary value is replaced with in JSON. Projected member names come from
-    /// the client's own C# identifiers, and <c>$</c> cannot start one, so no row can collide with it.
+    /// The property a diverted binary value is replaced with in JSON. The server refuses a projected
+    /// member name that starts with <c>$</c>, so no row can collide with it.
     /// </summary>
     public const string PartProperty = "$bin";
 

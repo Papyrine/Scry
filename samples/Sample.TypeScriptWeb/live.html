@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scry from TypeScript: live query</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main>
+      <h1>Live query</h1>
+      <nav id="via" class="tabs" aria-label="Ways to read a live query">
+        <a href="/live.html" data-via="callback">Callback</a>
+        <a href="/live.html?via=loop" data-via="loop">Loop</a>
+      </nav>
+      <p>
+        The same live query either way: handed to <code>subscribe</code>, or read with
+        <code>for await</code>. Open this page in a second window and press a button in either: both
+        update, with no reload and no polling from the page.
+      </p>
+      <p id="actions"></p>
+
+      <h2>Orders <small>answers: <span id="answers">0</span></small></h2>
+      <table id="orders" data-testid="orders">
+        <thead><tr><th>Id</th><th>Region</th><th>Amount</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <p id="status" data-testid="status" class="status" role="status"></p>
+    </main>
+    <script type="module" src="/src/live.ts"></script>
+  </body>
+</html>

@@ -458,6 +458,7 @@ It is off until a server is given somewhere to record, and the record it keeps i
 - [Source generator](docs/source-generator.md)
 - [The model as a package](docs/model-package.md)
 - [F#](docs/fsharp.md)
+- [TypeScript](docs/typescript.md)
 - [Writing queries](docs/querying.md)
 - [Server](docs/server.md)
 - [Row policies](docs/policies.md)

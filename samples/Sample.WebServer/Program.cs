@@ -139,6 +139,15 @@
         app.MapScry("/api/query");
         // end-snippet
 
+        // The description as the server writes it when it starts, where the TypeScript integration
+        // script asks for it: what it generates is compared with what the description this project's
+        // build writes generates. Nothing else sets it, so a server started any other way writes
+        // nothing, and the build's file keeps one writer.
+        if (Environment.GetEnvironmentVariable("SAMPLE_STARTUP_DESCRIPTION") is { } description)
+        {
+            app.WriteScryDescription(description);
+        }
+
         // The same queries over a SignalR hub, beside the HTTP endpoints rather than instead of them.
         // What the transport switch on the /live pages connects to: every live query a page holds
         // then shares the one connection. Optional — see /docs/live-queries.md.

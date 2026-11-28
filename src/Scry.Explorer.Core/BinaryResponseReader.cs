@@ -116,8 +116,8 @@ public static class BinaryResponseReader
         string.Create(CultureInfo.InvariantCulture, $"[binary: {length:N0} bytes]");
 
     /// <summary>
-    /// The part an object names, if it is a placeholder. A projected member name comes from the
-    /// caller's own C# identifiers and cannot start with '$', so an object carrying that property is a
+    /// The part an object names, if it is a placeholder. The server refuses a projected member name
+    /// that starts with '$', so an object carrying that property is a
     /// placeholder and nothing else — which is why a malformed one fails the read rather than being
     /// rendered as an object. The same checks <c>BinaryConverter</c> applies on the typed path.
     /// </summary>

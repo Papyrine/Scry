@@ -8,6 +8,13 @@
       "port": 5249
     },
     {
+      "name": "typescript-web",
+      "runtimeExecutable": "C:/Program Files/nodejs/node.exe",
+      "runtimeArgs": ["samples/Sample.TypeScriptWeb/node_modules/vite/bin/vite.js", "samples/Sample.TypeScriptWeb", "--port", "5173", "--strictPort"],
+      "port": 5173,
+      "env": { "SCRY_SERVER": "http://localhost:5249" }
+    },
+    {
       "name": "disclosure-sample",
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "samples/Sample.DisclosureServer", "--urls", "http://localhost:5251"],

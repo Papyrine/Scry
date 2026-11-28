@@ -4,6 +4,10 @@ public static class ModuleInitializer
     public static void Init()
     {
         VerifierSettings.Inline(maxLines: 10, applyMaxLinesToExisting: true);
+
+        // The wire vocabulary is snapshotted as an ES module the TypeScript client imports directly:
+        // .mts rather than .ts, since nothing above it marks a .ts file as a module.
+        EmptyFiles.FileExtensions.AddTextExtension("mts");
         VerifierSettings.InitializePlugins();
 
         // Cursors and schema stamps, scrubbed the same way in both test projects — see

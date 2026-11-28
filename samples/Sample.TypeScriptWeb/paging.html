@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scry from TypeScript: paging</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main>
+      <h1>Paging</h1>
+      <p>
+        Employees one page at a time with <code>page()</code>. The client sends an offset and a page
+        size; the server returns that page of rows and <code>hasMore</code>, which enables Next.
+      </p>
+
+      <table id="employees" data-testid="employees">
+        <thead><tr><th>Name</th><th>Status</th><th>Department</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p>
+        <button id="previous" disabled>Previous</button>
+        <span id="number"></span>
+        <button id="next" disabled>Next</button>
+      </p>
+
+      <p id="status" data-testid="status" class="status" role="status"></p>
+    </main>
+    <script type="module" src="/src/paging.ts"></script>
+  </body>
+</html>

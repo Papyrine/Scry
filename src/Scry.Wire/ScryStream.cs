@@ -18,8 +18,8 @@ public static class ScryStream
     public const string ContentType = "application/x-ndjson";
 
     /// <summary>
-    /// The property that tells a marker line from a row. Projected member names come from the client's
-    /// own C# identifiers, and <c>$</c> cannot start one, so no row can collide with it.
+    /// The property that tells a marker line from a row. The server refuses a projected member name
+    /// that starts with <c>$</c>, so no row can collide with it.
     /// </summary>
     public const string MarkerProperty = "$scry";
 

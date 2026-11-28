@@ -18,5 +18,27 @@
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
     <ProjectReference Include="..\Sample.CommandHandlers\Sample.CommandHandlers.csproj" />
     <ProjectReference Include="..\Sample.WebClient\Sample.WebClient.csproj" />
+    <!-- Build ordering only: WriteScryDescription below runs it. -->
+    <ProjectReference Include="..\..\src\Scry.Describe\Scry.Describe.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <!-- The description the TypeScript samples generate their clients from, written from the model DLL as
+       this project builds, so no server has to start for it: one run per sample. MaxPageSize is the one
+       option Program.cs sets that a description carries, so it is said again here. -->
+  <!-- begin-snippet: describeAtBuildTime -->
+  <Target Name="WriteScryDescription" AfterTargets="Build">
+    <MSBuild Projects="..\..\src\Scry.Describe\Scry.Describe.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" PropertyName="ScryDescribe" />
+    </MSBuild>
+    <PropertyGroup>
+      <ScryModel>$(TargetDir)Sample.Model.dll</ScryModel>
+      <ScryDescribeCommand>dotnet &quot;$(ScryDescribe)&quot; --model &quot;$(ScryModel)&quot; --max-page-size 200</ScryDescribeCommand>
+    </PropertyGroup>
+    <ItemGroup>
+      <ScryDescription Include="..\Sample.TypeScriptClient\scry.description.json" />
+      <ScryDescription Include="..\Sample.TypeScriptWeb\scry.description.json" />
+    </ItemGroup>
+    <Exec Command="$(ScryDescribeCommand) --output &quot;%(ScryDescription.FullPath)&quot;" />
+  </Target>
+  <!-- end-snippet -->
 </Project>

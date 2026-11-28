@@ -115,6 +115,11 @@ record struct SourceInfo(
 /// The command a capability answers for: the <c>bool</c> a targeted command adds to its target, saying
 /// row by row whether the caller may send it. Null on every member the model declares itself.
 /// </param>
+/// <param name="ContentType">
+/// The media type an attachment declares, as written, or null where it declares none. Read for the
+/// build-time description alone, which carries it as the server's does; nothing the generator emits
+/// depends on it, and it is out of the stamp on both sides.
+/// </param>
 /// <param name="NullableReference">
 /// True for a reference-typed command or result property the model declares nullable — <c>string?</c>,
 /// <c>byte[]?</c>, <c>List&lt;string&gt;?</c> — which is emitted as nullable and without the
@@ -134,7 +139,8 @@ record struct PropertyInfo(
     bool IsKey = false,
     bool IsSensitive = false,
     string? Capability = null,
-    bool NullableReference = false);
+    bool NullableReference = false,
+    string? ContentType = null);
 
 /// <summary>An enum referenced by a model, re-emitted so the client needs no server reference.</summary>
 /// <summary>

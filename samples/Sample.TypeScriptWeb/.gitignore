@@ -1,0 +1,6 @@
+node_modules/
+dist/
+# Written from the model DLL as Sample.WebServer builds (its WriteScryDescription target), and the
+# model the Vite plugin generates from it.
+scry.description.json
+src/scry.generated.ts

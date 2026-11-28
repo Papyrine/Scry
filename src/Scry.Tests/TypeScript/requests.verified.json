@@ -1,0 +1,1016 @@
+﻿[
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Active).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"},{\"name\":\"Carol\"},{\"name\":\"Aaron\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => !_.Active).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"unary\",\"op\":\"Not\",\"operand\":{\"$type\":\"member\",\"path\":\"Active\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Bob\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Status == wanted && _.Name.StartsWith(prefix)).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"AndAlso\",\"left\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Status\"},\"right\":{\"$type\":\"const\",\"value\":\"Contractor\",\"tag\":\"Enum\"}},\"right\":{\"$type\":\"call\",\"function\":\"StringStartsWith\",\"target\":{\"$type\":\"member\",\"path\":\"Name\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"A\",\"tag\":\"String\"}]}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Status != Status.FullTime || _.Name == \"Bob\").Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"OrElse\",\"left\":{\"$type\":\"binary\",\"op\":\"NotEqual\",\"left\":{\"$type\":\"member\",\"path\":\"Status\"},\"right\":{\"$type\":\"const\",\"value\":\"0\",\"tag\":\"Int32\"}},\"right\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Name\"},\"right\":{\"$type\":\"const\",\"value\":\"Bob\",\"tag\":\"String\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Carol\"},{\"name\":\"Bob\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.ManagerId == null).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"ManagerId\"},\"right\":{\"$type\":\"const\",\"tag\":\"Null\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"},{\"name\":\"Carol\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.ManagerId.HasValue).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"NotEqual\",\"left\":{\"$type\":\"member\",\"path\":\"ManagerId\"},\"right\":{\"$type\":\"const\",\"tag\":\"Null\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Aaron\"},{\"name\":\"Bob\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Avatar == avatar).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Avatar\"},\"right\":{\"$type\":\"const\",\"value\":\"AQID\",\"tag\":\"Bytes\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Address.Country == \"UK\").Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":[\"Address\",\"Country\"]},\"right\":{\"$type\":\"const\",\"value\":\"UK\",\"tag\":\"String\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"},{\"name\":\"Aaron\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Manager!.Name == \"Alice\").Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":[\"Manager\",\"Name\"]},\"right\":{\"$type\":\"const\",\"value\":\"Alice\",\"tag\":\"String\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Aaron\"},{\"name\":\"Bob\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Perks.HasFlag(Perks.Parking | Perks.Gym)).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"call\",\"function\":\"EnumHasFlag\",\"target\":{\"$type\":\"member\",\"path\":\"Perks\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"Parking, Gym\",\"tag\":\"Enum\"}]}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => regions.Contains(_.Region)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"call\",\"function\":\"In\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"North\",\"tag\":\"String\"},{\"$type\":\"const\",\"value\":\"West\",\"tag\":\"String\"}]}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Amount >= 100m && _.Amount < 250m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"AndAlso\",\"left\":{\"$type\":\"binary\",\"op\":\"GreaterThanOrEqual\",\"left\":{\"$type\":\"member\",\"path\":\"Amount\"},\"right\":{\"$type\":\"const\",\"value\":\"100\",\"tag\":\"Decimal\"}},\"right\":{\"$type\":\"binary\",\"op\":\"LessThan\",\"left\":{\"$type\":\"member\",\"path\":\"Amount\"},\"right\":{\"$type\":\"const\",\"value\":\"250\",\"tag\":\"Decimal\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"binary\",\"op\":\"Subtract\",\"left\":{\"$type\":\"member\",\"path\":\"Amount\"},\"right\":{\"$type\":\"binary\",\"op\":\"Coalesce\",\"left\":{\"$type\":\"member\",\"path\":\"Discount\"},\"right\":{\"$type\":\"const\",\"value\":\"0\",\"tag\":\"Decimal\"}}},\"right\":{\"$type\":\"const\",\"value\":\"90\",\"tag\":\"Decimal\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":250.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"LessThanOrEqual\",\"left\":{\"$type\":\"binary\",\"op\":\"Add\",\"left\":{\"$type\":\"binary\",\"op\":\"Divide\",\"left\":{\"$type\":\"binary\",\"op\":\"Multiply\",\"left\":{\"$type\":\"member\",\"path\":\"Amount\"},\"right\":{\"$type\":\"const\",\"value\":\"2\",\"tag\":\"Decimal\"}},\"right\":{\"$type\":\"const\",\"value\":\"4\",\"tag\":\"Decimal\"}},\"right\":{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Decimal\"}},\"right\":{\"$type\":\"const\",\"value\":\"100\",\"tag\":\"Decimal\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"South\",\"amount\":75.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Region.Length % 2 == 0).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"binary\",\"op\":\"Modulo\",\"left\":{\"$type\":\"call\",\"function\":\"StringLength\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]},\"right\":{\"$type\":\"const\",\"value\":\"2\",\"tag\":\"Int32\"}},\"right\":{\"$type\":\"const\",\"value\":\"0\",\"tag\":\"Int32\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => -_.Amount < 0m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"LessThan\",\"left\":{\"$type\":\"unary\",\"op\":\"Negate\",\"operand\":{\"$type\":\"member\",\"path\":\"Amount\"}},\"right\":{\"$type\":\"const\",\"value\":\"0\",\"tag\":\"Decimal\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00},{\"region\":\"South\",\"amount\":75.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Grade == 'A').Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Grade\"},\"right\":{\"$type\":\"const\",\"value\":\"65\",\"tag\":\"Int32\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"South\",\"amount\":75.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxValue).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"AndAlso\",\"left\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Quantity\"},\"right\":{\"$type\":\"const\",\"value\":\"7\",\"tag\":\"String\"}},\"right\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Sku\"},\"right\":{\"$type\":\"const\",\"value\":\"18446744073709551615\",\"tag\":\"String\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":250.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"member\",\"path\":\"Placed\"},\"right\":{\"$type\":\"const\",\"value\":\"2026-01-01T00:00:00.0000000\",\"tag\":\"DateTime\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Id < beyondInt).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"LessThan\",\"left\":{\"$type\":\"member\",\"path\":\"Id\"},\"right\":{\"$type\":\"const\",\"value\":\"5000000000\",\"tag\":\"Int64\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00},{\"region\":\"South\",\"amount\":75.00}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Active == active).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Active\"},\"right\":{\"$type\":\"const\",\"value\":\"true\",\"tag\":\"Boolean\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"},{\"name\":\"Carol\"},{\"name\":\"Aaron\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Where(_ => _.Day >= new Date(2026, 1, 1)).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThanOrEqual\",\"left\":{\"$type\":\"member\",\"path\":\"Day\"},\"right\":{\"$type\":\"const\",\"value\":\"2026-01-01\",\"tag\":\"DateOnly\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Early\"},{\"name\":\"Late\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Ticket>(\"Ticket\").Where(_ => _.Token != token).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Ticket\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"NotEqual\",\"left\":{\"$type\":\"member\",\"path\":\"Token\"},\"right\":{\"$type\":\"const\",\"value\":\"5f2b8a3c-1d4e-4f60-9a7b-8c9d0e1f2a3b\",\"tag\":\"Guid\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Login bug\"},{\"name\":\"Signup crash\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Name != escapes).Select(_ => new {Größe = _.Name}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"NotEqual\",\"left\":{\"$type\":\"member\",\"path\":\"Name\"},\"right\":{\"$type\":\"const\",\"value\":\"quote \\u0022 backslash \\\\ \\u003Ctag\\u003E \\u0026 \\u0027apos\\u0027 \\u002B \\u00E9 \\u6F22 \\uD83D\\uDC6A \\u2028 \\u0001 \\t\",\"tag\":\"String\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Gr\\u00F6\\u00DFe\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Name\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"gr\\u00F6\\u00DFe\":\"Alice\"},{\"gr\\u00F6\\u00DFe\":\"Carol\"},{\"gr\\u00F6\\u00DFe\":\"Aaron\"},{\"gr\\u00F6\\u00DFe\":\"Bob\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Name.Contains(\"LIC\", StringComparison.OrdinalIgnoreCase)).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"call\",\"function\":\"StringContains\",\"target\":{\"$type\":\"collate\",\"target\":{\"$type\":\"member\",\"path\":\"Name\"},\"match\":\"CaseInsensitive\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"LIC\",\"tag\":\"String\"}]}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"}]}"
+  },
+  {
+    "group": "Filtering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.Name.Equals(\"Alice\", StringComparison.Ordinal)).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"collate\",\"target\":{\"$type\":\"member\",\"path\":\"Name\"},\"match\":\"CaseSensitive\"},\"right\":{\"$type\":\"const\",\"value\":\"Alice\",\"tag\":\"String\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"}]}"
+  },
+  {
+    "group": "Ordering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Aaron\"},{\"name\":\"Alice\"},{\"name\":\"Bob\"},{\"name\":\"Carol\"}]}"
+  },
+  {
+    "group": "Ordering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":true},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Carol\"},{\"name\":\"Bob\"},{\"name\":\"Alice\"},{\"name\":\"Aaron\"}]}"
+  },
+  {
+    "group": "Ordering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Status).ThenBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Status\"},\"descending\":false},{\"$type\":\"thenBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Aaron\"},{\"name\":\"Alice\"},{\"name\":\"Bob\"},{\"name\":\"Carol\"}]}"
+  },
+  {
+    "group": "Ordering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Status).ThenByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Status\"},\"descending\":false},{\"$type\":\"thenBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":true},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"},{\"name\":\"Aaron\"},{\"name\":\"Bob\"},{\"name\":\"Carol\"}]}"
+  },
+  {
+    "group": "Ordering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Reverse().Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"reverse\"},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Carol\"},{\"name\":\"Bob\"},{\"name\":\"Alice\"},{\"name\":\"Aaron\"}]}"
+  },
+  {
+    "group": "Ordering",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Skip(2).Take(1).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"skip\",\"count\":2},{\"$type\":\"take\",\"count\":1},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Bob\"}]}"
+  },
+  {
+    "group": "Ordering",
+    "csharp": "_ => _.Source<Order>(\"Order\").OrderBy(_ => int.Parse(_.Code)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"call\",\"function\":\"Int32From\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":250.00},{\"region\":\"South\",\"amount\":75.00},{\"region\":\"North\",\"amount\":100.00}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Employee>(\"Employee\", [\"Name\", \"Status\"]).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",\"Status\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\",\"status\":\"FullTime\"},{\"name\":\"Carol\",\"status\":\"Contractor\"},{\"name\":\"Aaron\",\"status\":\"FullTime\"},{\"name\":\"Bob\",\"status\":\"PartTime\"}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"},{\"name\":\"Carol\"},{\"name\":\"Aaron\"},{\"name\":\"Bob\"}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new {_.Name, Manager = _.Manager!.Name}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",{\"name\":\"Manager\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":[\"Manager\",\"Name\"]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\",\"manager\":null},{\"name\":\"Carol\",\"manager\":null},{\"name\":\"Aaron\",\"manager\":\"Alice\"},{\"name\":\"Bob\",\"manager\":\"Alice\"}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name))).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",{\"name\":\"Department\",\"value\":{\"$type\":\"nested\",\"path\":\"Department\",\"projection\":{\"members\":[\"Name\"]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\",\"department\":{\"name\":\"Engineering\"}},{\"name\":\"Carol\",\"department\":{\"name\":\"Sales\"}},{\"name\":\"Aaron\",\"department\":{\"name\":\"Engineering\"}},{\"name\":\"Bob\",\"department\":{\"name\":\"Sales\"}}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper()))).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",{\"name\":\"Department\",\"value\":{\"$type\":\"nested\",\"path\":\"Department\",\"projection\":{\"members\":[{\"name\":\"Name\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringToUpper\",\"target\":{\"$type\":\"member\",\"path\":\"Name\"},\"arguments\":[]}}}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\",\"department\":{\"name\":\"ENGINEERING\"}},{\"name\":\"Carol\",\"department\":{\"name\":\"SALES\"}},{\"name\":\"Aaron\",\"department\":{\"name\":\"ENGINEERING\"}},{\"name\":\"Bob\",\"department\":{\"name\":\"SALES\"}}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new {_.Name, _.Address.City, _.Address.Country}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",{\"name\":\"City\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":[\"Address\",\"City\"]}}},{\"name\":\"Country\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":[\"Address\",\"Country\"]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\",\"city\":\"London\",\"country\":\"UK\"},{\"name\":\"Carol\",\"city\":\"Paris\",\"country\":\"FR\"},{\"name\":\"Aaron\",\"city\":\"London\",\"country\":\"UK\"},{\"name\":\"Bob\",\"city\":\"Berlin\",\"country\":\"DE\"}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new OrderRow(_.Region == \"North\" ? \"N\" : \"S\", _.Amount - (_.Discount ?? 0m))).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Region\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"conditional\",\"test\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Region\"},\"right\":{\"$type\":\"const\",\"value\":\"North\",\"tag\":\"String\"}},\"ifTrue\":{\"$type\":\"const\",\"value\":\"N\",\"tag\":\"String\"},\"ifFalse\":{\"$type\":\"const\",\"value\":\"S\",\"tag\":\"String\"}}}},{\"name\":\"Amount\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"binary\",\"op\":\"Subtract\",\"left\":{\"$type\":\"member\",\"path\":\"Amount\"},\"right\":{\"$type\":\"binary\",\"op\":\"Coalesce\",\"left\":{\"$type\":\"member\",\"path\":\"Discount\"},\"right\":{\"$type\":\"const\",\"value\":\"0\",\"tag\":\"Decimal\"}}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"N\",\"amount\":90.00},{\"region\":\"N\",\"amount\":250.00},{\"region\":\"S\",\"amount\":70.00}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {Label = $\"{_.Region}-{_.Quantity}\"}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Label\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringConcat\",\"target\":{\"$type\":\"call\",\"function\":\"StringConcat\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"-\",\"tag\":\"String\"}]},\"arguments\":[{\"$type\":\"member\",\"path\":\"Quantity\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"label\":\"North-3\"},{\"label\":\"North-7\"},{\"label\":\"South-1\"}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region}).Distinct().ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\"]}},{\"$type\":\"distinct\"}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\"},{\"region\":\"South\"}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Tags = _.Tags.ToList()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Tags\",\"value\":{\"$type\":\"collection\",\"path\":\"Tags\",\"selector\":{\"$type\":\"element\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"tags\":[\"urgent\",\"export\"]},{\"region\":\"North\",\"tags\":[\"export\"]},{\"region\":\"South\",\"tags\":[]}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Lines = _.Lines.Where(l => l.Quantity > 1).Select(l => new {l.Sku, l.Quantity}).ToList()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Lines\",\"value\":{\"$type\":\"collection\",\"path\":\"Lines\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"member\",\"path\":\"Quantity\"},\"right\":{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}},\"projection\":{\"members\":[\"Sku\",\"Quantity\"]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"lines\":[{\"sku\":\"A-1\",\"quantity\":2}]},{\"region\":\"North\",\"lines\":[{\"sku\":\"B-1\",\"quantity\":5}]},{\"region\":\"South\",\"lines\":[]}]}"
+  },
+  {
+    "group": "Projection",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Prices = _.Lines.Select(l => l.Price * 2m).ToList()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Prices\",\"value\":{\"$type\":\"collection\",\"path\":\"Lines\",\"selector\":{\"$type\":\"binary\",\"op\":\"Multiply\",\"left\":{\"$type\":\"member\",\"path\":\"Price\"},\"right\":{\"$type\":\"const\",\"value\":\"2\",\"tag\":\"Decimal\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"prices\":[50.0000,100.0000]},{\"region\":\"North\",\"prices\":[100.0000]},{\"region\":\"South\",\"prices\":[]}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount), Rows = _.Count()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"}]},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Key\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Region\"}}},{\"name\":\"Total\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}},{\"name\":\"Rows\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Count\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"key\":\"North\",\"total\":350.00,\"rows\":2},{\"key\":\"South\",\"total\":75.00,\"rows\":1}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low = _.Min(_ => _.Amount), High = _.Max(_ => _.Amount), Mean = _.Average(o => o.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"}]},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Key\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Region\"}}},{\"name\":\"Low\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Min\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}},{\"name\":\"High\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Max\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}},{\"name\":\"Mean\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Average\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"key\":\"North\",\"low\":100.00,\"high\":250.00,\"mean\":175.000000},{\"key\":\"South\",\"low\":75.00,\"high\":75.00,\"mean\":75.000000}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => new {_.Key.Region, _.Key.Grade, Total = _.Sum(_ => _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"},{\"$type\":\"member\",\"path\":\"Grade\"}]},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Grade\",{\"name\":\"Total\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"grade\":\"A\",\"total\":100.00},{\"region\":\"South\",\"grade\":\"A\",\"total\":75.00},{\"region\":\"North\",\"grade\":\"B\",\"total\":250.00}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {Day = _.Key, Count = _.Count()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"call\",\"function\":\"DateDayOfWeek\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}]},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Day\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"groupKey\",\"index\":0}}},{\"name\":\"Count\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Count\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"day\":1,\"count\":1},{\"day\":3,\"count\":2}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {Region = _.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"call\",\"function\":\"StringToUpper\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}]},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Region\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"groupKey\",\"index\":0}}},{\"name\":\"Total\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"NORTH\",\"total\":350.00},{\"region\":\"SOUTH\",\"total\":75.00}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"}]},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Total\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"total\":350.00},{\"region\":\"South\",\"total\":75.00}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amount) > 100m && _.Key != \"South\").Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"}]},{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"AndAlso\",\"left\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"aggregate\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}},\"right\":{\"$type\":\"const\",\"value\":\"100\",\"tag\":\"Decimal\"}},\"right\":{\"$type\":\"binary\",\"op\":\"NotEqual\",\"left\":{\"$type\":\"member\",\"path\":\"Region\"},\"right\":{\"$type\":\"const\",\"value\":\"South\",\"tag\":\"String\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Key\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Region\"}}},{\"name\":\"Total\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"key\":\"North\",\"total\":350.00}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big = _.Count(_ => _.Amount > 90m), Graded = _.Count(_ => _.Grade == 'A')}).ToListAsync()",
+    "request": "{\"version\":2,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"}]},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Key\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Region\"}}},{\"name\":\"Big\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Count\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"member\",\"path\":\"Amount\"},\"right\":{\"$type\":\"const\",\"value\":\"90\",\"tag\":\"Decimal\"}}}}},{\"name\":\"Graded\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Count\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Grade\"},\"right\":{\"$type\":\"const\",\"value\":\"65\",\"tag\":\"Int32\"}}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"key\":\"North\",\"big\":2,\"graded\":1},{\"key\":\"South\",\"big\":0,\"graded\":1}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region).Select(_ => new {_.Key, Grades = _.Select(_ => _.Grade).Distinct().Count()}).ToListAsync()",
+    "request": "{\"version\":2,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"}]},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Key\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Region\"}}},{\"name\":\"Grades\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Count\",\"selector\":{\"$type\":\"member\",\"path\":\"Grade\"},\"distinct\":true}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"key\":\"North\",\"grades\":2},{\"key\":\"South\",\"grades\":1}]}"
+  },
+  {
+    "group": "Grouping",
+    "csharp": "_ => _.Source<Order>(\"Order\").GroupBy(_ => _.Region).Select(_ => new {_.Key, Codes = string.Join(\",\", _.Select(_ => _.Code))}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"groupBy\",\"keys\":[{\"$type\":\"member\",\"path\":\"Region\"}]},{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Key\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Region\"}}},{\"name\":\"Codes\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"aggregate\",\"function\":\"Join\",\"selector\":{\"$type\":\"member\",\"path\":\"Code\"},\"separator\":\",\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"key\":\"North\",\"codes\":\"40,8\"},{\"key\":\"South\",\"codes\":\"17\"}]}"
+  },
+  {
+    "group": "Joins",
+    "csharp": "client.Source<Employee>(\"Employee\").Join(client.Source<Department>(\"Department\"), _ => _.DepartmentId, _ => _.Id, (employee, department) => new {Employee = employee.Name, Department = department.Name}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"join\",\"root\":\"Department\",\"kind\":\"Inner\",\"outerKey\":{\"$type\":\"member\",\"path\":\"DepartmentId\"},\"innerKey\":{\"$type\":\"member\",\"path\":\"Id\"},\"result\":[{\"name\":\"Employee\",\"side\":\"Outer\",\"path\":\"Name\"},{\"name\":\"Department\",\"side\":\"Inner\",\"path\":\"Name\"}]}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"employee\":\"Alice\",\"department\":\"Engineering\"},{\"employee\":\"Carol\",\"department\":\"Sales\"},{\"employee\":\"Aaron\",\"department\":\"Engineering\"},{\"employee\":\"Bob\",\"department\":\"Sales\"}]}"
+  },
+  {
+    "group": "Joins",
+    "csharp": "client.Source<Employee>(\"Employee\").Join(client.Source<Department>(\"Department\").Where(_ => _.Name == \"Engineering\"), _ => _.DepartmentId, _ => _.Id, (employee, department) => new {Employee = employee.Name, Department = department.Name}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"join\",\"root\":\"Department\",\"kind\":\"Inner\",\"outerKey\":{\"$type\":\"member\",\"path\":\"DepartmentId\"},\"innerKey\":{\"$type\":\"member\",\"path\":\"Id\"},\"innerPredicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Name\"},\"right\":{\"$type\":\"const\",\"value\":\"Engineering\",\"tag\":\"String\"}},\"result\":[{\"name\":\"Employee\",\"side\":\"Outer\",\"path\":\"Name\"},{\"name\":\"Department\",\"side\":\"Inner\",\"path\":\"Name\"}]}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"employee\":\"Alice\",\"department\":\"Engineering\"},{\"employee\":\"Aaron\",\"department\":\"Engineering\"}]}"
+  },
+  {
+    "group": "Joins",
+    "csharp": "client.Source<Employee>(\"Employee\").LeftJoin(client.Source<Department>(\"Department\"), _ => _.DepartmentId, _ => _.Id, (employee, department) => new {Employee = employee.Name, Department = department!.Name}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"join\",\"root\":\"Department\",\"kind\":\"Left\",\"outerKey\":{\"$type\":\"member\",\"path\":\"DepartmentId\"},\"innerKey\":{\"$type\":\"member\",\"path\":\"Id\"},\"result\":[{\"name\":\"Employee\",\"side\":\"Outer\",\"path\":\"Name\"},{\"name\":\"Department\",\"side\":\"Inner\",\"path\":\"Name\"}]}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"employee\":\"Alice\",\"department\":\"Engineering\"},{\"employee\":\"Carol\",\"department\":\"Sales\"},{\"employee\":\"Aaron\",\"department\":\"Engineering\"},{\"employee\":\"Bob\",\"department\":\"Sales\"}]}"
+  },
+  {
+    "group": "Joins",
+    "csharp": "client.Source<Employee>(\"Employee\").RightJoin(client.Source<Ticket>(\"Ticket\"), _ => _.Id, _ => _.Id, (employee, ticket) => new {Employee = employee!.Name, Ticket = ticket.Name}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"join\",\"root\":\"Ticket\",\"kind\":\"Right\",\"outerKey\":{\"$type\":\"member\",\"path\":\"Id\"},\"innerKey\":{\"$type\":\"member\",\"path\":\"Id\"},\"result\":[{\"name\":\"Employee\",\"side\":\"Outer\",\"path\":\"Name\"},{\"name\":\"Ticket\",\"side\":\"Inner\",\"path\":\"Name\"}]}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"employee\":\"Alice\",\"ticket\":\"Login bug\"},{\"employee\":\"Carol\",\"ticket\":\"Signup crash\"}]}"
+  },
+  {
+    "group": "Joins",
+    "csharp": "client.Source<Department>(\"Department\").GroupJoin(client.Source<Employee>(\"Employee\"), _ => _.Id, _ => _.DepartmentId, (department, employees) => new {Department = department.Name, Size = employees.Count()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Department\",\"pipeline\":[{\"$type\":\"join\",\"root\":\"Employee\",\"kind\":\"Group\",\"outerKey\":{\"$type\":\"member\",\"path\":\"Id\"},\"innerKey\":{\"$type\":\"member\",\"path\":\"DepartmentId\"},\"result\":[{\"name\":\"Department\",\"side\":\"Outer\",\"path\":\"Name\"},{\"name\":\"Size\",\"side\":\"Inner\",\"path\":[],\"aggregate\":{\"function\":\"Count\"}}]}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"department\":\"Engineering\",\"size\":2},{\"department\":\"Sales\",\"size\":2}]}"
+  },
+  {
+    "group": "Joins",
+    "csharp": "client.Source<Order>(\"Order\").Join(client.Source<Order>(\"Order\"), _ => new {_.Region, _.Grade}, _ => new {_.Region, _.Grade}, (outer, inner) => new {outer.Code, Matched = inner.Amount}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"join\",\"root\":\"Order\",\"kind\":\"Inner\",\"outerKey\":{\"$type\":\"compositeKey\",\"parts\":[{\"$type\":\"member\",\"path\":\"Region\"},{\"$type\":\"member\",\"path\":\"Grade\"}]},\"innerKey\":{\"$type\":\"compositeKey\",\"parts\":[{\"$type\":\"member\",\"path\":\"Region\"},{\"$type\":\"member\",\"path\":\"Grade\"}]},\"result\":[{\"name\":\"Code\",\"side\":\"Outer\",\"path\":\"Code\"},{\"name\":\"Matched\",\"side\":\"Inner\",\"path\":\"Amount\"}]}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"code\":\"40\",\"matched\":100.00},{\"code\":\"8\",\"matched\":250.00},{\"code\":\"17\",\"matched\":75.00}]}"
+  },
+  {
+    "group": "Joins",
+    "csharp": "client.Source<Order>(\"Order\").Join(client.Source<Order>(\"Order\").Where(_ => _.Grade == 'A').OrderByDescending(_ => _.Amount).Take(1), _ => _.Region, _ => _.Region, (outer, inner) => new {outer.Code, Matched = inner.Amount}).ToListAsync()",
+    "request": "{\"version\":2,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"join\",\"root\":\"Order\",\"kind\":\"Inner\",\"outerKey\":{\"$type\":\"member\",\"path\":\"Region\"},\"innerKey\":{\"$type\":\"member\",\"path\":\"Region\"},\"result\":[{\"name\":\"Code\",\"side\":\"Outer\",\"path\":\"Code\"},{\"name\":\"Matched\",\"side\":\"Inner\",\"path\":\"Amount\"}],\"innerOps\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Grade\"},\"right\":{\"$type\":\"const\",\"value\":\"65\",\"tag\":\"Int32\"}}},{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Amount\"},\"descending\":true},{\"$type\":\"take\",\"count\":1}]}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"code\":\"40\",\"matched\":100.00},{\"code\":\"8\",\"matched\":100.00}]}"
+  },
+  {
+    "group": "SetOperations",
+    "csharp": "client.Source<Order>(\"Order\").Select(_ => new OrderRow(_.Region, _.Amount)).Union(client.Source<OrderLine>(\"OrderLine\").Select(_ => new OrderRow(_.Sku, _.Price))).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}},{\"$type\":\"set\",\"kind\":\"Union\",\"root\":\"OrderLine\",\"projection\":{\"members\":[{\"name\":\"Region\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Sku\"}}},{\"name\":\"Amount\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Price\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"A-1\",\"amount\":25.00},{\"region\":\"A-2\",\"amount\":50.00},{\"region\":\"B-1\",\"amount\":50.00},{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00},{\"region\":\"South\",\"amount\":75.00}]}"
+  },
+  {
+    "group": "SetOperations",
+    "csharp": "client.Source<Order>(\"Order\").Select(_ => new OrderRow(_.Region, _.Amount)).Concat(client.Source<OrderLine>(\"OrderLine\").Select(_ => new OrderRow(_.Sku, _.Price))).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}},{\"$type\":\"set\",\"kind\":\"Concat\",\"root\":\"OrderLine\",\"projection\":{\"members\":[{\"name\":\"Region\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Sku\"}}},{\"name\":\"Amount\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Price\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00},{\"region\":\"South\",\"amount\":75.00},{\"region\":\"A-1\",\"amount\":25.00},{\"region\":\"A-2\",\"amount\":50.00},{\"region\":\"B-1\",\"amount\":50.00}]}"
+  },
+  {
+    "group": "SetOperations",
+    "csharp": "client.Source<Order>(\"Order\").Select(_ => new OrderRow(_.Region, _.Amount)).Intersect(client.Source<OrderLine>(\"OrderLine\").Select(_ => new OrderRow(_.Sku, _.Price))).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}},{\"$type\":\"set\",\"kind\":\"Intersect\",\"root\":\"OrderLine\",\"projection\":{\"members\":[{\"name\":\"Region\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Sku\"}}},{\"name\":\"Amount\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Price\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[]}"
+  },
+  {
+    "group": "SetOperations",
+    "csharp": "client.Source<Order>(\"Order\").Select(_ => new OrderRow(_.Region, _.Amount)).Except(client.Source<OrderLine>(\"OrderLine\").Select(_ => new OrderRow(_.Sku, _.Price))).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}},{\"$type\":\"set\",\"kind\":\"Except\",\"root\":\"OrderLine\",\"projection\":{\"members\":[{\"name\":\"Region\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Sku\"}}},{\"name\":\"Amount\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"member\",\"path\":\"Price\"}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00},{\"region\":\"South\",\"amount\":75.00}]}"
+  },
+  {
+    "group": "SetOperations",
+    "csharp": "client.Source<Order>(\"Order\").Select(_ => new OrderRow(_.Region, _.Amount)).Union(client.Source<Order>(\"Order\").Where(_ => _.Grade == 'A').OrderBy(_ => _.Amount).Take(2).Select(_ => new OrderRow(_.Region, _.Amount))).ToListAsync()",
+    "request": "{\"version\":2,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}},{\"$type\":\"set\",\"kind\":\"Union\",\"root\":\"Order\",\"projection\":{\"members\":[\"Region\",\"Amount\"]},\"operandOps\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Grade\"},\"right\":{\"$type\":\"const\",\"value\":\"65\",\"tag\":\"Int32\"}}},{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Amount\"},\"descending\":false},{\"$type\":\"take\",\"count\":2}]}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00},{\"region\":\"South\",\"amount\":75.00}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Order>(\"Order\").SelectMany(_ => _.Lines).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"selectMany\",\"path\":\"Lines\"},{\"$type\":\"select\",\"projection\":{\"members\":[\"Sku\",\"Quantity\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"sku\":\"A-1\",\"quantity\":2},{\"sku\":\"A-2\",\"quantity\":1},{\"sku\":\"B-1\",\"quantity\":5}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Region == \"North\").SelectMany(_ => _.Lines).Where(_ => _.Quantity > 1).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Region\"},\"right\":{\"$type\":\"const\",\"value\":\"North\",\"tag\":\"String\"}}},{\"$type\":\"selectMany\",\"path\":\"Lines\"},{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"member\",\"path\":\"Quantity\"},\"right\":{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Sku\",\"Quantity\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"sku\":\"A-1\",\"quantity\":2},{\"sku\":\"B-1\",\"quantity\":5}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Lines.Any(l => l.Price == 25m)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"subquery\",\"path\":\"Lines\",\"function\":\"Any\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Price\"},\"right\":{\"$type\":\"const\",\"value\":\"25\",\"tag\":\"Decimal\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Lines.All(l => l.Quantity > 0)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"subquery\",\"path\":\"Lines\",\"function\":\"All\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"member\",\"path\":\"Quantity\"},\"right\":{\"$type\":\"const\",\"value\":\"0\",\"tag\":\"Int32\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",\"Amount\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"amount\":100.00},{\"region\":\"North\",\"amount\":250.00},{\"region\":\"South\",\"amount\":75.00}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Lines = _.Lines.Count(l => l.Quantity > 1)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Lines\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"subquery\",\"path\":\"Lines\",\"function\":\"Count\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"member\",\"path\":\"Quantity\"},\"right\":{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"lines\":1},{\"region\":\"North\",\"lines\":1},{\"region\":\"South\",\"lines\":0}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Total = _.Lines.Sum(l => l.Price), Mean = _.Lines.Average(l => l.Price), Low = _.Lines.Min(l => l.Price), High = _.Lines.Max(l => l.Price)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Total\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"subquery\",\"path\":\"Lines\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Price\"}}}},{\"name\":\"Mean\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"subquery\",\"path\":\"Lines\",\"function\":\"Average\",\"selector\":{\"$type\":\"member\",\"path\":\"Price\"}}}},{\"name\":\"Low\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"subquery\",\"path\":\"Lines\",\"function\":\"Min\",\"selector\":{\"$type\":\"member\",\"path\":\"Price\"}}}},{\"name\":\"High\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"subquery\",\"path\":\"Lines\",\"function\":\"Max\",\"selector\":{\"$type\":\"member\",\"path\":\"Price\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"total\":75.00,\"mean\":37.500000,\"low\":25.00,\"high\":50.00},{\"region\":\"North\",\"total\":50.00,\"mean\":50.000000,\"low\":50.00,\"high\":50.00},{\"region\":\"South\",\"total\":0.00,\"mean\":null,\"low\":null,\"high\":null}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Order>(\"Order\").Where(_ => _.Tags.Contains(\"urgent\")).Select(_ => new {_.Region}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"subquery\",\"path\":\"Tags\",\"function\":\"Any\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"element\"},\"right\":{\"$type\":\"const\",\"value\":\"urgent\",\"tag\":\"String\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\"}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Region, Total = _.Scores.Sum(), High = _.Scores.Max()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Region\",{\"name\":\"Total\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"subquery\",\"path\":\"Scores\",\"function\":\"Sum\",\"selector\":{\"$type\":\"element\"}}}},{\"name\":\"High\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"subquery\",\"path\":\"Scores\",\"function\":\"Max\",\"selector\":{\"$type\":\"element\"}}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"region\":\"North\",\"total\":8,\"high\":5},{\"region\":\"North\",\"total\":8,\"high\":8},{\"region\":\"South\",\"total\":0,\"high\":null}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Where(_ => _.PreviousAddresses.Any(address => address.City == \"Berlin\")).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"subquery\",\"path\":\"PreviousAddresses\",\"function\":\"Any\",\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"City\"},\"right\":{\"$type\":\"const\",\"value\":\"Berlin\",\"tag\":\"String\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Alice\"},{\"name\":\"Carol\"}]}"
+  },
+  {
+    "group": "Collections",
+    "csharp": "client.Source<Employee>(\"Employee\").Where(_ => client.Source<Department>(\"Department\").Where(_ => _.Name == \"Sales\").Select(_ => _.Id).Contains(_.DepartmentId)).Select(_ => new NameRow(_.Name)).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"inSource\",\"value\":{\"$type\":\"member\",\"path\":\"DepartmentId\"},\"root\":\"Department\",\"selector\":{\"$type\":\"member\",\"path\":\"Id\"},\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Name\"},\"right\":{\"$type\":\"const\",\"value\":\"Sales\",\"tag\":\"String\"}}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Carol\"},{\"name\":\"Bob\"}]}"
+  },
+  {
+    "group": "Hierarchy",
+    "csharp": "_ => _.Source<Asset>(\"Asset\").OfType<Vehicle>().Select(_ => new {_.Name, _.Wheels}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Asset\",\"pipeline\":[{\"$type\":\"ofType\",\"type\":\"Vehicle\"},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",\"Wheels\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Van\",\"wheels\":4},{\"name\":\"Trailer\",\"wheels\":2}]}"
+  },
+  {
+    "group": "Hierarchy",
+    "csharp": "_ => _.Source<Asset>(\"Asset\").OfType<Building>().Where(_ => _.Floors > 1).Select(_ => new {_.Name, _.Floors}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Asset\",\"pipeline\":[{\"$type\":\"ofType\",\"type\":\"Building\"},{\"$type\":\"where\",\"predicate\":{\"$type\":\"binary\",\"op\":\"GreaterThan\",\"left\":{\"$type\":\"member\",\"path\":\"Floors\"},\"right\":{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}}},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",\"Floors\"]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"name\":\"Depot\",\"floors\":3}]}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").CountAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"count\"}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":4}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").CountAsync(_ => _.Active)",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"count\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":3}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").LongCountAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"longCount\"}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":4}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").LongCountAsync(_ => _.Active)",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"longCount\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":3}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").AnyAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"any\"}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":true}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").AnyAsync(_ => _.Active)",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"any\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":true}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").AllAsync(_ => _.Active)",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"all\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":false}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new NameRow(_.Name)).FirstAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"first\",\"orDefault\":false}]}",
+    "failed": true
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new NameRow(_.Name)).FirstOrDefaultAsync(_ => _.Name == \"Alice\")",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"first\",\"orDefault\":true,\"predicate\":{\"$type\":\"binary\",\"op\":\"Equal\",\"left\":{\"$type\":\"member\",\"path\":\"Name\"},\"right\":{\"$type\":\"const\",\"value\":\"Alice\",\"tag\":\"String\"}}}]}",
+    "refused": "A terminal predicate is not allowed after a Select."
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new NameRow(_.Name)).SingleAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"single\",\"orDefault\":false}]}",
+    "failed": true
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").Select(_ => new NameRow(_.Name)).SingleOrDefaultAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"single\",\"orDefault\":true}]}",
+    "failed": true
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"last\",\"orDefault\":false}]}",
+    "response": "{\"version\":2,\"kind\":\"Single\",\"payload\":{\"name\":\"Carol\"}}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastOrDefaultAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"last\",\"orDefault\":true}]}",
+    "response": "{\"version\":2,\"kind\":\"Single\",\"payload\":{\"name\":\"Carol\"}}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ElementAtAsync(1)",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"skip\",\"count\":1},{\"$type\":\"first\",\"orDefault\":false}]}",
+    "response": "{\"version\":2,\"kind\":\"Single\",\"payload\":{\"name\":\"Alice\"}}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Order>(\"Order\").MaxByAsync(_ => _.Amount)",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Amount\"},\"descending\":true},{\"$type\":\"first\",\"orDefault\":false}]}",
+    "response": "{\"version\":2,\"kind\":\"Single\",\"payload\":{\"id\":2,\"region\":\"North\",\"amount\":250.00,\"quantity\":7,\"sku\":18446744073709551615,\"placed\":\"2026-07-20T14:05:00\",\"discount\":null,\"grade\":\"B\",\"code\":\"8\",\"audited\":\"false\"}}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Order>(\"Order\").MinByAsync(_ => _.Amount)",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Amount\"},\"descending\":false},{\"$type\":\"first\",\"orDefault\":false}]}",
+    "response": "{\"version\":2,\"kind\":\"Single\",\"payload\":{\"id\":3,\"region\":\"South\",\"amount\":75.00,\"quantity\":1,\"sku\":3000,\"placed\":\"2025-12-31T23:59:59\",\"discount\":5.00,\"grade\":\"A\",\"code\":\"17\",\"audited\":\"true\"}}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Order>(\"Order\").SumAsync(_ => _.Amount)",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"aggregate\",\"function\":\"Sum\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":425.00}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Order>(\"Order\").AverageAsync(_ => _.Amount)",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"aggregate\",\"function\":\"Average\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":141.666666}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Order>(\"Order\").MinAsync(_ => _.Amount)",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"aggregate\",\"function\":\"Min\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":75.00}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Order>(\"Order\").MaxAsync(_ => _.Amount)",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"aggregate\",\"function\":\"Max\",\"selector\":{\"$type\":\"member\",\"path\":\"Amount\"}}]}",
+    "response": "{\"version\":2,\"kind\":\"Scalar\",\"payload\":250.00}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync()",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"page\"}]}",
+    "response": "{\"version\":2,\"kind\":\"Page\",\"payload\":{\"items\":[{\"name\":\"Aaron\"},{\"name\":\"Alice\"},{\"name\":\"Bob\"},{\"name\":\"Carol\"}],\"hasMore\":false}}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2)",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"page\",\"size\":2}]}",
+    "response": "{\"version\":2,\"kind\":\"Page\",\"payload\":{\"items\":[{\"name\":\"Aaron\"},{\"name\":\"Alice\"}],\"hasMore\":true,\"cursor\":\"{cursor}\"}}"
+  },
+  {
+    "group": "Terminals",
+    "csharp": "_ => _.Source<Employee>(\"Employee\").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2, \"eyJrIjpbXX0.c2ln\")",
+    "request": "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}},{\"$type\":\"page\",\"size\":2,\"cursor\":\"eyJrIjpbXX0.c2ln\"}]}",
+    "refused": "Invalid paging cursor."
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ =>_.Source<Order>(\"Order\").Select(_ => new {V = _.Region.Contains(\"or\")}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringContains\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"or\",\"tag\":\"String\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":true},{\"v\":true},{\"v\":false}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ =>_.Source<Order>(\"Order\").Select(_ => new {V = _.Region.StartsWith(\"No\")}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringStartsWith\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"No\",\"tag\":\"String\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":true},{\"v\":true},{\"v\":false}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ =>_.Source<Order>(\"Order\").Select(_ => new {V = _.Region.EndsWith(\"th\")}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringEndsWith\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"th\",\"tag\":\"String\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":true},{\"v\":true},{\"v\":true}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {A = _.Region.StartsWith('N'), B = _.Region.EndsWith('h'), C = _.Region.Contains('o')}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"A\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringStartsWith\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"N\",\"tag\":\"String\"}]}}},{\"name\":\"B\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringEndsWith\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"h\",\"tag\":\"String\"}]}}},{\"name\":\"C\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringContains\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"o\",\"tag\":\"String\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"a\":true,\"b\":true,\"c\":true},{\"a\":true,\"b\":true,\"c\":true},{\"a\":false,\"b\":true,\"c\":true}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.ToLower()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringToLower\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"north\"},{\"v\":\"north\"},{\"v\":\"south\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.ToUpper()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringToUpper\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"NORTH\"},{\"v\":\"NORTH\"},{\"v\":\"SOUTH\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = string.IsNullOrEmpty(_.Region)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringIsNullOrEmpty\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":false},{\"v\":false},{\"v\":false}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = string.IsNullOrWhiteSpace(_.Region)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringIsNullOrWhiteSpace\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":false},{\"v\":false},{\"v\":false}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.Length}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringLength\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":5},{\"v\":5},{\"v\":5}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.Trim()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringTrim\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"North\"},{\"v\":\"North\"},{\"v\":\"South\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.TrimStart()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringTrimStart\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"North\"},{\"v\":\"North\"},{\"v\":\"South\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.TrimEnd()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringTrimEnd\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"North\"},{\"v\":\"North\"},{\"v\":\"South\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.Substring(1)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringSubstring\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"orth\"},{\"v\":\"orth\"},{\"v\":\"outh\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.Substring(1, 2)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringSubstring\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"},{\"$type\":\"const\",\"value\":\"2\",\"tag\":\"Int32\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"or\"},{\"v\":\"or\"},{\"v\":\"ou\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.IndexOf('o')}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringIndexOf\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"o\",\"tag\":\"String\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":1},{\"v\":1},{\"v\":1}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.Replace(\"o\", \"0\")}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringReplace\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"o\",\"tag\":\"String\"},{\"$type\":\"const\",\"value\":\"0\",\"tag\":\"String\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"N0rth\"},{\"v\":\"N0rth\"},{\"v\":\"S0uth\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.FirstOrDefault()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringFirst\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"N\"},{\"v\":\"N\"},{\"v\":\"S\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.LastOrDefault()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringLast\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"h\"},{\"v\":\"h\"},{\"v\":\"h\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Amount.ToString()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"100.00\"},{\"v\":\"250.00\"},{\"v\":\"75.00\"}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Region.CompareTo(\"South\")}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"CompareTo\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"South\",\"tag\":\"String\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":-1},{\"v\":-1},{\"v\":0}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = string.Compare(_.Region, \"South\")}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"CompareTo\",\"target\":{\"$type\":\"member\",\"path\":\"Region\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"South\",\"tag\":\"String\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":-1},{\"v\":-1},{\"v\":0}]}"
+  },
+  {
+    "group": "StringFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Amount.CompareTo(100m)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"CompareTo\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"100\",\"tag\":\"Decimal\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":0},{\"v\":1},{\"v\":-1}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Placed.Year, _.Placed.Month, _.Placed.Day, _.Placed.DayOfYear}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Year\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateYear\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"Month\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateMonth\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"Day\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateDay\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"DayOfYear\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateDayOfYear\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"year\":2026,\"month\":3,\"day\":4,\"dayOfYear\":63},{\"year\":2026,\"month\":7,\"day\":20,\"dayOfYear\":201},{\"year\":2025,\"month\":12,\"day\":31,\"dayOfYear\":365}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _.Placed.Second, _.Placed.Millisecond}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Hour\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateHour\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"Minute\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateMinute\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"Second\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateSecond\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"Millisecond\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateMillisecond\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"hour\":9,\"minute\":30,\"second\":15,\"millisecond\":0},{\"hour\":14,\"minute\":5,\"second\":0,\"millisecond\":0},{\"hour\":23,\"minute\":59,\"second\":59,\"millisecond\":0}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Placed.Microsecond, _.Placed.Nanosecond}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Microsecond\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateMicrosecond\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"Nanosecond\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateNanosecond\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"microsecond\":0,\"nanosecond\":0},{\"microsecond\":0,\"nanosecond\":0},{\"microsecond\":0,\"nanosecond\":0}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date, _.Placed.TimeOfDay}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"DayOfWeek\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateDayOfWeek\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"Date\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateDate\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"TimeOfDay\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateTimeOfDay\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"dayOfWeek\":3,\"date\":\"2026-03-04T00:00:00\",\"timeOfDay\":\"09:30:15\"},{\"dayOfWeek\":1,\"date\":\"2026-07-20T00:00:00\",\"timeOfDay\":\"14:05:00\"},{\"dayOfWeek\":3,\"date\":\"2025-12-31T00:00:00\",\"timeOfDay\":\"23:59:59\"}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Select(_ => new {_.Day.DayNumber}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"DayNumber\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateDayNumber\",\"target\":{\"$type\":\"member\",\"path\":\"Day\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"dayNumber\":739678},{\"dayNumber\":739815}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Select(_ => new {_.Duration.Hours, _.Duration.Minutes, _.Duration.Seconds}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Hours\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"TimeSpanHours\",\"target\":{\"$type\":\"member\",\"path\":\"Duration\"},\"arguments\":[]}}},{\"name\":\"Minutes\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"TimeSpanMinutes\",\"target\":{\"$type\":\"member\",\"path\":\"Duration\"},\"arguments\":[]}}},{\"name\":\"Seconds\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"TimeSpanSeconds\",\"target\":{\"$type\":\"member\",\"path\":\"Duration\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"hours\":7,\"minutes\":30,\"seconds\":15},{\"hours\":9,\"minutes\":45,\"seconds\":50}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Select(_ => new {_.Duration.Milliseconds, _.Duration.Microseconds, _.Duration.Nanoseconds}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"Milliseconds\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"TimeSpanMilliseconds\",\"target\":{\"$type\":\"member\",\"path\":\"Duration\"},\"arguments\":[]}}},{\"name\":\"Microseconds\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"TimeSpanMicroseconds\",\"target\":{\"$type\":\"member\",\"path\":\"Duration\"},\"arguments\":[]}}},{\"name\":\"Nanoseconds\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"TimeSpanNanoseconds\",\"target\":{\"$type\":\"member\",\"path\":\"Duration\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"milliseconds\":0,\"microseconds\":0,\"nanoseconds\":0},{\"milliseconds\":0,\"microseconds\":0,\"nanoseconds\":0}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {D = Date.FromDateTime(_.Placed), T = Time.FromDateTime(_.Placed)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"D\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateOnlyFromDateTime\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}},{\"name\":\"T\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"TimeOnlyFromDateTime\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"d\":\"2026-03-04\",\"t\":\"09:30:15\"},{\"d\":\"2026-07-20\",\"t\":\"14:05:00\"},{\"d\":\"2025-12-31\",\"t\":\"23:59:59\"}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Select(_ => new {T = Time.FromTimeSpan(_.Duration), Stamp = _.Day.ToDateTime(_.Start)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"T\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"TimeOnlyFromTimeSpan\",\"target\":{\"$type\":\"member\",\"path\":\"Duration\"},\"arguments\":[]}}},{\"name\":\"Stamp\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateTimeFromDateAndTime\",\"target\":{\"$type\":\"member\",\"path\":\"Day\"},\"arguments\":[{\"$type\":\"member\",\"path\":\"Start\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"t\":\"07:30:15\",\"stamp\":\"2026-03-04T06:15:30\"},{\"t\":\"09:45:50\",\"stamp\":\"2026-07-19T14:05:00\"}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds(), Ms = _.Stamped.ToUnixTimeMilliseconds()}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"S\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"UnixSecondsFromOffset\",\"target\":{\"$type\":\"member\",\"path\":\"Stamped\"},\"arguments\":[]}}},{\"name\":\"Ms\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"UnixMillisecondsFromOffset\",\"target\":{\"$type\":\"member\",\"path\":\"Stamped\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"s\":1772597730,\"ms\":1772597730000},{\"s\":1784469900,\"ms\":1784469900000}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {A = _.Placed.AddYears(1), B = _.Placed.AddMonths(1), C = _.Placed.AddDays(1), D = _.Placed.AddHours(1)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"A\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateAddYears\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}]}}},{\"name\":\"B\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateAddMonths\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}]}}},{\"name\":\"C\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateAddDays\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Double\"}]}}},{\"name\":\"D\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateAddHours\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Double\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"a\":\"2027-03-04T09:30:15\",\"b\":\"2026-04-04T09:30:15\",\"c\":\"2026-03-05T09:30:15\",\"d\":\"2026-03-04T10:30:15\"},{\"a\":\"2027-07-20T14:05:00\",\"b\":\"2026-08-20T14:05:00\",\"c\":\"2026-07-21T14:05:00\",\"d\":\"2026-07-20T15:05:00\"},{\"a\":\"2026-12-31T23:59:59\",\"b\":\"2026-01-31T23:59:59\",\"c\":\"2026-01-01T23:59:59\",\"d\":\"2026-01-01T00:59:59\"}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {A = _.Placed.AddMinutes(1), B = _.Placed.AddSeconds(1), C = _.Placed.AddMilliseconds(1)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"A\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateAddMinutes\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Double\"}]}}},{\"name\":\"B\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateAddSeconds\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Double\"}]}}},{\"name\":\"C\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DateAddMilliseconds\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Double\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"a\":\"2026-03-04T09:31:15\",\"b\":\"2026-03-04T09:30:16\",\"c\":\"2026-03-04T09:30:15.001\"},{\"a\":\"2026-07-20T14:06:00\",\"b\":\"2026-07-20T14:05:01\",\"c\":\"2026-07-20T14:05:00.001\"},{\"a\":\"2026-01-01T00:00:59\",\"b\":\"2026-01-01T00:00:00\",\"c\":\"2025-12-31T23:59:59.001\"}]}"
+  },
+  {
+    "group": "TemporalFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = _.Placed.CompareTo(new(2026, 1, 1))}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"CompareTo\",\"target\":{\"$type\":\"member\",\"path\":\"Placed\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"2026-01-01T00:00:00.0000000\",\"tag\":\"DateTime\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":1},{\"v\":1},{\"v\":-1}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Abs(_.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathAbs\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":100.00},{\"v\":250.00},{\"v\":75.00}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Ceiling(_.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathCeiling\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":100},{\"v\":250},{\"v\":75}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Floor(_.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathFloor\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":100},{\"v\":250},{\"v\":75}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Round(_.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathRound\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":100.00},{\"v\":250.00},{\"v\":75.00}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Round(_.Amount, 1)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathRound\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":100.00},{\"v\":250.00},{\"v\":75.00}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Truncate(_.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathTruncate\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":100.00},{\"v\":250.00},{\"v\":75.00}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Sign(_.Amount - 100m)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathSign\",\"target\":{\"$type\":\"binary\",\"op\":\"Subtract\",\"left\":{\"$type\":\"member\",\"path\":\"Amount\"},\"right\":{\"$type\":\"const\",\"value\":\"100\",\"tag\":\"Decimal\"}},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":0},{\"v\":1},{\"v\":-1}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Sqrt((double) _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathSqrt\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":10},{\"v\":15.811388300841896},{\"v\":8.660254037844387}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Pow((double) _.Amount, 2d)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathPow\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[{\"$type\":\"const\",\"value\":\"2\",\"tag\":\"Double\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":10000},{\"v\":62500},{\"v\":5625}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Exp((double) _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathExp\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":2.6881171418161356E+43},{\"v\":3.7464546145026734E+108},{\"v\":3.7332419967990015E+32}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Log((double) _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathLog\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":4.605170185988092},{\"v\":5.521460917862246},{\"v\":4.31748811353631}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Log((double) _.Amount, 10d)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathLog\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[{\"$type\":\"const\",\"value\":\"10\",\"tag\":\"Double\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":2},{\"v\":2.397940008672037},{\"v\":1.8750612633916997}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Log10((double) _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathLog10\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":2},{\"v\":2.3979400086720375},{\"v\":1.8750612633917}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {A = Math.Sin((double) _.Amount), B = Math.Cos((double) _.Amount), C = Math.Tan((double) _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"A\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathSin\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}},{\"name\":\"B\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathCos\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}},{\"name\":\"C\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathTan\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"a\":-0.5063656411097588,\"b\":0.8623188722876839,\"c\":-0.5872139151569291},{\"a\":-0.9705280195418053,\"b\":0.24098830528525864,\"c\":-4.027282645076856},{\"a\":-0.38778163540943045,\"b\":0.9217512697247493,\"c\":-0.42070095062112434}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {A = Math.Asin((double) _.Amount), B = Math.Acos((double) _.Amount), C = Math.Atan((double) _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"A\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathAsin\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}},{\"name\":\"B\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathAcos\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}},{\"name\":\"C\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathAtan\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}}]}}]}",
+    "failed": true
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Math.Atan2((double) _.Amount, 2d)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathAtan2\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[{\"$type\":\"const\",\"value\":\"2\",\"tag\":\"Double\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":1.550798992821746},{\"v\":1.56279649745501},{\"v\":1.5441359784202986}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {A = Math.Max(_.Amount, 100m), B = Math.Min(_.Amount, 100m)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"A\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathMax\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"100\",\"tag\":\"Decimal\"}]}}},{\"name\":\"B\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathMin\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"100\",\"tag\":\"Decimal\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"a\":100.00,\"b\":100.00},{\"a\":250.00,\"b\":100.00},{\"a\":100.00,\"b\":75.00}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = double.DegreesToRadians((double) _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathDegreesToRadians\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":1.7453292519943295},{\"v\":4.363323129985824},{\"v\":1.3089969389957472}]}"
+  },
+  {
+    "group": "MathFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = double.RadiansToDegrees((double) _.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"MathRadiansToDegrees\",\"target\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":5729.5779513082325},{\"v\":14323.94487827058},{\"v\":4297.183463481174}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = int.Parse(_.Code)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"Int32From\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":40},{\"v\":8},{\"v\":17}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = long.Parse(_.Code)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"Int64From\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":40},{\"v\":8},{\"v\":17}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = decimal.Parse(_.Code)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DecimalFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":40.00},{\"v\":8.00},{\"v\":17.00}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = double.Parse(_.Code)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"DoubleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":40},{\"v\":8},{\"v\":17}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = short.Parse(_.Code)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"Int16From\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":40},{\"v\":8},{\"v\":17}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = byte.Parse(_.Code)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"ByteFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":40},{\"v\":8},{\"v\":17}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = float.Parse(_.Code)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"SingleFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":40},{\"v\":8},{\"v\":17}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = bool.Parse(_.Audited)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"BooleanFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Audited\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":true},{\"v\":false},{\"v\":true}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Convert.ToInt32(_.Code)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"Int32From\",\"target\":{\"$type\":\"member\",\"path\":\"Code\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":40},{\"v\":8},{\"v\":17}]}"
+  },
+  {
+    "group": "ConversionFunctions",
+    "csharp": "_ => _.Source<Order>(\"Order\").Select(_ => new {V = Convert.ToString(_.Amount)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Order\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"StringFrom\",\"target\":{\"$type\":\"member\",\"path\":\"Amount\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":\"100.00\"},{\"v\":\"250.00\"},{\"v\":\"75.00\"}]}"
+  },
+  {
+    "group": "BinaryFunctions",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Select(_ => new {V = _.Signature.Length}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"BytesLength\",\"target\":{\"$type\":\"member\",\"path\":\"Signature\"},\"arguments\":[]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":3},{\"v\":0}]}"
+  },
+  {
+    "group": "BinaryFunctions",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Select(_ => new {V = _.Signature.Contains((byte) 0x0B)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"BytesContains\",\"target\":{\"$type\":\"member\",\"path\":\"Signature\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"11\",\"tag\":\"Int32\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":true},{\"v\":false}]}"
+  },
+  {
+    "group": "BinaryFunctions",
+    "csharp": "_ => _.Source<Shift>(\"Shift\").Select(_ => new {V = _.Signature.ElementAt(1)}).ToListAsync()",
+    "request": "{\"version\":1,\"root\":\"Shift\",\"pipeline\":[{\"$type\":\"select\",\"projection\":{\"members\":[{\"name\":\"V\",\"value\":{\"$type\":\"node\",\"node\":{\"$type\":\"call\",\"function\":\"BytesElementAt\",\"target\":{\"$type\":\"member\",\"path\":\"Signature\"},\"arguments\":[{\"$type\":\"const\",\"value\":\"1\",\"tag\":\"Int32\"}]}}}]}}]}",
+    "response": "{\"version\":2,\"kind\":\"List\",\"payload\":[{\"v\":11},{\"v\":0}]}"
+  }
+]

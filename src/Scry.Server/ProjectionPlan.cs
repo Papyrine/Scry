@@ -216,17 +216,20 @@ sealed class ProjectionPlan(
     // projected collection may hold one wherever its element may.
     static bool MayBeBytes(Type type)
     {
-        if (type.IsAssignableFrom(typeof(byte[])))
+        while (true)
         {
-            return true;
-        }
+            if (type.IsAssignableFrom(typeof(byte[])))
+            {
+                return true;
+            }
 
-        if (type.IsGenericType &&
-            type.GetGenericTypeDefinition() == typeof(List<>))
-        {
-            return MayBeBytes(type.GetGenericArguments()[0]);
-        }
+            if (!type.IsGenericType ||
+                type.GetGenericTypeDefinition() != typeof(List<>))
+            {
+                return false;
+            }
 
-        return false;
+            type = type.GetGenericArguments()[0];
+        }
     }
 }

@@ -1,0 +1,92 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 2rem;
+  color: #222;
+}
+
+main {
+  max-width: 48rem;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 0.5rem 0 1rem;
+}
+
+th,
+td {
+  border: 1px solid #ccc;
+  padding: 0.3rem 0.7rem;
+  text-align: left;
+}
+
+th {
+  background: #f3f3f3;
+}
+
+.photos {
+  display: flex;
+  gap: 1rem;
+}
+
+.photos figure {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.photos img,
+.photos .none {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+}
+
+.photos .none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #bbb;
+  color: #888;
+  font-size: 0.7rem;
+}
+
+.status {
+  min-height: 1.5rem;
+  color: #555;
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+nav a[aria-current="page"] {
+  font-weight: bold;
+  text-decoration: none;
+  color: inherit;
+}
+
+.tabs {
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 0.3rem;
+}
+
+.stale {
+  background: #fff4d6;
+  border: 1px solid #e0c060;
+  padding: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.pending {
+  border: 1px solid #ccc;
+  padding: 0 1rem 1rem;
+  margin-top: 1rem;
+}
+
+.pending [data-status="failed"],
+.pending [data-status="unknown"] {
+  color: #a00;
+}
