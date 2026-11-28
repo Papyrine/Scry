@@ -533,7 +533,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L160-L172' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L169-L181' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Priming is `cache.Prime(scopeKey, rows, context)` alongside the write that produced them. `ScryPolicyCache` is registered as a singleton by `AddScry`, and is also `ScryProcessor.PolicyCache`.
@@ -574,7 +574,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L174-L194' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L183-L203' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `InvalidateRows<T>(keys)` is the narrower form of the second: it re-decides those rows in every scope, rather than emptying one scope entirely.

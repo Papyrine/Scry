@@ -61,6 +61,12 @@ npm run check
 SCRY_SERVER=http://localhost:5249 node --test test/server.test.ts
 ```
 
+`samples/Sample.TypeScriptClient/integration.ps1` runs the whole of it end to end, as CI's Windows job does after the suites: it builds `Sample.WebServer`, whose build writes the description, starts it, generates one client from the build's description, from the one the server writes as it starts, and from its introspection endpoint, and fails unless all three are the same. It then runs the sample, and these server tests, against it. It needs LocalDB, as the .NET suites do.
+
+```powershell
+./samples/Sample.TypeScriptClient/integration.ps1
+```
+
 What is generated for the two fixture descriptions is committed under `test/generated`. After changing the generator, or after the .NET side accepts a new description, write it again and review the difference:
 
 ```bash

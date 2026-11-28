@@ -502,7 +502,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L198-L211' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L207-L220' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Invalidating a [cached policy](policies.md) reports a change too. No row was written, but which rows a caller may see is part of what a live query answers.

@@ -123,6 +123,25 @@ jobs:
         if: ${{ !cancelled() && steps.pack-model.outcome == 'success' }}
         run: dotnet build samples/Sample.ModelPackageClient -c Release -p:GeneratePackageOnBuild=false
 
+      # The TypeScript client against a real Sample.WebServer, which needs this job's LocalDB: one client
+      # generated from the description the server's build writes, from the one it writes as it starts,
+      # and from its introspection endpoint, the three compared; then the sample run and the client's
+      # server tests. Gated as the steps above are. The typescript job checks everything that needs no
+      # server.
+      - name: Set up Node
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            clients/typescript/package-lock.json
+            samples/Sample.TypeScriptClient/package-lock.json
+      - name: Run the TypeScript client end to end
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: ./samples/Sample.TypeScriptClient/integration.ps1 -Configuration Release
+
       - name: Upload test results
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v7

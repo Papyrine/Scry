@@ -5,11 +5,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { createServer as createHttpServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { build, createServer } from "vite";
+import { build, createServer, type InlineConfig } from "vite";
 import { readDescription } from "../src/codegen/description.ts";
 import { generate } from "../src/codegen/generate.ts";
+import { scry } from "../src/vite.ts";
 import { descriptionPath, fixtures } from "./fixtures.ts";
 
 const configFile = join(import.meta.dirname, "vite", "vite.config.ts");
@@ -27,9 +30,9 @@ async function app(withDescription = true): Promise<string> {
   return root;
 }
 
-async function bundle(root: string): Promise<string> {
+async function bundle(root: string, config: InlineConfig = { configFile }): Promise<string> {
   const output = await build({
-    configFile,
+    ...config,
     root,
     logLevel: "silent",
     build: { write: false, lib: { entry: join(root, "src", "index.ts"), formats: ["es"], fileName: "index" } }
@@ -124,6 +127,53 @@ test("the dev server generates the model again when the server writes a new desc
     await until(async () => (await readFile(generated(root), "utf8")).includes("Schema stamp: moved"), "the model to be generated again");
   } finally {
     await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// A running server's introspection, as the endpoint serves it.
+async function serving(body: string): Promise<{ readonly url: string; readonly server: Server }> {
+  const server = createHttpServer((request, response) => {
+    if (request.url !== "/scry/introspect") {
+      response.writeHead(404).end();
+      return;
+    }
+
+    response.writeHead(200, { "Content-Type": "application/json" }).end(body);
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return { url: `http://127.0.0.1:${port}/scry/introspect`, server };
+}
+
+test("a build generates the model from a running server's introspection, read once as it starts", async () => {
+  const root = await app(false);
+  const { url, server } = await serving(await readFile(description, "utf8"));
+  try {
+    const code = await bundle(root, { configFile: false, plugins: [scry({ input: url, output: "src/scry.generated.ts" })] });
+    const read = await readDescription(description);
+
+    assert.equal(await readFile(generated(root), "utf8"), generate(read, { runtime: "scry-client", from: url }));
+    assert.ok(code.includes(read.schemaStamp), "The bundle holds the stamp the generated model carries.");
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a server that does not answer keeps the model a build has, and fails one with none", async () => {
+  const root = await app(false);
+  const { url, server } = await serving(await readFile(description, "utf8"));
+  await new Promise(resolve => server.close(resolve));
+  const config: InlineConfig = { configFile: false, plugins: [scry({ input: url, output: "src/scry.generated.ts" })] };
+  try {
+    await assert.rejects(() => bundle(root, config), /could not be read, and there is no src\/scry\.generated\.ts to build with/);
+
+    await writeFile(generated(root), "export const schema = { stamp: \"kept\" };\n");
+    await bundle(root, config);
+
+    assert.equal(await readFile(generated(root), "utf8"), "export const schema = { stamp: \"kept\" };\n");
+  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });

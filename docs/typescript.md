@@ -35,7 +35,7 @@ npm start
 | `npm start -- --photos` | Opens each employee's photo, an attachment no query carried. |
 | `npm start -- --server <url>` | Points at a server other than `Sample.WebServer`. |
 
-`npm run generate` writes `src/scry.generated.ts` from that description, as an app's build would; neither file is committed. CI writes the model from the sample model's committed description instead (`npm run generate:snapshot`) and type-checks the sample against it, which compiles every example on this page.
+`npm run generate` writes `src/scry.generated.ts` from that description, as an app's build would; neither file is committed. CI writes the model from the sample model's committed description instead (`npm run generate:snapshot`) and type-checks the sample against it, which compiles every example on this page. It also runs `integration.ps1`, beside the sample, against a real server: one client generated from the description the build writes, from the one the server writes as it starts, and from its introspection endpoint, which have to be the same, then the sample and the client's server tests run against that server.
 
 
 ## Generating the model
