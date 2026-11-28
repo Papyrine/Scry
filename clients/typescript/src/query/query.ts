@@ -150,8 +150,9 @@ export interface Page<R> {
 export interface QueryOptions {
   /**
    * Abandons the request: the terminal rejects with the signal's reason, and a stream ends with it. A
-   * query added to a batch is sent with the batch, so the signal handed to its `send` is the one that
-   * counts there.
+   * live query ends for good, every connection it holds closed: a loop over it ends with the reason, and
+   * a subscription stops as its own stop would. A query added to a batch is sent with the batch, so the
+   * signal handed to its `send` is the one that counts there.
    */
   readonly signal?: AbortSignal;
 }
@@ -185,12 +186,12 @@ export interface Final<R> {
   /** The rows as they arrive, rather than once the last of them has. */
   stream(options?: QueryOptions): AsyncIterable<R>;
   /** The rows, now and again whenever they change: each answer the whole current result. */
-  live(): LiveQuery<R[]>;
-  liveCount(): LiveQuery<number>;
-  liveLongCount(): LiveQuery<bigint>;
-  liveAny(): LiveQuery<boolean>;
-  liveFirstOrDefault(): LiveQuery<R | null>;
-  liveSingleOrDefault(): LiveQuery<R | null>;
+  live(options?: QueryOptions): LiveQuery<R[]>;
+  liveCount(options?: QueryOptions): LiveQuery<number>;
+  liveLongCount(options?: QueryOptions): LiveQuery<bigint>;
+  liveAny(options?: QueryOptions): LiveQuery<boolean>;
+  liveFirstOrDefault(options?: QueryOptions): LiveQuery<R | null>;
+  liveSingleOrDefault(options?: QueryOptions): LiveQuery<R | null>;
   /** The request a list of the rows sends, without sending it. */
   toRequest(): QueryRequest;
   /**
@@ -250,11 +251,16 @@ export interface Rows<Q, R, S> extends Final<R> {
   minBy(key: (_: Q) => scry.Expr<unknown>, options?: QueryOptions): Promise<R>;
   /** The row with the largest key. */
   maxBy(key: (_: Q) => scry.Expr<unknown>, options?: QueryOptions): Promise<R>;
-  liveCount(predicate?: (_: Q) => Condition): LiveQuery<number>;
-  liveLongCount(predicate?: (_: Q) => Condition): LiveQuery<bigint>;
-  liveAny(predicate?: (_: Q) => Condition): LiveQuery<boolean>;
-  liveFirstOrDefault(predicate?: (_: Q) => Condition): LiveQuery<R | null>;
-  liveSingleOrDefault(predicate?: (_: Q) => Condition): LiveQuery<R | null>;
+  liveCount(options?: QueryOptions): LiveQuery<number>;
+  liveCount(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): LiveQuery<number>;
+  liveLongCount(options?: QueryOptions): LiveQuery<bigint>;
+  liveLongCount(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): LiveQuery<bigint>;
+  liveAny(options?: QueryOptions): LiveQuery<boolean>;
+  liveAny(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): LiveQuery<boolean>;
+  liveFirstOrDefault(options?: QueryOptions): LiveQuery<R | null>;
+  liveFirstOrDefault(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): LiveQuery<R | null>;
+  liveSingleOrDefault(options?: QueryOptions): LiveQuery<R | null>;
+  liveSingleOrDefault(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): LiveQuery<R | null>;
 }
 
 /** Rows straight after an ordering, which a further ordering refines. */
@@ -1176,58 +1182,60 @@ class Query {
 
   // Live queries.
 
-  live(): LiveQuery<unknown> {
-    return this.#live([], "List", rows => ({ kind: "array", element: rows }));
+  live(options?: QueryOptions): LiveQuery<unknown> {
+    return this.#live([], "List", rows => ({ kind: "array", element: rows }), options);
   }
 
-  liveCount(predicate?: (_: never) => unknown): LiveQuery<unknown> {
-    return this.#liveScalar("count", "int", predicate);
+  liveCount(predicate?: Optional, options?: QueryOptions): LiveQuery<unknown> {
+    return this.#liveScalar("count", "int", predicate, options);
   }
 
-  liveLongCount(predicate?: (_: never) => unknown): LiveQuery<unknown> {
-    return this.#liveScalar("longCount", "long", predicate);
+  liveLongCount(predicate?: Optional, options?: QueryOptions): LiveQuery<unknown> {
+    return this.#liveScalar("longCount", "long", predicate, options);
   }
 
-  liveAny(predicate?: (_: never) => unknown): LiveQuery<unknown> {
-    return this.#liveScalar("any", "bool", predicate);
+  liveAny(predicate?: Optional, options?: QueryOptions): LiveQuery<unknown> {
+    return this.#liveScalar("any", "bool", predicate, options);
   }
 
-  liveFirstOrDefault(predicate?: (_: never) => unknown): LiveQuery<unknown> {
-    return this.#liveElement("first", predicate);
+  liveFirstOrDefault(predicate?: Optional, options?: QueryOptions): LiveQuery<unknown> {
+    return this.#liveElement("first", predicate, options);
   }
 
-  liveSingleOrDefault(predicate?: (_: never) => unknown): LiveQuery<unknown> {
-    return this.#liveElement("single", predicate);
+  liveSingleOrDefault(predicate?: Optional, options?: QueryOptions): LiveQuery<unknown> {
+    return this.#liveElement("single", predicate, options);
   }
 
-  #liveScalar(op: "count" | "longCount" | "any", answers: Scalar, predicate: ((_: never) => unknown) | undefined): LiveQuery<unknown> {
+  #liveScalar(op: "count" | "longCount" | "any", answers: Scalar, predicate: Optional, options: QueryOptions | undefined): LiveQuery<unknown> {
+    const [condition, sent] = conditionOf(predicate, options);
     let terminal: QueryOp = { $type: op };
     let sensitive = false;
-    if (predicate !== undefined) {
+    if (condition !== undefined) {
       this.#expect(["rows", "ordered"], `A condition on live${op.charAt(0).toUpperCase()}${op.slice(1)}()`);
-      const condition = this.#expression(predicate, "A condition");
-      terminal = { $type: op, predicate: condition.node };
-      sensitive = condition.sensitive;
+      const expression = this.#expression(condition, "A condition");
+      terminal = { $type: op, predicate: expression.node };
+      sensitive = expression.sensitive;
     }
 
-    return this.#live([terminal], "Scalar", () => valuePlan({ scalar: answers }), sensitive);
+    return this.#live([terminal], "Scalar", () => valuePlan({ scalar: answers }), sent, sensitive);
   }
 
-  #liveElement(op: "first" | "single", predicate: ((_: never) => unknown) | undefined): LiveQuery<unknown> {
+  #liveElement(op: "first" | "single", predicate: Optional, options: QueryOptions | undefined): LiveQuery<unknown> {
+    const [condition, sent] = conditionOf(predicate, options);
     let terminal: QueryOp = { $type: op, orDefault: true };
     let sensitive = false;
-    if (predicate !== undefined) {
+    if (condition !== undefined) {
       this.#expect(["rows", "ordered"], `A condition on a live ${op}`);
-      const condition = this.#expression(predicate, "A condition");
-      terminal = { $type: op, orDefault: true, predicate: condition.node };
-      sensitive = condition.sensitive;
+      const expression = this.#expression(condition, "A condition");
+      terminal = { $type: op, orDefault: true, predicate: expression.node };
+      sensitive = expression.sensitive;
     }
 
-    return this.#live([terminal], "Single", rows => rows, sensitive);
+    return this.#live([terminal], "Single", rows => rows, sent, sensitive);
   }
 
   // The request is made now, so the values a query closes over are read once, as the C# client does.
-  #live(terminal: readonly QueryOp[], kind: ResultKind, payload: (rows: Plan) => Plan, sensitive = false): LiveQuery<unknown> {
+  #live(terminal: readonly QueryOp[], kind: ResultKind, payload: (rows: Plan) => Plan, options: QueryOptions | undefined, sensitive = false): LiveQuery<unknown> {
     const { client } = this.#state;
     const transport = client.options.transport;
     if (transport?.subscribe === undefined) {
@@ -1248,7 +1256,8 @@ class Query {
         ...this.#headers()
       }),
       data => this.#read(parseJson(data), kind, plan),
-      client.options.retry ?? backoff);
+      client.options.retry ?? backoff,
+      options?.signal);
   }
 }
 

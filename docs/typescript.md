@@ -488,7 +488,7 @@ async function showPagesByOffset(): Promise<void> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L185-L204' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptPaging' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L193-L212' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Handed back, the cursor resumes past the last row, so the server seeks rather than counting the rows before it, and a row added or removed earlier on does not shift the pages after it ([Paging](paging.md)):
@@ -516,7 +516,7 @@ async function showPagesByCursor(): Promise<void> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L208-L228' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptKeyset' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L216-L236' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptKeyset' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `page()` with no size asks for the server's own.
@@ -597,7 +597,7 @@ A batch sends its queries as one request ([Batching](batching.md)). Each entry i
 
 ## Cancelling
 
-Every terminal that answers once, and `stream()`, takes `{ signal }` last, as each C# terminal takes a `CancellationToken`:
+Every terminal that answers once, `stream()`, and every live terminal takes `{ signal }` last, as each C# terminal takes a `CancellationToken`:
 
 <!-- snippet: typescriptCancel -->
 <a id='snippet-typescriptCancel'></a>
@@ -619,7 +619,7 @@ const first =
 
 An aborted signal abandons the request: the fetch stops, the server sees its connection close, and the terminal rejects with the signal's reason (a `TimeoutError` for `AbortSignal.timeout`). A signal already aborted sends nothing. The options come after the condition where a terminal has one, and take its place where it is left out, so `count({ signal })` counts every row; `page` takes them in place of the size or the cursor, as `page({ signal })`, `page(20, { signal })` or `page(20, cursor, { signal })`. A query sent with a signal is the same request, byte for byte, as without one.
 
-A stream whose signal aborts ends with the reason, whether it was waiting for a row or holding one, rather than as a stream the server cut off. A query in a batch goes with the batch: the signal handed to `send` abandons it, and every entry rejects with the reason, while a signal handed to an entry's own terminal is not read. A live query ends when its loop is left or the function `subscribe` returned is called. A command's sender takes `{ signal }` too, as `send.repriceOrder(payload, { signal })`: it stops waiting, but once the server has answered it never stops the command, which goes on being followed as pending work ([Commands](#commands)). An attachment's `open({ signal })` abandons its fetch.
+A stream whose signal aborts ends with the reason, whether it was waiting for a row or holding one, rather than as a stream the server cut off. A query in a batch goes with the batch: the signal handed to `send` abandons it, and every entry rejects with the reason, while a signal handed to an entry's own terminal is not read. A live query's signal ends it for good, every connection it holds closed: a loop over it ends with the reason, whether it was waiting for an answer or to ask again, and a subscription stops as the function `subscribe` returned would stop it, telling `onError` nothing. Leaving the loop, or calling that function, ends it as well. A command's sender takes `{ signal }` too, as `send.repriceOrder(payload, { signal })`: it stops waiting, but once the server has answered it never stops the command, which goes on being followed as pending work ([Commands](#commands)). An attachment's `open({ signal })` abandons its fetch.
 
 
 ## Live queries
@@ -657,7 +657,7 @@ async function watchOrders(): Promise<void> {
 <sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L134-L161' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Read in a loop, the next answer waits until the loop comes back for it, so a slow reader is never handed a queue of them, and leaving the loop ends the subscription:
+Read in a loop, the next answer waits until the loop comes back for it, so a slow reader is never handed a queue of them. Leaving the loop ends the subscription, and so does a signal handed to `live`, which ends the loop with its reason wherever it was waiting ([Cancelling](#cancelling)):
 
 <!-- snippet: typescriptLiveLoop -->
 <a id='snippet-typescriptLiveLoop'></a>
@@ -665,20 +665,28 @@ Read in a loop, the next answer waits until the loop comes back for it, so a slo
 async function readOrders(): Promise<void> {
   console.log("Watching orders. Ctrl+C to stop.");
   console.log();
+  const stopping = new AbortController();
+  process.once("SIGINT", () => stopping.abort());
   const orders = scry.order
     .orderBy(_ => _.id)
     .select(_ => ({ id: _.id, region: _.region, amount: _.amount }))
-    .live();
+    .live({ signal: stopping.signal });
 
-  for await (const answer of orders) {
-    console.log(new Date().toLocaleTimeString());
-    writeTable(
-        ["Id", "Region", "Amount"],
-        answer.map(_ => [String(_.id), _.region, _.amount]));
+  try {
+    for await (const answer of orders) {
+      console.log(new Date().toLocaleTimeString());
+      writeTable(
+          ["Id", "Region", "Amount"],
+          answer.map(_ => [String(_.id), _.region, _.amount]));
+    }
+  } catch (error) {
+    if (!stopping.signal.aborted) {
+      throw error;
+    }
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L166-L182' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveLoop' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L166-L190' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveLoop' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A [live query](live-queries.md) is one request answered whenever its answer changes. `live()` answers with the rows, and `liveCount`, `liveLongCount`, `liveAny`, `liveFirstOrDefault` and `liveSingleOrDefault` with the scalar:
@@ -695,7 +703,7 @@ const stop = scry.employee
 <sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L99-L105' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveCount' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-A live query is an `AsyncIterable` that runs until the loop leaves it, and `subscribe` calls back until the function it returns is called. A connection that ends is asked for again naming the last answer held, so an answer that has not moved is not sent again, and the consumer sees a pause rather than an end. The server failing for the moment, a server-side limit on open subscriptions, a 5xx, 408 or 429 from something in between, and a failed connection are all asked again. A rejection, a denial, or a client the server calls stale ends the live query with its error, since asking again would not change the answer. The C# client follows the same rules.
+A live query is an `AsyncIterable` that runs until the loop leaves it or its signal aborts, and `subscribe` calls back until the function it returns is called or the signal aborts. A connection that ends is asked for again naming the last answer held, so an answer that has not moved is not sent again, and the consumer sees a pause rather than an end. The server failing for the moment, a server-side limit on open subscriptions, a 5xx, 408 or 429 from something in between, and a failed connection are all asked again. A rejection, a denial, or a client the server calls stale ends the live query with its error, since asking again would not change the answer. The C# client follows the same rules.
 
 The `retry` option of `createScry` decides how long to wait before asking again. It is told how many attempts have failed since the last answer, how long that has been, and why the last one failed, and it returns milliseconds, or `undefined` to stop. The default, `backoff`, asks at once, then after a second, doubling to thirty, with a fifth either way at random so that clients cut off together do not return together.
 
@@ -725,7 +733,7 @@ async function repriceOrder(id: number): Promise<number> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L234-L254' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommand' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L242-L262' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommand' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `createCommands` takes the sources `createScry` made, and `send` holds one function per [command](commands.md) the model declares, typed by its payload and its result. A payload is written as a query's constant is, so a date may be a `Date` or its text, and a `[Flags]` value its names. It travels camel-cased, each value in the JSON type the server binds it from: a `long` and a `decimal` as numbers, every enum by its name. A member the command does not have, or a null it cannot hold, is refused before anything is sent.
@@ -797,7 +805,7 @@ async function showPhotos(): Promise<void> {
   writeTable(["Name", "Photo"], rows);
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L258-L279' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptAttachment' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L266-L287' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptAttachment' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each row comes back with a handle made from its key, and `open()` fetches the bytes from the attachment endpoint as a request of its own, which the server authorizes afresh. It answers `null` where the stored value is null, and throws `ScryRequestError` with status 404 where the server will not hand the bytes over: an absent row, one a policy hides and one the check refuses are answered alike. What it opens has the type the member declares, an advisory `length`, the `body` as it arrives, and `bytes()` and `blob()`, any one of which reads it.

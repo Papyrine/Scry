@@ -70,7 +70,7 @@ export type Attachments = [
 // The pipeline's grammar, held by the types: what the server would refuse does not compile.
 
 import { eq, resultOf } from "../src/index.ts";
-import type { CommandOutcome, Page, Scry, ScryCommands } from "../src/index.ts";
+import type { CommandOutcome, LiveQuery, Page, Scry, ScryCommands } from "../src/index.ts";
 
 declare const client: Scry<Sources>;
 
@@ -140,12 +140,18 @@ const pagedBySize = client.employee.page(10, { signal });
 const pagedAfter = client.employee.page(10, "eyJrIjpbXX0.c2ln", { signal });
 const streamed = client.employee.stream({ signal });
 const projectedFirst = projected.first({ signal });
+const watched = client.employee.live({ signal });
+const watchedWhere = client.employee.liveCount(_ => _.active, { signal });
+const watchedProjection = projected.liveFirstOrDefault({ signal });
 
 // @ts-expect-error all() needs its condition, signal or not.
 void client.employee.all({ signal });
 
 // @ts-expect-error A projection's rows take no condition, so a function is not their options.
 void projected.first(_ => _.count);
+
+// @ts-expect-error Nor do a projection's live terminals.
+void projected.liveCount(_ => _.count);
 
 // @ts-expect-error A signal is an AbortSignal.
 void client.employee.toList({ signal: true });
@@ -162,7 +168,10 @@ export type Cancellable = [
   Holds<Equal<typeof pagedBySize, Promise<Page<EmployeeRow>>>>,
   Holds<Equal<typeof pagedAfter, Promise<Page<EmployeeRow>>>>,
   Holds<Equal<typeof streamed, AsyncIterable<EmployeeRow>>>,
-  Holds<Equal<typeof projectedFirst, Promise<{ region: string; tags: string[]; lines: { sku: string }[]; count: number; department: { name: string } }>>>
+  Holds<Equal<typeof projectedFirst, Promise<{ region: string; tags: string[]; lines: { sku: string }[]; count: number; department: { name: string } }>>>,
+  Holds<Equal<typeof watched, LiveQuery<EmployeeRow[]>>>,
+  Holds<Equal<typeof watchedWhere, LiveQuery<number>>>,
+  Holds<Equal<typeof watchedProjection, LiveQuery<Awaited<typeof projectedFirst> | null>>>
 ];
 
 // A query's own headers leave it the query it was, so what may follow is what could before.

@@ -1,13 +1,14 @@
 // A terminal's signal: handed to the transport without changing the request, abandoning a request in
 // flight as the reason it was aborted for, ending a stream part way as that reason rather than as a
-// stream cut off, and let go of once a stream is done with it.
+// stream cut off, and let go of once a stream is done with it. A live query's ends it for good: a loop
+// over it with the reason, wherever it was waiting, and a subscription quietly.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { getEventListeners } from "node:events";
-import { createBatch, createScry, httpTransport, type QueryOptions, type Scry } from "../src/index.ts";
+import { createBatch, createScry, httpTransport, type LiveEvent, type QueryOptions, type Scry, type Transport } from "../src/index.ts";
 import { schema, type Sources } from "./generated/test-model.ts";
 import framings from "../../../src/Scry.Tests/TypeScript/framings.verified.json" with { type: "json" };
 
@@ -233,4 +234,174 @@ test("a query in a batch goes with the batch: send's signal abandons it, and eac
   await assert.rejects(sending, error => error === reason);
   await assert.rejects(listed, error => error === reason);
   await assert.rejects(counted, error => error === reason);
+});
+
+// A live query's connections, each played from its script and then held open until its signal aborts,
+// as a server holds one open: what was asked, and how each connection was ended.
+function holdingLive(connections: readonly (readonly LiveEvent[])[], retry = () => 0) {
+  const asked: { json: string; signal: AbortSignal }[] = [];
+  const transport: Transport = {
+    query: () => Promise.reject(new Error("Not asked once.")),
+    async *subscribe(_request, context) {
+      asked.push({ json: context.json, signal: context.signal });
+      const script = connections[asked.length - 1] ?? [];
+      yield* script;
+      if (script.at(-1)?.event === "end") {
+        return;
+      }
+
+      await new Promise<void>(resolve => {
+        if (context.signal.aborted) {
+          resolve();
+          return;
+        }
+
+        context.signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    }
+  };
+  const scry = createScry<Sources>(schema, { defaultProjection: "server", stamp: false, transport, retry });
+  return { scry, asked };
+}
+
+const answered = (id: string, ...names: string[]): LiveEvent => ({
+  event: "result",
+  id,
+  data: JSON.stringify({ version: 2, kind: "List", payload: names.map(_ => ({ name: _ })) })
+});
+
+const counted = (id: string, count: number): LiveEvent => ({
+  event: "result",
+  id,
+  data: JSON.stringify({ version: 2, kind: "Scalar", payload: count })
+});
+
+type LiveTerminal = (scry: Scry<Sources>, options?: QueryOptions) => AsyncIterable<unknown>;
+
+const liveTerminals: Readonly<Record<string, LiveTerminal>> = {
+  live: (scry, options) => scry.employee.select(_ => ({ name: _.name })).live(options),
+  liveCount: (scry, options) => scry.employee.liveCount(options),
+  "liveCount with a condition": (scry, options) => scry.employee.liveCount(_ => _.active, options),
+  liveLongCount: (scry, options) => scry.employee.liveLongCount(_ => _.active, options),
+  liveAny: (scry, options) => scry.employee.liveAny(options),
+  liveFirstOrDefault: (scry, options) => scry.employee.orderBy(_ => _.id).liveFirstOrDefault(_ => _.active, options),
+  liveSingleOrDefault: (scry, options) => scry.employee.liveSingleOrDefault(options)
+};
+
+for (const [name, terminal] of Object.entries(liveTerminals)) {
+  test(`${name}: a signal ends it, and the request is the one sent without it`, async () => {
+    const { scry, asked } = holdingLive([[], []]);
+    const controller = new AbortController();
+    const reason = new Error("Done watching.");
+
+    // Opened in this order, so the first connection is the watched one's.
+    const watched = terminal(scry, { signal: controller.signal })[Symbol.asyncIterator]();
+    const waiting = watched.next();
+    const plain = terminal(scry)[Symbol.asyncIterator]();
+    void plain.next();
+    await new Promise(resolve => setImmediate(resolve));
+    controller.abort(reason);
+
+    await assert.rejects(waiting, error => error === reason);
+    assert.equal(asked.length, 2);
+    assert.equal(asked[0]!.json, asked[1]!.json);
+    assert.equal(asked[0]!.signal.aborted, true);
+    assert.equal(asked[1]!.signal.aborted, false);
+    void plain.return?.();
+  });
+}
+
+test("a loop over a live query ends with the reason as the signal aborts, its connection closed", async () => {
+  const { scry, asked } = holdingLive([[answered("a", "Alice")]]);
+  const controller = new AbortController();
+  const reason = new Error("Done watching.");
+  const seen: unknown[] = [];
+
+  await assert.rejects(async () => {
+    for await (const answer of scry.employee.select(_ => ({ name: _.name })).live({ signal: controller.signal })) {
+      seen.push(answer);
+      controller.abort(reason);
+    }
+  }, error => error === reason);
+
+  assert.deepEqual(seen, [[{ name: "Alice" }]]);
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0]!.signal.aborted, true);
+});
+
+test("a loop waiting to ask again ends with the reason as the signal aborts, without asking", async () => {
+  // A connection the server ends, and a retry policy that would wait a minute before the next.
+  const { scry, asked } = holdingLive([[counted("a", 3), { event: "end", data: JSON.stringify({ reconnect: true }) }]], () => 60_000);
+  const controller = new AbortController();
+  const reason = new Error("Done waiting.");
+  const reading = scry.employee.liveCount({ signal: controller.signal })[Symbol.asyncIterator]();
+
+  assert.deepEqual(await reading.next(), { done: false, value: 3 });
+  const next = reading.next();
+  await new Promise(resolve => setImmediate(resolve));
+  controller.abort(reason);
+
+  await assert.rejects(next, error => error === reason);
+  assert.equal(asked.length, 1);
+});
+
+test("a live query whose signal has already aborted opens nothing, and a loop over it ends at once", async () => {
+  const { scry, asked } = holdingLive([]);
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(scry.employee.liveCount({ signal: controller.signal })[Symbol.asyncIterator]().next(), { name: "AbortError" });
+  assert.equal(asked.length, 0);
+});
+
+test("a subscription stops as the signal aborts, telling onError nothing, and lets go of the signal", async () => {
+  const { scry, asked } = holdingLive([[answered("a", "Alice")]]);
+  const controller = new AbortController();
+  const answers: unknown[] = [];
+  const errors: unknown[] = [];
+  const first = Promise.withResolvers<void>();
+
+  scry.employee.select(_ => ({ name: _.name })).live({ signal: controller.signal }).subscribe(
+    answer => {
+      answers.push(answer);
+      first.resolve();
+    },
+    error => errors.push(error));
+  await first.promise;
+  controller.abort(new Error("Done watching."));
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(answers, [[{ name: "Alice" }]]);
+  assert.deepEqual(errors, []);
+  assert.equal(asked[0]!.signal.aborted, true);
+  assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+});
+
+test("a live query lets go of its signal once a loop leaves it", async () => {
+  const { scry } = holdingLive([[answered("a", "Alice")]]);
+  const lifetime = new AbortController();
+
+  for await (const _ of scry.employee.select(_ => ({ name: _.name })).live({ signal: lifetime.signal })) {
+    break;
+  }
+
+  assert.equal(getEventListeners(lifetime.signal, "abort").length, 0);
+});
+
+test("a live query over a real fetch is abandoned as its signal aborts, and the server sees the connection close", async () => {
+  await using server = await holding(response => {
+    response.writeHead(200, { "Content-Type": "text/event-stream" });
+    response.write(`event: result\nid: a\ndata: ${answered("a", "Alice").data}\n\n`);
+  });
+  const controller = new AbortController();
+  const reason = new Error("Done watching.");
+  const abandoned = server.abandonment();
+  const reading = server.scry.employee.select(_ => ({ name: _.name })).live({ signal: controller.signal })[Symbol.asyncIterator]();
+
+  assert.deepEqual(await reading.next(), { done: false, value: [{ name: "Alice" }] });
+  const next = reading.next();
+  controller.abort(reason);
+
+  await assert.rejects(next, error => error === reason);
+  await abandoned;
 });

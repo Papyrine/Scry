@@ -161,22 +161,30 @@ async function watchOrders(): Promise<void> {
 // end-snippet
 
 // The same live query read in a loop. The next answer is not read until the loop comes back for it,
-// so a slow reader is never handed a queue of them; leaving the loop ends the subscription, and so
-// does Ctrl+C, which ends the process.
+// so a slow reader is never handed a queue of them. Leaving the loop ends the subscription, and so
+// does the signal, which ends the loop with its reason wherever it was waiting: here Ctrl+C.
 // begin-snippet: typescriptLiveLoop
 async function readOrders(): Promise<void> {
   console.log("Watching orders. Ctrl+C to stop.");
   console.log();
+  const stopping = new AbortController();
+  process.once("SIGINT", () => stopping.abort());
   const orders = scry.order
     .orderBy(_ => _.id)
     .select(_ => ({ id: _.id, region: _.region, amount: _.amount }))
-    .live();
+    .live({ signal: stopping.signal });
 
-  for await (const answer of orders) {
-    console.log(new Date().toLocaleTimeString());
-    writeTable(
-        ["Id", "Region", "Amount"],
-        answer.map(_ => [String(_.id), _.region, _.amount]));
+  try {
+    for await (const answer of orders) {
+      console.log(new Date().toLocaleTimeString());
+      writeTable(
+          ["Id", "Region", "Amount"],
+          answer.map(_ => [String(_.id), _.region, _.amount]));
+    }
+  } catch (error) {
+    if (!stopping.signal.aborted) {
+      throw error;
+    }
   }
 }
 // end-snippet

@@ -41,23 +41,45 @@ export class LiveQuery<T> implements AsyncIterable<T> {
   readonly #open: Opener;
   readonly #read: Reader<T>;
   readonly #retry: RetryPolicy;
+  readonly #signal: AbortSignal | undefined;
 
-  constructor(open: Opener, read: Reader<T>, retry: RetryPolicy) {
+  /** `signal` ends it for good, every connection it holds closed. */
+  constructor(open: Opener, read: Reader<T>, retry: RetryPolicy, signal?: AbortSignal) {
     this.#open = open;
     this.#read = read;
     this.#retry = retry;
-  }
-
-  [Symbol.asyncIterator](): AsyncIterator<T> {
-    return this.#answers(new AbortController().signal);
+    this.#signal = signal;
   }
 
   /**
-   * Calls `onAnswer` with every answer until the returned function is called, or until the live
-   * query ends for good, which `onError` is told.
+   * Every answer, until the loop leaves or the live query's signal aborts, which ends the loop with the
+   * signal's reason, whether it was waiting for an answer or between two connections.
+   */
+  [Symbol.asyncIterator](): AsyncIterator<T> {
+    return this.#until(this.#signal ?? new AbortController().signal);
+  }
+
+  async *#until(signal: AbortSignal): AsyncGenerator<T> {
+    yield* this.#answers(signal);
+    // The answers end quietly when the signal aborts, which is how a subscription stops, but a loop
+    // that stopped at the signal did not reach the end of anything.
+    signal.throwIfAborted();
+  }
+
+  /**
+   * Calls `onAnswer` with every answer until the returned function is called or the live query's
+   * signal aborts, or until the live query ends for good, which `onError` is told.
    */
   subscribe(onAnswer: (answer: T) => void, onError?: (error: unknown) => void): () => void {
     const stop = new AbortController();
+    const signal = this.#signal;
+    const forward = () => stop.abort();
+    if (signal?.aborted === true) {
+      stop.abort();
+    } else {
+      signal?.addEventListener("abort", forward, { once: true });
+    }
+
     void (async () => {
       try {
         for await (const answer of this.#answers(stop.signal)) {
@@ -67,6 +89,8 @@ export class LiveQuery<T> implements AsyncIterable<T> {
         if (!stop.signal.aborted) {
           onError?.(error);
         }
+      } finally {
+        signal?.removeEventListener("abort", forward);
       }
     })();
     return () => stop.abort();
