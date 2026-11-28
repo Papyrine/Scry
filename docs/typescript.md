@@ -298,7 +298,7 @@ const scry = createScry<Sources>(schema, {
   })
 });
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L10-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptTransport' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L11-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptTransport' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A request travels as a URL when it fits the server's budget and reads nothing sensitive, which lets a cache between the client and the server keep the answer, and as a body otherwise. The budget is learned from every response (`Scry-Url-Limit`). A URL refused before it reached the server (a 400, 404, 414 or 431 without that header) is asked again as a body, and nothing as long is asked as a URL again; a 405 turns the URL form off; a refusal saying the request must travel as a body is asked again as one. This is the C# client's behaviour.
@@ -338,7 +338,7 @@ const rows = await scry.employee
   .toList();
 // { name: string; manager: string | null; department: { name: string | null } }[]
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L20-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWhere' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L21-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWhere' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A collection is asked about through its own methods: `_.lines.any(l => gt(l.quantity, 1))`, `_.tags.contains("urgent")`. Grouping, joins and set operations follow LINQ's shape:
@@ -380,6 +380,28 @@ A constant is typed by what stands beside it, as C# would type it, so a query se
 
 JavaScript's own operators ask nothing of the server, since a member is an expression rather than a value. `>`, `+` and a template literal on one throw. `&&`, `||`, `!` and `? :` cannot be caught at run time: `where(_ => a && b)` would send `b` alone. Turn on `@typescript-eslint/strict-boolean-expressions` for code that writes queries.
 
+### Headers
+
+`withHeader`, `withHeaders` and `onResponseHeaders` are the C# client's `WithHeader`, `WithHeaders` and `OnResponseHeaders`: a header sent with one query's request beside the transport's own, and the headers of the response that answered it:
+
+<!-- snippet: typescriptHeaders -->
+<a id='snippet-typescriptHeaders'></a>
+```ts
+const rows = await scry.order
+  .withHeader("X-Correlation", correlationId)
+  .onResponseHeaders(_ => trace = _.get("X-Trace"))
+  .where(_ => gt(_.amount, 100))
+  .select(_ => ({ id: _.id, amount: _.amount }))
+  .toList();
+```
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L53-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptHeaders' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+They are the transport's, not the query's: nothing of them enters the request, so a query is the same bytes with them or without, and where in the chain they are written makes no difference. `withHeaders` runs once per request, so a query sent again as a body carries the headers the first attempt was given; a live query writes them for each connection. `onResponseHeaders` reads a refusal's headers too, before the refusal is thrown, and a stream's before its first row. A query in a batch cannot carry headers of its own, since the batch is one request, and is refused when added. A query's header is written over the transport's of the same name.
+
+> [!WARNING]
+> Whatever a client sends is the client's word by the time the server reads it. Treat these as hints, a correlation id or a client build, and never as an authorization input.
+
 
 ## Reading answers
 
@@ -402,7 +424,7 @@ for await (const order of scry.order.orderBy(_ => _.id).select(_ => ({ id: _.id,
   show(`${order.id}: ${order.amount}`);
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L32-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L33-L37' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `stream()` reads the rows a line at a time as the server writes them. A failure after the first row throws the error its status would have been, and a stream cut off before the server's closing marker throws `ScryWireError`, so a short read is never taken for the whole answer. Leaving the loop early closes the connection. A projection of `[BinaryTransfer]` members streams as multipart, each row's parts arriving immediately before it, and reads as any other stream does.
@@ -417,7 +439,7 @@ await batch.send();
 
 show(`${await count} employees, the first ${(await names)[0]?.name}`);
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L40-L47' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptBatch' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L41-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptBatch' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A batch sends its queries as one request ([Batching](batching.md)). Each entry is answered as it would have been alone, so one refused entry rejects its own promise and the others resolve. A batch is sent once, and each entry is one query ended by its terminal.
@@ -434,7 +456,7 @@ const signal = AbortSignal.timeout(5_000);
 const active = await scry.employee.count(_ => _.active, { signal });
 const first = await scry.employee.orderBy(_ => _.name).select(_ => ({ name: _.name })).page(20, { signal });
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L51-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCancel' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L66-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCancel' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An aborted signal abandons the request: the fetch stops, the server sees its connection close, and the terminal rejects with the signal's reason (a `TimeoutError` for `AbortSignal.timeout`). A signal already aborted sends nothing. The options come after the condition where a terminal has one, and take its place where it is left out, so `count({ signal })` counts every row; `page` takes them in place of the size or the cursor, as `page({ signal })`, `page(20, { signal })` or `page(20, cursor, { signal })`. A query sent with a signal is the same request, byte for byte, as without one.
@@ -486,7 +508,7 @@ const stop = scry.employee
     active => show(`${active} active`),
     error => show(`The live query ended: ${(error as Error).message}`));
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L60-L66' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveCount' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L75-L81' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveCount' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A live query is an `AsyncIterable` that runs until the loop leaves it, and `subscribe` calls back until the function it returns is called. A connection that ends is asked for again naming the last answer held, so an answer that has not moved is not sent again, and the consumer sees a pause rather than an end. The server failing for the moment, a server-side limit on open subscriptions, a 5xx, 408 or 429 from something in between, and a failed connection are all asked again. A rejection, a denial, or a client the server calls stale ends the live query with its error, since asking again would not change the answer. The C# client follows the same rules.
@@ -549,7 +571,7 @@ const deletable = await scry.employee
   .select(_ => ({ name: _.name, deletable: _.canDeleteEmployee }))
   .single();
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L71-L84' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommandResult' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L86-L99' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommandResult' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The server answers at once where it decides a command within its sync window, and otherwise answers pending and streams the outcome on the same response. The client waits `wait` milliseconds (three seconds unless set; `Infinity` waits for the outcome) before answering `Pending`. A pending command's connection that ends first is asked for again by the command's id, under the `retry` policy live queries use. `commands.pending` lists each command from going pending until its outcome has been seen: a completed one leaves after `completedLinger` milliseconds (eight seconds unless set), and a failed or unknown one stays until `clearFinished()`, since it says something somebody should read. `onPendingChanged` says when the list moves. `close()` stops following, and each command still followed ends `Unknown`; the server finishes what it accepted either way.

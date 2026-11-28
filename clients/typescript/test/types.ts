@@ -165,6 +165,19 @@ export type Cancellable = [
   Holds<Equal<typeof projectedFirst, Promise<{ region: string; tags: string[]; lines: { sku: string }[]; count: number; department: { name: string } }>>>
 ];
 
+// A query's own headers leave it the query it was, so what may follow is what could before.
+
+const headedOrdering = client.employee.orderBy(_ => _.name).withHeader("X-Correlation", "1").thenBy(_ => _.id);
+const headedProjection = projected.withHeaders(_ => _.set("X-Correlation", "1")).onResponseHeaders(_ => _.get("X-Trace")).distinct();
+
+// @ts-expect-error A header's value is text.
+void client.employee.withHeader("X-Retry", 1);
+
+export type Headed = [
+  Holds<Equal<Awaited<ReturnType<typeof headedOrdering.toList>>, EmployeeRow[]>>,
+  Holds<Equal<Awaited<ReturnType<typeof headedProjection.toList>>, Awaited<ReturnType<typeof projected.toList>>>>
+];
+
 // A command is sent with its payload, written as a constant is, and completes with its result.
 
 declare const commands: ScryCommands<Commands>;

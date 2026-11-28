@@ -1,11 +1,12 @@
 // What docs/typescript.md shows beyond what main.ts runs, kept here so that the sample's type-check
 // compiles every example the page quotes. Nothing calls these.
 
-import { and, createBatch, createCommands, createScry, eq, httpTransport, resultOf, startsWith } from "scry-client";
+import { and, createBatch, createCommands, createScry, eq, gt, httpTransport, resultOf, startsWith } from "scry-client";
 import { schema, type Commands, type Sources } from "./scry.generated.ts";
 
 declare function token(): string;
 declare function show(text: string): void;
+declare const correlationId: string;
 
 // begin-snippet: typescriptTransport
 const scry = createScry<Sources>(schema, {
@@ -45,6 +46,20 @@ export async function batch(): Promise<void> {
 
   show(`${await count} employees, the first ${(await names)[0]?.name}`);
   // end-snippet
+}
+
+export async function headers(): Promise<string | null> {
+  let trace: string | null = null;
+  // begin-snippet: typescriptHeaders
+  const rows = await scry.order
+    .withHeader("X-Correlation", correlationId)
+    .onResponseHeaders(_ => trace = _.get("X-Trace"))
+    .where(_ => gt(_.amount, 100))
+    .select(_ => ({ id: _.id, amount: _.amount }))
+    .toList();
+  // end-snippet
+  show(`${rows.length} orders`);
+  return trace;
 }
 
 export async function cancel(): Promise<void> {

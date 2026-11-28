@@ -7,7 +7,7 @@ import { refused, ScryStaleClientError, ScryWireError, statusFor } from "../erro
 import { serializeBatch } from "../request/json.ts";
 import { parseJson, type Json } from "../response/json.ts";
 import { isObject, refusalIn } from "../response/refusal.ts";
-import { rebind, type Answer, type Scry, type Transport } from "./query.ts";
+import { rebind, type Answer, type RequestContext, type Scry, type Transport } from "./query.ts";
 
 interface Entry {
   readonly request: QueryRequest;
@@ -33,11 +33,12 @@ export class Batch<S> {
   readonly #entries: Entry[] = [];
   #transport: Transport | undefined;
   #sent = false;
+  #refusal: Error | undefined;
 
   constructor(scry: Scry<S>) {
     this.#scry = rebind(scry, original => {
       this.#transport = original;
-      return { query: request => this.#collect(request) };
+      return { query: (request, context) => this.#collect(request, context) };
     });
   }
 
@@ -52,6 +53,13 @@ export class Batch<S> {
 
     const before = this.#entries.length;
     const answer = run(this.#scry);
+    const refusal = this.#refusal;
+    if (refusal !== undefined) {
+      this.#refusal = undefined;
+      answer.catch(() => {});
+      throw refusal;
+    }
+
     if (this.#entries.length !== before + 1) {
       throw new Error("A batch entry is one query ended by its terminal: toList(), count(), first() and the rest.");
     }
@@ -107,7 +115,15 @@ export class Batch<S> {
     results.forEach((result, index) => settle(entries[index]!, result, answer.stamp, answer.parts));
   }
 
-  #collect(request: QueryRequest): Promise<Answer> {
+  // A batch is one request, so a query's own headers have no request of their own to go on: refused
+  // rather than dropped, as ScryBatch refuses them.
+  #collect(request: QueryRequest, context: RequestContext): Promise<Answer> {
+    if (context.headers !== undefined ||
+        context.onResponseHeaders !== undefined) {
+      this.#refusal = new Error("A query in a batch cannot carry headers of its own: the batch is one request. Send the query alone, or give the transport the header.");
+      return Promise.reject(this.#refusal);
+    }
+
     return new Promise((resolve, reject) => this.#entries.push({ request, resolve, reject }));
   }
 }

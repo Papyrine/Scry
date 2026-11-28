@@ -45,20 +45,23 @@ export function httpTransport(options: HttpOptions): Transport {
     return { ...options.headers };
   }
 
-  async function ask(form: Form, signal: AbortSignal | undefined): Promise<Response> {
-    const configured = await headers();
+  async function ask(form: Form, context: RequestContext): Promise<Response> {
     if (form.kind === "url") {
       const separator = endpoint.includes("?") ? "&" : "?";
-      return send(`${endpoint}${separator}${QueryUrl.Parameter}=${form.query}`, { method: "GET", headers: configured, ...signalled(signal) });
+      return send(`${endpoint}${separator}${QueryUrl.Parameter}=${form.query}`, {
+        method: "GET",
+        headers: written(await headers(), context.headers),
+        ...signalled(context.signal)
+      });
     }
 
-    return post(endpoint, form.body, {}, signal);
+    return post(endpoint, form.body, {}, context.signal, context.headers);
   }
 
-  async function post(url: string, body: string, extra: Record<string, string>, signal: AbortSignal | undefined): Promise<Response> {
+  async function post(url: string, body: string, extra: Record<string, string>, signal: AbortSignal | undefined, query?: Headers): Promise<Response> {
     return send(url, {
       method: "POST",
-      headers: { ...await headers(), ...extra, "Content-Type": json },
+      headers: { ...written(await headers(), query), ...extra, "Content-Type": json },
       body,
       ...signalled(signal)
     });
@@ -153,7 +156,7 @@ export function httpTransport(options: HttpOptions): Transport {
   return {
     async query(_request: QueryRequest, context: RequestContext): Promise<Answer> {
       let form = formFor(context.json, context.sensitive, limit(context));
-      let response = await ask(form, context.signal);
+      let response = await ask(form, context);
       let stamp = learn(response);
 
       // A URL refused before it reached the server carries no budget to learn from, so the query is
@@ -164,7 +167,7 @@ export function httpTransport(options: HttpOptions): Transport {
         if (ceiling !== undefined) {
           ingress = Math.min(ingress, ceiling);
           form = { kind: "body", body: context.json };
-          response = await ask(form, context.signal);
+          response = await ask(form, context);
           stamp = learn(response) ?? stamp;
         }
       }
@@ -175,14 +178,16 @@ export function httpTransport(options: HttpOptions): Transport {
           !response.ok) {
         const text = await response.text();
         if (refusalIn(tryParse(text))?.requiresBody !== true) {
+          context.onResponseHeaders?.(response.headers);
           throw failure(response.status, text, stamp);
         }
 
         form = { kind: "body", body: context.json };
-        response = await ask(form, context.signal);
+        response = await ask(form, context);
         stamp = learn(response) ?? stamp;
       }
 
+      context.onResponseHeaders?.(response.headers);
       return read(response, stamp);
     },
 
@@ -194,7 +199,8 @@ export function httpTransport(options: HttpOptions): Transport {
     async *stream(_request: QueryRequest, context: RequestContext): AsyncIterable<string | StreamLine> {
       const connection = linked(context.signal);
       try {
-        const response = await post(beside("stream"), context.json, {}, connection.signal);
+        const response = await post(beside("stream"), context.json, {}, connection.signal, context.headers);
+        context.onResponseHeaders?.(response.headers);
         const stamp = learn(response);
         if (!response.ok) {
           await refuse(response, stamp);
@@ -224,7 +230,8 @@ export function httpTransport(options: HttpOptions): Transport {
           extra[ScryLive.LastEventIdHeader] = context.lastEventId;
         }
 
-        const response = await post(beside(ScryLive.Route), context.json, extra, connection.signal);
+        const response = await post(beside(ScryLive.Route), context.json, extra, connection.signal, context.headers);
+        context.onResponseHeaders?.(response.headers);
         const stamp = learn(response);
         if (response.status === 404 ||
             response.status === 405) {
@@ -323,6 +330,25 @@ export function httpTransport(options: HttpOptions): Transport {
 
 function notServingCommands(): ScryNotServedError {
   return new ScryNotServedError("This server is not serving commands: ScryOptions.MaxPendingCommands maps the routes, at how many it may have in flight at once.");
+}
+
+// The transport's headers, with a query's own written over any of the same name.
+function written(configured: Record<string, string>, query: Headers | undefined): Record<string, string> {
+  if (query === undefined) {
+    return configured;
+  }
+
+  const headers = { ...configured };
+  query.forEach((value, name) => {
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === name) {
+        delete headers[key];
+      }
+    }
+
+    headers[name] = value;
+  });
+  return headers;
 }
 
 function signalled(signal: AbortSignal | undefined): { signal?: AbortSignal } {

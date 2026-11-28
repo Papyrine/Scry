@@ -38,6 +38,13 @@ export interface RequestContext {
   readonly urlLimit: number;
   /** Ends the request, and any stream it opened. */
   readonly signal?: AbortSignal;
+  /**
+   * Headers this query's request carries beside the transport's own, as `withHeader` and
+   * `withHeaders` wrote them: the same ones on a request sent again as a body.
+   */
+  readonly headers?: Headers;
+  /** Told the headers of the response that answered, a refusal's included, as `onResponseHeaders` reads them. */
+  readonly onResponseHeaders?: (headers: Headers) => void;
 }
 
 /** What a live query's connection is opened with besides. */
@@ -186,6 +193,16 @@ export interface Final<R> {
   liveSingleOrDefault(): LiveQuery<R | null>;
   /** The request a list of the rows sends, without sending it. */
   toRequest(): QueryRequest;
+  /**
+   * Sends a header with this query's request alone, beside the transport's own. Nothing of it enters
+   * the request, so the query is the same bytes with it or without; and whatever a client sends, the
+   * server reads as the client's word, never as an authorization.
+   */
+  withHeader(name: string, value: string): this;
+  /** Writes the headers of this query's request, once per request: once per connection for a live query. */
+  withHeaders(configure: (headers: Headers) => void): this;
+  /** Reads the headers of the response that answers this query, a refusal's included, before it is read. */
+  onResponseHeaders(read: (headers: Headers) => void): this;
 }
 
 /** Rows of a model, before anything reshapes them. */
@@ -355,6 +372,9 @@ interface State {
   readonly sensitive: boolean;
   /** What its rows are once reshaped; until then, the model's. */
   readonly plan: Plan | undefined;
+  /** What writes its request's headers, and what reads its response's, in the order they were added. */
+  readonly configure: readonly ((headers: Headers) => void)[];
+  readonly read: readonly ((headers: Headers) => void)[];
 }
 
 export function createScry<S>(schema: ScrySchema, options: ScryOptions = {}): Scry<S> {
@@ -388,7 +408,9 @@ function sourcesOf<S>(client: Client): Scry<S> {
         stage: "rows",
         group: undefined,
         sensitive: false,
-        plan: undefined
+        plan: undefined,
+        configure: [],
+        read: []
       })
     });
   }
@@ -692,6 +714,47 @@ class Query {
     return this.#combine("Except", other);
   }
 
+  // Headers, which are the transport's and never the request's.
+
+  withHeader(name: string, value: string): Query {
+    return this.withHeaders(_ => _.set(name, value));
+  }
+
+  withHeaders(configure: (headers: Headers) => void): Query {
+    return new Query({ ...this.#state, configure: [...this.#state.configure, configure] });
+  }
+
+  onResponseHeaders(read: (headers: Headers) => void): Query {
+    return new Query({ ...this.#state, read: [...this.#state.read, read] });
+  }
+
+  // What a request is handed for its headers: written once, here, so a request sent again carries the
+  // same ones.
+  #headers(): { headers?: Headers; onResponseHeaders?: (headers: Headers) => void } {
+    const { configure, read } = this.#state;
+    let headers: Headers | undefined;
+    if (configure.length > 0) {
+      headers = new Headers();
+      for (const write of configure) {
+        write(headers);
+      }
+    }
+
+    let onResponseHeaders: ((headers: Headers) => void) | undefined;
+    if (read.length > 0) {
+      onResponseHeaders = received => {
+        for (const reader of read) {
+          reader(received);
+        }
+      };
+    }
+
+    return {
+      ...(headers === undefined ? {} : { headers }),
+      ...(onResponseHeaders === undefined ? {} : { onResponseHeaders })
+    };
+  }
+
   // Terminals.
 
   toRequest(): QueryRequest {
@@ -973,7 +1036,8 @@ class Query {
         json: serializeRequest(prepared.request),
         sensitive: prepared.sensitive || sensitive,
         urlLimit: client.schema.queryUrlLimit,
-        ...signalOf(options)
+        ...signalOf(options),
+        ...this.#headers()
       });
     } catch (error) {
       if (error instanceof ScryRequestError) {
@@ -1033,13 +1097,15 @@ class Query {
     const open = transport.stream.bind(transport);
     const scope = client.scope;
     const signal = options?.signal;
+    const headers = () => this.#headers();
     return {
       async *[Symbol.asyncIterator]() {
         const lines = open(prepared.request, {
           json: serializeRequest(prepared.request),
           sensitive: prepared.sensitive,
           urlLimit: client.schema.queryUrlLimit,
-          ...signalOf(options)
+          ...signalOf(options),
+          ...headers()
         });
         let decoder: Decoder | undefined;
         let closed = false;
@@ -1178,7 +1244,8 @@ class Query {
         sensitive: prepared.sensitive || sensitive,
         urlLimit: client.schema.queryUrlLimit,
         lastEventId,
-        signal
+        signal,
+        ...this.#headers()
       }),
       data => this.#read(parseJson(data), kind, plan),
       client.options.retry ?? backoff);
