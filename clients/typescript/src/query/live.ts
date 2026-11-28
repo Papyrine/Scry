@@ -198,7 +198,8 @@ function worthAskingAgain(error: unknown): boolean {
          (error instanceof DOMException && error.name !== "AbortError");
 }
 
-function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
+/** @internal Resolves after the delay, or as soon as the signal aborts. */
+export function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
   return new Promise(resolve => {
     const timer = setTimeout(done, milliseconds);
     signal.addEventListener("abort", done, { once: true });

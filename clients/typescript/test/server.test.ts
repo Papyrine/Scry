@@ -8,10 +8,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { and, createBatch, createScry, eq, gt, httpTransport, isIn, ne, schemaStatus, startsWith, toUpper } from "../src/index.ts";
+import { and, createBatch, createCommands, createScry, eq, gt, httpTransport, isIn, ne, resultOf, schemaStatus, ScryRequestError, startsWith, toUpper } from "../src/index.ts";
 import { readDescription } from "../src/codegen/cli.ts";
 import { generate } from "../src/codegen/generate.ts";
-import type { Sources } from "./generated/sample-model.ts";
+import type { Commands, Sources } from "./generated/sample-model.ts";
 import * as committed from "./generated/sample-model.ts";
 
 const server = process.env["SCRY_SERVER"];
@@ -164,4 +164,48 @@ test("a live query answers again when what it read is written", { skip, timeout:
   assert.ok(before!.length > 0);
   assert.deepEqual(after!.map(_ => _.id), before!.map(_ => _.id));
   assert.equal(Number(after![0]!.amount), Number(before![0]!.amount) + 1);
+});
+
+test("a command is decided at once, and its result read typed", { skip }, async () => {
+  const scry = await client();
+  const commands = createCommands<Commands>(scry);
+
+  const hired = await commands.send.createEmployee({ name: "Typed Hire", departmentId: 1, status: "FullTime" });
+  const { id } = resultOf(hired);
+  const row = await scry.employee.where(_ => eq(_.id, id)).select(_ => ({ name: _.name })).single();
+
+  assert.equal(hired.status, "Completed");
+  assert.equal(row.name, "Typed Hire");
+});
+
+test("a command the server's validation refuses throws", { skip }, async () => {
+  const commands = createCommands<Commands>(await client());
+
+  await assert.rejects(
+    () => commands.send.createEmployee({ name: "", departmentId: 1, status: "FullTime" }),
+    (error: unknown) => error instanceof ScryRequestError && error.code === "Validation");
+});
+
+test("a slow command goes pending, and its outcome follows", { skip, timeout: 60_000 }, async () => {
+  const scry = await client();
+  const commands = createCommands<Commands>(scry, { wait: 500 });
+  const { id } = await scry.employee.orderBy(_ => _.id).select(_ => ({ id: _.id })).first();
+
+  const renaming = await commands.send.renameEmployee({ id, name: "A slow rename" });
+
+  assert.equal(renaming.status, "Pending");
+  assert.deepEqual(commands.pending.map(_ => ({ command: _.command, keys: _.keys })), [{ command: "RenameEmployee", keys: [id] }]);
+  assert.equal((await renaming.completion).status, "Completed");
+  assert.equal((await scry.employee.where(_ => eq(_.id, id)).select(_ => ({ name: _.name })).single()).name, "A slow rename");
+});
+
+test("what a caller may send, command by command and row by row", { skip }, async () => {
+  const scry = await client();
+  const commands = createCommands<Commands>(scry);
+  await commands.ready;
+  const rows = await scry.employee.select(_ => ({ active: _.active, deletable: _.canDeleteEmployee })).toList();
+
+  assert.equal(commands.can("createEmployee"), true);
+  assert.ok(rows.some(_ => _.deletable === false));
+  assert.ok(rows.every(_ => !_.deletable || !_.active));
 });

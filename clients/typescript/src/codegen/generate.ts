@@ -211,7 +211,7 @@ class Generator {
       this.#declare(payload, `the payload of the command '${command.name}'`);
       lines.push(...docs(`What the ${command.name} command is sent with.`, command.obsolete));
       lines.push(`export interface ${payload} {`);
-      lines.push(...this.#plainMembers(command.name, command.properties));
+      lines.push(...this.#plainMembers(command.name, command.properties, true));
       lines.push("}");
       lines.push("");
 
@@ -221,7 +221,7 @@ class Generator {
         this.#declare(result, `the result of the command '${command.name}'`);
         lines.push(`/** What the ${command.name} command completes with. */`);
         lines.push(`export interface ${result} {`);
-        lines.push(...this.#plainMembers(command.result.name, command.result.properties));
+        lines.push(...this.#plainMembers(command.result.name, command.result.properties, false));
         lines.push("}");
         lines.push("");
       }
@@ -238,13 +238,21 @@ class Generator {
     return lines.join("\n");
   }
 
-  // A payload or a result is a plain object: its lists are arrays, and it names no model.
-  #plainMembers(owner: string, members: readonly ScryMemberInfo[]): string[] {
+  // A payload or a result is a plain object: its lists are arrays, and it names no model. A payload's
+  // nullable value may be left out, as a C# client leaves out one it never set.
+  #plainMembers(owner: string, members: readonly ScryMemberInfo[], payload: boolean): string[] {
     const lines: string[] = [];
     for (const member of members) {
       const display = this.#parse(`${owner}.${member.name}`, member.typeDisplay);
+      let optional = "";
+      if (payload &&
+          display.kind === "value" &&
+          display.nullable) {
+        optional = "?";
+      }
+
       lines.push(...docs(undefined, member.obsolete).map(_ => `  ${_}`));
-      lines.push(`  ${camelCase(member.name)}: ${this.#plainSpelling(`${owner}.${member.name}`, display)};`);
+      lines.push(`  ${camelCase(member.name)}${optional}: ${this.#plainSpelling(`${owner}.${member.name}`, display)};`);
     }
 
     return lines;

@@ -4,6 +4,7 @@
 
 import type {
   AggregateNode,
+  CommandRequest,
   JoinMember,
   Node,
   Path,
@@ -150,6 +151,20 @@ export function serializeBatch(batch: QueryBatchRequest): string {
   return object<QueryBatchRequest>({
     version: integer(batch.version),
     queries: array(batch.queries, serializeRequest)
+  });
+}
+
+/**
+ * A command's request, around its payload already written: a payload's members are the model's, which
+ * the wire vocabulary does not name.
+ */
+export function serializeCommand(request: Omit<CommandRequest, "payload">, payload: string): string {
+  return object<CommandRequest>({
+    version: integer(request.version),
+    command: quote(request.command),
+    id: quote(request.id),
+    payload,
+    stamp: optional(request.stamp, quote)
   });
 }
 

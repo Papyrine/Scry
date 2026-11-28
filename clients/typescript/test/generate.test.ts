@@ -69,6 +69,20 @@ test("a command's payload is described as it travels, camel-cased", () => {
   assert.equal(rename.obsolete, "Shifts are renamed through the rota.");
 });
 
+test("a payload's nullable value may be left out, where a result's is typed as null", () => {
+  const description = described([member("Id", "int")], _ => {
+    _.commands = [{
+      name: "Book",
+      properties: [member("Starts", "global::System.DateOnly?"), member("Nickname", "string", { needsNullDefault: true }), member("Seats", "int")],
+      result: { name: "Booked", properties: [member("Reference", "int?")] }
+    }];
+  });
+  const generated = generate(description, options);
+
+  assert.match(generated, /export interface BookCommand \{\n  starts\?: scry\.DateOnly \| null;\n  nickname: string;\n  seats: number;\n\}/);
+  assert.match(generated, /export interface Booked \{\n  reference: number \| null;\n\}/);
+});
+
 // A description of one source with one member, for the refusals below to vary.
 function described(members: ScryMemberInfo[], change: (description: ScryIntrospection) => void = () => {}): ScryIntrospection {
   const description: ScryIntrospection = {

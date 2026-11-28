@@ -66,8 +66,8 @@ export type NoAttachmentInAQuery = import("./generated/test-model.ts").ContractQ
 
 // The pipeline's grammar, held by the types: what the server would refuse does not compile.
 
-import { eq } from "../src/index.ts";
-import type { Page, Scry } from "../src/index.ts";
+import { eq, resultOf } from "../src/index.ts";
+import type { CommandOutcome, Page, Scry, ScryCommands } from "../src/index.ts";
 
 declare const client: Scry<Sources>;
 
@@ -116,4 +116,32 @@ export type Returns = [
   Holds<Equal<Awaited<ReturnType<typeof projected.toList>>, { region: string; tags: string[]; lines: { sku: string }[]; count: number; department: { name: string } }[]>>,
   Holds<Equal<Awaited<ReturnType<typeof grouped.toList>>, { key: string; total: scry.Decimal }[]>>,
   Holds<Equal<Awaited<ReturnType<typeof joined.toList>>, { employee: string; department: string | null }[]>>
+];
+
+// A command is sent with its payload, written as a constant is, and completes with its result.
+
+declare const commands: ScryCommands<Commands>;
+
+commands.send.createShift({ day: new Date(), name: "Late", perks: [["Parking", "Gym"], "None"] });
+commands.send.renameShift({ id: 1, name: "Night" });
+
+// @ts-expect-error A payload member the command needs is missing.
+commands.send.renameShift({ name: "Night" });
+
+// @ts-expect-error A member the command does not have.
+commands.send.sealContract({ contractId: 1, sealedBy: "me" });
+
+// @ts-expect-error A command the model does not declare.
+commands.send.deleteShift({ id: 1 });
+
+// @ts-expect-error Capabilities are asked by the command's name.
+commands.can("createShifts");
+
+const created = commands.send.createShift({ day: "2026-03-04", name: "Late", perks: [] });
+
+export type Sends = [
+  Holds<Equal<Awaited<typeof created>, CommandOutcome<ShiftCreated>>>,
+  Holds<Equal<ReturnType<typeof resultOf<ShiftCreated>>, ShiftCreated>>,
+  Holds<Equal<Extract<Awaited<typeof created>, { status: "Completed" }>["result"], ShiftCreated>>,
+  Holds<Equal<Extract<Awaited<ReturnType<typeof commands.send.renameShift>>, { status: "Completed" }>["result"], void>>
 ];

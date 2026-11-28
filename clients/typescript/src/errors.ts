@@ -83,6 +83,17 @@ export function refused(status: number, refusal: Refusal, stamp: string | undefi
   return new ScryRequestError(status, refusal.code ?? "Unknown", refusal.error, refusal.requiresBody === true, stamp);
 }
 
+/**
+ * The server maps no route for what was asked: it is not serving live queries, or commands, which are
+ * off until a server says how many it will hold.
+ */
+export class ScryNotServedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ScryNotServedError";
+  }
+}
+
 /** A response this client cannot read: cut short, not the wire's JSON, or not the answer asked for. */
 export class ScryWireError extends Error {
   constructor(message: string) {

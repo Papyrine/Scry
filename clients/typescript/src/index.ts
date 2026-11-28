@@ -9,7 +9,22 @@ export { createBatch, Batch } from "./query/batch.ts";
 export { backoff, LiveQuery } from "./query/live.ts";
 export type { RetryContext, RetryPolicy } from "./query/live.ts";
 export type { HttpOptions } from "./http.ts";
-export { ScryPermissionError, ScryRequestError, ScryStaleClientError, ScryWireError } from "./errors.ts";
+export { createCommands, resultOf, ScryCommandFailedError, ScryCommands } from "./commands/commands.ts";
+export type {
+  CommandOutcome,
+  CommandOutcomeStatus,
+  CommandsOptions,
+  CompletedOutcome,
+  FailedOutcome,
+  FinalOutcome,
+  PendingCommand,
+  PayloadInput,
+  PendingOutcome,
+  SendOptions,
+  Senders,
+  UnknownOutcome
+} from "./commands/commands.ts";
+export { ScryNotServedError, ScryPermissionError, ScryRequestError, ScryStaleClientError, ScryWireError } from "./errors.ts";
 export {
   add,
   and,

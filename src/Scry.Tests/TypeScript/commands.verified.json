@@ -1,0 +1,111 @@
+﻿[
+  {
+    "name": "A command answered at once, with its result",
+    "method": "POST",
+    "path": "/api/query/command",
+    "requestBody": "{\"version\":1,\"command\":\"CreateShift\",\"id\":\"00000000-0000-0000-0000-000000000001\",\"payload\":{\"day\":\"2026-03-04\",\"name\":\"Late \\u003Cshift\\u003E \\u0026 \\u0022night\\u0022 \\u00E9\",\"perks\":[\"Parking, Gym\",\"None\"]}}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"version\":1,\"id\":\"00000000-0000-0000-0000-000000000001\",\"status\":\"Completed\",\"result\":{\"id\":7},\"stamp\":\"{stamp}\"}"
+  },
+  {
+    "name": "A command that failed",
+    "method": "POST",
+    "path": "/api/query/command",
+    "requestBody": "{\"version\":1,\"command\":\"RenameShift\",\"id\":\"00000000-0000-0000-0000-000000000002\",\"payload\":{\"id\":1,\"name\":\"Night\"}}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"version\":1,\"id\":\"00000000-0000-0000-0000-000000000002\",\"status\":\"Failed\",\"error\":\"The rota is locked this week.\",\"stamp\":\"{stamp}\"}"
+  },
+  {
+    "name": "A command refused",
+    "method": "POST",
+    "path": "/api/query/command",
+    "requestBody": "{\"version\":1,\"command\":\"CreateShift\",\"id\":\"00000000-0000-0000-0000-000000000003\",\"payload\":{\"day\":\"2026-03-04\",\"name\":\"Night\",\"perks\":[],\"colour\":\"red\"}}",
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"error\":\"The payload of command \\u0027CreateShift\\u0027 carries \\u0027colour\\u0027, which the command does not have.\",\"code\":\"Validation\"}"
+  },
+  {
+    "name": "A command whose target is not there",
+    "method": "POST",
+    "path": "/api/query/command",
+    "requestBody": "{\"version\":1,\"command\":\"SealContract\",\"id\":\"00000000-0000-0000-0000-000000000004\",\"payload\":{\"contractId\":999}}",
+    "status": 404,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"error\":\"The command\\u0027s target was not found.\",\"code\":\"NotFound\"}"
+  },
+  {
+    "name": "A command going pending, then its outcome",
+    "method": "POST",
+    "path": "/api/query/command",
+    "requestBody": "{\"version\":1,\"command\":\"RenameShift\",\"id\":\"00000000-0000-0000-0000-000000000005\",\"payload\":{\"id\":1,\"name\":\"Slow\"}}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "event: result\ndata: {\"version\":1,\"id\":\"00000000-0000-0000-0000-000000000005\",\"status\":\"Pending\",\"stamp\":\"{stamp}\"}\n\nevent: result\ndata: {\"version\":1,\"id\":\"00000000-0000-0000-0000-000000000005\",\"status\":\"Completed\",\"stamp\":\"{stamp}\"}\n\n"
+  },
+  {
+    "name": "A command asked for again by its id",
+    "method": "GET",
+    "path": "/api/query/command/00000000-0000-0000-0000-000000000005",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"version\":1,\"id\":\"00000000-0000-0000-0000-000000000005\",\"status\":\"Completed\",\"stamp\":\"{stamp}\"}"
+  },
+  {
+    "name": "An id nobody sent",
+    "method": "GET",
+    "path": "/api/query/command/00000000-0000-0000-0000-000000000099",
+    "status": 404,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"error\":\"The command is not one this server holds.\",\"code\":\"NotFound\"}"
+  },
+  {
+    "name": "What a caller may send",
+    "method": "GET",
+    "path": "/api/query/capabilities",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"version\":1,\"commands\":[\"CreateShift\",\"RenameShift\",\"SealContract\"],\"stamp\":\"{stamp}\"}"
+  }
+]

@@ -5,9 +5,10 @@ A TypeScript client for Scry, in progress. What exists so far:
 - the generator, which reads a server's introspection and writes the types a query is written against, reading the description the way the [query explorer](../../docs/explorer.md) does;
 - the query builder, which writes the request a C# client sends for the same query, byte for byte;
 - the HTTP transport, and the reader that turns each answer back into what the query said it returns;
-- streams, batches, and live queries that reconnect.
+- streams, batches, and live queries that reconnect;
+- commands, followed to their outcome, and what a caller may send.
 
-Commands, binary parts and attachments come next.
+Binary parts and attachments come next.
 
 The package is private and unpublished.
 
@@ -67,6 +68,38 @@ A live query is one request answered whenever its answer changes. `live()` answe
 A connection that ends is asked for again naming the last answer held, so an answer that has not moved is not sent again, and the consumer sees a pause rather than an end. The server failing for the moment, a server-side limit on open subscriptions, a 5xx, 408 or 429 from something in between, and a failed connection are all asked again. A rejection, a denial, or a client the server calls stale ends the live query with its error, since asking again would not change the answer. The C# client follows the same rules.
 
 The `retry` option of `createScry` decides how long to wait before asking again. It is told how many attempts have failed since the last answer, how long that has been, and why the last one failed, and it returns milliseconds, or `undefined` to stop. The default, `backoff`, asks at once, then after a second, doubling to thirty, with a fifth either way at random so that clients cut off together do not return together.
+
+## Commands
+
+```ts
+import { createCommands, resultOf } from "scry-client";
+import type { Commands } from "./scry.generated.ts";
+
+const commands = createCommands<Commands>(scry);
+
+const hired = await commands.send.createEmployee({ name: "Ann", departmentId: 1, status: "FullTime" });
+if (hired.status === "Completed") {
+  show(`Hired #${hired.result.id}`);
+}
+```
+
+`createCommands` takes the sources `createScry` made, and `send` holds one function per command the model declares, typed by its payload and its result. A payload is written as a query's constant is, so a date may be a `Date` or its text, and a [Flags] value its names. It travels camel-cased, each value in the JSON type the server binds it from: a `long` and a `decimal` as numbers, every enum by its name. A member the command does not have, or a null it cannot hold, is refused before anything is sent.
+
+What comes back is an outcome:
+
+| `status` | Means |
+| --- | --- |
+| `Completed` | Handled. `result` holds what the handler answered with, read as the model describes it. |
+| `Failed` | Accepted and then not done: the handler refused or failed, or the target was gone by the time the command arrived. `error` is the reason the server showed. |
+| `Pending` | Still being handled when the client stopped waiting. `completion` settles with the outcome, and meanwhile the command is listed in `commands.pending`. |
+| `Unknown` | The connection it was answered on ended, and the server no longer holds its outcome or would not answer for it when asked again. It may have run. |
+
+A refusal is not an outcome. A command the server would not accept (malformed, denied, one too many) never ran, so sending it throws, as a refused query does. Every outcome has a `completion`, which is the outcome itself where it is final and never rejects. `resultOf(outcome)` answers the result of a completed command and throws `ScryCommandFailedError` otherwise.
+
+The server answers at once where it decides a command within its sync window, and otherwise answers pending and streams the outcome on the same response. The client waits `wait` milliseconds (three seconds unless set; `Infinity` waits for the outcome) before answering `Pending`. A pending command's connection that ends first is asked for again by the command's id, under the `retry` policy live queries use. `commands.pending` lists each command from going pending until its outcome has been seen: a completed one leaves after `completedLinger` milliseconds (eight seconds unless set), and a failed or unknown one stays until `clearFinished()`, since it says something somebody should read. `onPendingChanged` says when the list moves. `close()` stops following, and each command still followed ends `Unknown`; the server finishes what it accepted either way.
+
+`commands.can("createEmployee")` says whether this caller may send the command at all. It is `false` until the server has answered, which the first call starts; `ready` settles once it has, and `onCapabilitiesChanged` says when the answer moves. A denial asks again. Each targeted command also adds a `can{Command}` member to its target, decided on the server from the command's policy, which a query reads as it reads any member: `scry.employee.select(_ => ({ name: _.name, deletable: _.canDeleteEmployee }))`. Both are advisory: the server decides again on every command.
+
 
 ## Writing a query
 
@@ -133,6 +166,8 @@ Beside them: every enum the model names (a [Flags] one as `Flags`), `Sources` an
 | `T?` | `T \| null` |
 
 Introspection does not say whether a `string` or `byte[]` member may be null, so neither is typed as nullable, as the C# client's generated models do not mark them either.
+
+Per command, `{Command}Command`, its payload, in which a nullable value may be left out, and the class its result is, by the server's name for it.
 
 
 ## Developing

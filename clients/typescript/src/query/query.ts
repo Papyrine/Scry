@@ -75,6 +75,15 @@ export interface Transport {
   stream?(request: QueryRequest, context: RequestContext): AsyncIterable<string>;
   /** A live query's events, for one connection: until the server ends it or the signal aborts. */
   subscribe?(request: QueryRequest, context: LiveContext): AsyncIterable<LiveEvent>;
+  /**
+   * A serialized CommandRequest, answered with its receipts: the outcome where the server decided it at
+   * once, and otherwise the pending receipt, then the outcome. Ends early where the connection did.
+   */
+  command?(json: string, signal: AbortSignal): AsyncIterable<Answer>;
+  /** A command already sent, asked for again by its id, answered as `command` is. */
+  receipt?(id: string, signal: AbortSignal): AsyncIterable<Answer>;
+  /** The commands this caller may send, or nothing where the server serves none. */
+  capabilities?(signal?: AbortSignal): Promise<Answer | undefined>;
 }
 
 export interface ScryOptions {
@@ -247,6 +256,24 @@ class Client {
 }
 
 const clients = new WeakMap<object, Client>();
+
+/** @internal What commands share with the client a set of sources was made by. */
+export interface ClientState {
+  readonly schema: ScrySchema;
+  readonly options: ScryOptions;
+  readonly scope: Scope;
+  observe(stamp: string | undefined): void;
+}
+
+/** @internal */
+export function clientOf(scry: object): ClientState {
+  const client = clients.get(scry);
+  if (client === undefined) {
+    throw new Error("Not a client createScry made.");
+  }
+
+  return client;
+}
 
 /** The schema stamps of a client and of the server it last heard from, and whether they differ. */
 export function schemaStatus(scry: object): { readonly client: string; readonly server: string | undefined; readonly stale: boolean } {

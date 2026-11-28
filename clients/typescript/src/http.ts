@@ -2,11 +2,12 @@
 // reads nothing sensitive, which is what lets a cache between here and the server keep the answer, and
 // as a body otherwise. What the server says about itself on every response, its schema stamp and its
 // URL budget, is read off whichever response says it. Beside the query endpoint MapScry maps
-// `…/batch`, `…/stream` (newline-delimited JSON) and `…/subscribe` (server-sent events).
+// `…/batch`, `…/stream` (newline-delimited JSON) and `…/subscribe` (server-sent events), and, where
+// commands are on, `…/command`, `…/command/{id}` and `…/capabilities`.
 
-import { QueryUrl, ScryBinary, ScryLive, ScryStream, WireFormat } from "./wire.ts";
+import { QueryUrl, ScryBinary, ScryCommandProtocol, ScryLive, ScryStream, WireFormat } from "./wire.ts";
 import type { QueryRequest } from "./wire.ts";
-import { refused, ScryRequestError, ScryWireError } from "./errors.ts";
+import { refused, ScryNotServedError, ScryRequestError, ScryWireError, statusFor } from "./errors.ts";
 import { formFor, type Form } from "./request/url.ts";
 import { parseJson } from "./response/json.ts";
 import { refusalIn } from "./response/refusal.ts";
@@ -22,6 +23,9 @@ export interface HttpOptions {
 }
 
 const json = "application/json; charset=utf-8";
+
+// A command is answered as JSON where the server decided it at once, and as events where it did not.
+const receiptTypes = `application/json, ${ScryLive.ContentType}`;
 
 export function httpTransport(options: HttpOptions): Transport {
   const send = options.fetch ?? globalThis.fetch;
@@ -76,6 +80,59 @@ export function httpTransport(options: HttpOptions): Transport {
 
   async function refuse(response: Response, stamp: string | undefined): Promise<never> {
     throw failure(response.status, await response.text(), stamp);
+  }
+
+  async function get(url: string, accept: string, signal: AbortSignal | undefined): Promise<Response> {
+    return send(url, { method: "GET", headers: { ...await headers(), Accept: accept }, ...signalled(signal) });
+  }
+
+  // A command's receipts, however they were answered: one as JSON, or a stream of them as events,
+  // framed as a live query's answers are and ended by the outcome, by an end the server sent to bound
+  // the stream's life, or cut.
+  async function* receipts(response: Response, bareRefusalIsNotServing: boolean, signal: AbortSignal): AsyncIterable<Answer> {
+    const stamp = learn(response);
+    if (!response.ok) {
+      const text = await response.text();
+
+      // No such route, and no word from the endpoint: the server maps none, since commands are off. A
+      // 404 with the endpoint's own body is about the target, not the route.
+      if (bareRefusalIsNotServing &&
+          (response.status === 404 || response.status === 405) &&
+          (refusalIn(tryParse(text))?.error ?? "").length === 0) {
+        throw notServingCommands();
+      }
+
+      throw failure(response.status, text, stamp);
+    }
+
+    const type = mediaType(response);
+    if (type === "application/json") {
+      yield answered(await response.text(), stamp);
+      return;
+    }
+
+    // A success that is neither is somebody else's answer: a single-page app's fallback route serving
+    // its index page for a path the server does not map, usually.
+    if (type !== ScryLive.ContentType) {
+      throw notServingCommands();
+    }
+
+    for await (const event of events(lines(response, signal))) {
+      if (event.event === ScryLive.Result) {
+        yield answered(event.data, stamp);
+        continue;
+      }
+
+      if (event.event === ScryLive.Error) {
+        throw failure(statusFor(refusalIn(tryParse(event.data))?.code), event.data, stamp);
+      }
+
+      if (event.event === ScryLive.End) {
+        return;
+      }
+
+      // A heartbeat, or an event from a server newer than this client.
+    }
   }
 
   return {
@@ -163,7 +220,7 @@ export function httpTransport(options: HttpOptions): Transport {
         const stamp = learn(response);
         if (response.status === 404 ||
             response.status === 405) {
-          throw new Error("This server is not serving live queries: ScryOptions.MaxSubscriptions maps the route, at how many it may hold open at once.");
+          throw new ScryNotServedError("This server is not serving live queries: ScryOptions.MaxSubscriptions maps the route, at how many it may hold open at once.");
         }
 
         if (!response.ok) {
@@ -171,15 +228,61 @@ export function httpTransport(options: HttpOptions): Transport {
         }
 
         if (mediaType(response) !== ScryLive.ContentType) {
-          throw new Error("This server is not serving live queries: the route did not answer with an event stream.");
+          throw new ScryNotServedError("This server is not serving live queries: the route did not answer with an event stream.");
         }
 
         yield* events(lines(response, connection.signal));
       } finally {
         connection.abort();
       }
+    },
+
+    async *command(body: string, signal: AbortSignal): AsyncIterable<Answer> {
+      const connection = linked(signal);
+      try {
+        const response = await post(beside(ScryCommandProtocol.Route), body, { Accept: receiptTypes }, connection.signal);
+        yield* receipts(response, true, connection.signal);
+      } finally {
+        connection.abort();
+      }
+    },
+
+    async *receipt(id: string, signal: AbortSignal): AsyncIterable<Answer> {
+      const connection = linked(signal);
+      try {
+        const response = await get(beside(`${ScryCommandProtocol.Route}/${encodeURIComponent(id)}`), receiptTypes, connection.signal);
+        yield* receipts(response, false, connection.signal);
+      } finally {
+        connection.abort();
+      }
+    },
+
+    async capabilities(signal?: AbortSignal): Promise<Answer | undefined> {
+      const response = await get(beside(ScryCommandProtocol.CapabilitiesRoute), "application/json", signal);
+      const stamp = learn(response);
+
+      // No route: commands are off, and there is nothing this caller may send.
+      if (response.status === 404 ||
+          response.status === 405) {
+        return undefined;
+      }
+
+      const text = await response.text();
+      if (!response.ok) {
+        throw failure(response.status, text, stamp);
+      }
+
+      if (mediaType(response) !== "application/json") {
+        return undefined;
+      }
+
+      return answered(text, stamp);
     }
   };
+}
+
+function notServingCommands(): ScryNotServedError {
+  return new ScryNotServedError("This server is not serving commands: ScryOptions.MaxPendingCommands maps the routes, at how many it may have in flight at once.");
 }
 
 function signalled(signal: AbortSignal | undefined): { signal?: AbortSignal } {
