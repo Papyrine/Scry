@@ -21,7 +21,8 @@ const server = valueOf("--server") ?? "http://localhost:5000";
 // begin-snippet: typescriptClientSetup
 const scry = createScry<Sources>(schema, {
   transport: httpTransport({ endpoint: `${server}/api/query` }),
-  onSchemaStale: _ => console.warn(`Generated against ${_.client}, and the server is on ${_.server}: run npm run generate.`)
+  onSchemaStale: _ =>
+      console.warn(`Generated against ${_.client}, and the server is on ${_.server}: run npm run generate.`)
 });
 const commands = createCommands<Commands>(scry);
 // end-snippet
@@ -83,7 +84,12 @@ async function showActiveEmployees(): Promise<void> {
   const rows = await scry.employee
     .where(_ => _.active)
     .orderBy(_ => _.name)
-    .select(_ => ({ name: _.name, status: _.status, manager: _.manager.name, department: _.department.name }))
+    .select(_ =>
+        ({
+          name: _.name,
+          status: _.status,
+          manager: _.manager.name,
+          department: _.department.name }))
     .toList();
 
   writeTable(
@@ -98,7 +104,11 @@ async function showActiveEmployees(): Promise<void> {
 async function showRegions(): Promise<void> {
   const rows = await scry.order
     .groupBy(_ => _.region)
-    .select(group => ({ region: group.key, total: group.sum(_ => _.amount), count: group.count() }))
+    .select(group =>
+        ({
+          region: group.key,
+          total: group.sum(_ => _.amount),
+          count: group.count() }))
     .toList();
 
   writeTable(
@@ -132,7 +142,9 @@ async function watchOrders(): Promise<void> {
     const stop = orders.subscribe(
       answer => {
         console.log(new Date().toLocaleTimeString());
-        writeTable(["Id", "Region", "Amount"], answer.map(_ => [String(_.id), _.region, _.amount]));
+        writeTable(
+            ["Id", "Region", "Amount"],
+            answer.map(_ => [String(_.id), _.region, _.amount]));
       },
       error => {
         console.error(`The live query ended: ${(error as Error).message}`);
@@ -160,7 +172,9 @@ async function readOrders(): Promise<void> {
 
   for await (const answer of orders) {
     console.log(new Date().toLocaleTimeString());
-    writeTable(["Id", "Region", "Amount"], answer.map(_ => [String(_.id), _.region, _.amount]));
+    writeTable(
+        ["Id", "Region", "Amount"],
+        answer.map(_ => [String(_.id), _.region, _.amount]));
   }
 }
 // end-snippet
@@ -177,7 +191,9 @@ async function showPagesByOffset(): Promise<void> {
       .page(size);
 
     console.log(`Page ${index + 1}, by offset`);
-    writeTable(["Name", "Status"], page.items.map(_ => [_.name, _.status]));
+    writeTable(
+        ["Name", "Status"],
+        page.items.map(_ => [_.name, _.status]));
     if (!page.hasMore) {
       return;
     }
@@ -197,7 +213,9 @@ async function showPagesByCursor(): Promise<void> {
       .page(2, cursor);
 
     console.log(`Page ${number}, by cursor`);
-    writeTable(["Name", "Status"], page.items.map(_ => [_.name, _.status]));
+    writeTable(
+        ["Name", "Status"],
+        page.items.map(_ => [_.name, _.status]));
     if (!page.hasMore) {
       return;
     }
@@ -269,8 +287,12 @@ function valueOf(name: string): string | undefined {
 
 // Nothing to do with Scry: enough column alignment to make the rows readable in a terminal.
 function writeTable(headers: readonly string[], rows: readonly (readonly string[])[]): void {
-  const widths = headers.map((header, column) => Math.max(header.length, ...rows.map(_ => _[column]!.length)));
-  const line = (cells: readonly string[]) => cells.map((cell, column) => cell.padEnd(widths[column]!)).join("  ");
+  const widths = headers.map((header, column) =>
+      Math.max(header.length, ...rows.map(_ => _[column]!.length)));
+  const line = (cells: readonly string[]) =>
+      cells.map((cell, column) =>
+          cell.padEnd(widths[column]!))
+          .join("  ");
   console.log(line(headers));
   console.log(line(widths.map(_ => "-".repeat(_))));
   for (const row of rows) {

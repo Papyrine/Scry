@@ -31,7 +31,11 @@ export async function where(): Promise<void> {
 
 export async function stream(): Promise<void> {
   // begin-snippet: typescriptStream
-  for await (const order of scry.order.orderBy(_ => _.id).select(_ => ({ id: _.id, amount: _.amount })).stream()) {
+  for await (const order of
+      scry
+          .order
+          .orderBy(_ => _.id)
+          .select(_ => ({ id: _.id, amount: _.amount })).stream()) {
     show(`${order.id}: ${order.amount}`);
   }
   // end-snippet
@@ -41,7 +45,11 @@ export async function batch(): Promise<void> {
   // begin-snippet: typescriptBatch
   const batch = createBatch(scry);
   const count = batch.add(_ => _.employee.count());
-  const names = batch.add(_ => _.employee.orderBy(_ => _.name).select(_ => ({ name: _.name })).toList());
+  const names =
+      batch
+          .add(_ => _.employee.orderBy(_ => _.name)
+              .select(_ => ({ name: _.name }))
+              .toList());
   await batch.send();
 
   show(`${await count} employees, the first ${(await names)[0]?.name}`);
@@ -65,8 +73,16 @@ export async function headers(): Promise<string | null> {
 export async function cancel(): Promise<void> {
   // begin-snippet: typescriptCancel
   const signal = AbortSignal.timeout(5_000);
-  const active = await scry.employee.count(_ => _.active, { signal });
-  const first = await scry.employee.orderBy(_ => _.name).select(_ => ({ name: _.name })).page(20, { signal });
+  const active =
+      await scry
+          .employee
+          .count(_ => _.active, { signal });
+  const first =
+      await scry
+          .employee
+          .orderBy(_ => _.name)
+          .select(_ => ({ name: _.name }))
+          .page(20, { signal });
   // end-snippet
   show(`${active} active, the first page starting at ${first.items[0]?.name}`);
 }
@@ -90,12 +106,16 @@ export async function hire(): Promise<void> {
     return;
   }
 
-  const hired = await commands.send.createEmployee({ name: "Ann", departmentId: 1, status: "FullTime" });
-  const { id } = resultOf(await hired.completion);
-  const deletable = await scry.employee
-    .where(_ => eq(_.id, id))
-    .select(_ => ({ name: _.name, deletable: _.canDeleteEmployee }))
-    .single();
+  const hired =
+      await commands
+          .send
+          .createEmployee({name: "Ann", departmentId: 1, status: "FullTime"});
+  const {id} = resultOf(await hired.completion);
+  const deletable =
+      await scry.employee
+          .where(_ => eq(_.id, id))
+          .select(_ => ({name: _.name, deletable: _.canDeleteEmployee}))
+          .single();
   // end-snippet
   show(JSON.stringify(deletable));
 }
