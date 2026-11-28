@@ -41,6 +41,48 @@ export class ScryStaleClientError extends Error {
   }
 }
 
+/** What the server refused with: its message, its code, and whether a body would be answered. */
+export interface Refusal {
+  readonly error: string;
+  readonly code?: ScryErrorCode;
+  readonly requiresBody?: boolean;
+}
+
+/**
+ * The status an answer with no status line of its own (a stream's error marker, a batch's entry)
+ * would have carried, as ResponseFailure.Status decides it on the .NET side.
+ */
+export function statusFor(code: ScryErrorCode | undefined): number {
+  switch (code) {
+    case "WireFormat":
+    case "Validation":
+    case "StaleClient":
+      return 400;
+    case "Forbidden":
+      return 403;
+    case "UnsupportedMedia":
+      return 415;
+    case "SubscriptionLimit":
+    case "CommandLimit":
+      return 503;
+    case "NotFound":
+      return 404;
+    case "PayloadTooLarge":
+      return 413;
+    default:
+      return 500;
+  }
+}
+
+/** The error a refusal surfaces as, however it arrived. */
+export function refused(status: number, refusal: Refusal, stamp: string | undefined): Error {
+  if (refusal.code === "Forbidden") {
+    return new ScryPermissionError(status, refusal.error, stamp);
+  }
+
+  return new ScryRequestError(status, refusal.code ?? "Unknown", refusal.error, refusal.requiresBody === true, stamp);
+}
+
 /** A response this client cannot read: cut short, not the wire's JSON, or not the answer asked for. */
 export class ScryWireError extends Error {
   constructor(message: string) {

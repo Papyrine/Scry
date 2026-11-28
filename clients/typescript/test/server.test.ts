@@ -8,7 +8,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { and, createScry, eq, gt, httpTransport, isIn, ne, schemaStatus, startsWith, toUpper } from "../src/index.ts";
+import { and, createBatch, createScry, eq, gt, httpTransport, isIn, ne, schemaStatus, startsWith, toUpper } from "../src/index.ts";
 import { readDescription } from "../src/codegen/cli.ts";
 import { generate } from "../src/codegen/generate.ts";
 import type { Sources } from "./generated/sample-model.ts";
@@ -120,4 +120,48 @@ test("a client generated against another model hears of it once", { skip }, asyn
 
   assert.equal(told.length, 1);
   assert.equal(schemaStatus(scry).stale, true);
+});
+
+test("a stream's rows are the rows the same query lists", { skip }, async () => {
+  const scry = await client();
+  const listed = await scry.employee.orderBy(_ => _.id).select(_ => ({ id: _.id, name: _.name })).toList();
+  const streamed = [];
+  for await (const row of scry.employee.orderBy(_ => _.id).select(_ => ({ id: _.id, name: _.name })).stream()) {
+    streamed.push(row);
+  }
+
+  assert.deepEqual(streamed, listed);
+});
+
+test("a batch answers each of its queries as it would have been answered alone", { skip }, async () => {
+  const scry = await client();
+  const batch = createBatch(scry);
+  const count = batch.add(_ => _.employee.count());
+  const names = batch.add(_ => _.employee.orderBy(_ => _.id).select(_ => ({ name: _.name })).toList());
+  methods.length = 0;
+  await batch.send();
+
+  assert.deepEqual(methods, ["POST"]);
+  assert.equal(await count, await scry.employee.count());
+  assert.deepEqual(await names, await scry.employee.orderBy(_ => _.id).select(_ => ({ name: _.name })).toList());
+});
+
+test("a live query answers again when what it read is written", { skip, timeout: 60_000 }, async () => {
+  const scry = await client();
+  const answers = [];
+  for await (const answer of scry.order.orderBy(_ => _.id).select(_ => ({ id: _.id, amount: _.amount })).live()) {
+    answers.push(answer);
+    if (answers.length === 1) {
+      const written = await fetch(`${server}/api/orders/reprice-bulk`, { method: "POST" });
+      assert.equal(written.status, 204);
+      continue;
+    }
+
+    break;
+  }
+
+  const [before, after] = answers;
+  assert.ok(before!.length > 0);
+  assert.deepEqual(after!.map(_ => _.id), before!.map(_ => _.id));
+  assert.equal(Number(after![0]!.amount), Number(before![0]!.amount) + 1);
 });

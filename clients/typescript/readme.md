@@ -4,9 +4,10 @@ A TypeScript client for Scry, in progress. What exists so far:
 
 - the generator, which reads a server's introspection and writes the types a query is written against, reading the description the way the [query explorer](../../docs/explorer.md) does;
 - the query builder, which writes the request a C# client sends for the same query, byte for byte;
-- the HTTP transport, and the reader that turns each answer back into what the query said it returns.
+- the HTTP transport, and the reader that turns each answer back into what the query said it returns;
+- streams, batches, and live queries that reconnect.
 
-Streams, live queries, commands, binary parts and attachments come next.
+Commands, binary parts and attachments come next.
 
 The package is private and unpublished.
 
@@ -31,6 +32,41 @@ Each answer is read by a plan the query builds alongside its projection, so ever
 
 A refusal throws `ScryRequestError` with the server's status, `code` and message; `ScryPermissionError` and `ScryStaleClientError` are told apart. A body cut off part way, or an answer of another kind than the terminal asked for, throws `ScryWireError` rather than returning a short answer. `schemaStatus(scry)` says which stamps the client and the server are on.
 
+
+
+## Streams, batches and live queries
+
+```ts
+for await (const row of scry.order.orderBy(_ => _.id).select(_ => ({ id: _.id, amount: _.amount })).stream()) {
+  // Each row as it arrives.
+}
+```
+
+`stream()` reads the rows a line at a time as the server writes them. A failure after the first row throws the error its status would have been, and a stream cut off before the server's closing marker throws `ScryWireError`, so a short read is never taken for the whole answer. Leaving the loop early closes the connection. A projection of binary members streams as binary parts, which this client does not read yet: it refuses such an answer rather than misreading it.
+
+```ts
+const batch = createBatch(scry);
+const count = batch.add(_ => _.employee.count());
+const names = batch.add(_ => _.employee.select(_ => ({ name: _.name })).toList());
+await batch.send();
+```
+
+A batch sends its queries as one request. Each entry is answered as it would have been alone, so one refused entry rejects its own promise and the others resolve. A batch is sent once, and each entry is one query ended by its terminal.
+
+```ts
+const totals = scry.order.groupBy(_ => _.region).select(g => ({ region: g.key, total: g.sum(_ => _.amount) })).live();
+for await (const answer of totals) {
+  // The whole current answer, each time it changes.
+}
+
+const stop = scry.order.liveCount().subscribe(count => show(count), error => fail(error));
+```
+
+A live query is one request answered whenever its answer changes. `live()` answers with the rows, and `liveCount`, `liveLongCount`, `liveAny`, `liveFirstOrDefault` and `liveSingleOrDefault` with the scalar. A live query is an `AsyncIterable` that runs until the loop leaves it, and `subscribe` calls back until the function it returns is called.
+
+A connection that ends is asked for again naming the last answer held, so an answer that has not moved is not sent again, and the consumer sees a pause rather than an end. The server failing for the moment, a server-side limit on open subscriptions, a 5xx, 408 or 429 from something in between, and a failed connection are all asked again. A rejection, a denial, or a client the server calls stale ends the live query with its error, since asking again would not change the answer. The C# client follows the same rules.
+
+The `retry` option of `createScry` decides how long to wait before asking again. It is told how many attempts have failed since the last answer, how long that has been, and why the last one failed, and it returns milliseconds, or `undefined` to stop. The default, `backoff`, asks at once, then after a second, doubling to thirty, with a fifth either way at random so that clients cut off together do not return together.
 
 ## Writing a query
 

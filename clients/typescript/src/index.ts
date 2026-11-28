@@ -3,8 +3,11 @@
 
 export * from "./runtime/index.ts";
 export { createScry, schemaStatus } from "./query/query.ts";
-export type { Answer, Final, Grouped, Ordered, Page, Projected, RequestContext, Rows, Scry, ScryOptions, Transport } from "./query/query.ts";
+export type { Answer, Final, Grouped, LiveContext, LiveEvent, Ordered, Page, Projected, RequestContext, Rows, Scry, ScryOptions, Transport } from "./query/query.ts";
 export { httpTransport } from "./http.ts";
+export { createBatch, Batch } from "./query/batch.ts";
+export { backoff, LiveQuery } from "./query/live.ts";
+export type { RetryContext, RetryPolicy } from "./query/live.ts";
 export type { HttpOptions } from "./http.ts";
 export { ScryPermissionError, ScryRequestError, ScryStaleClientError, ScryWireError } from "./errors.ts";
 export {

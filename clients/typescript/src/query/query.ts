@@ -18,9 +18,12 @@ import type { Scalar, ScrySchema, ValueInfo } from "../runtime/schema.ts";
 import { serializeRequest } from "../request/json.ts";
 import { parseJson, RawNumber, type Json } from "../response/json.ts";
 import { Decoder, valuePlan, type Plan, type PlanMember } from "../response/decode.ts";
-import { ScryRequestError, ScryStaleClientError, ScryWireError } from "../errors.ts";
+import { refused, ScryRequestError, ScryStaleClientError, ScryWireError, statusFor } from "../errors.ts";
+import { isObject, refusalIn } from "../response/refusal.ts";
+import { backoff, LiveQuery, type RetryPolicy } from "./live.ts";
 import type * as scry from "../runtime/types.ts";
 import { requiredVersion } from "../request/version.ts";
+import { ScryStream } from "../wire.ts";
 import { Collection, Expression, Grouping, Scope, groupKey, row, type GroupKey, type Side } from "./expression.ts";
 import { projectionOf, wireName } from "./projection.ts";
 
@@ -32,17 +35,46 @@ export interface RequestContext {
   readonly sensitive: boolean;
   /** The longest URL the description says the server wants, until a response says otherwise. */
   readonly urlLimit: number;
+  /** Ends the request, and any stream it opened. */
+  readonly signal?: AbortSignal;
 }
 
-/** A response's JSON as the server wrote it, and the schema stamp a header carried with it. */
+/** What a live query's connection is opened with besides. */
+export interface LiveContext extends RequestContext {
+  /** The id of the last answer held, which the server does not send again if it is still the answer. */
+  readonly lastEventId: string | undefined;
+  readonly signal: AbortSignal;
+}
+
+/** One server-sent event of a live query: result, unchanged, ping, error or end. */
+export interface LiveEvent {
+  readonly event: string;
+  readonly id?: string;
+  readonly data: string;
+}
+
+/**
+ * A response's JSON as the server wrote it, or already read (as a batch's entry is), and the schema
+ * stamp a header carried with it.
+ */
 export interface Answer {
-  readonly text: string;
+  readonly text?: string;
+  readonly json?: Json;
   readonly stamp?: string;
 }
 
-/** Sends a request and answers with the server's response. */
+/**
+ * Sends a request and answers with the server's response. A transport that cannot batch, stream or
+ * hold a query open leaves those out, and a query asking for one is refused saying so.
+ */
 export interface Transport {
   query(request: QueryRequest, context: RequestContext): Promise<Answer>;
+  /** A serialized QueryBatchRequest, answered with the batch's response. */
+  batch?(json: string, signal?: AbortSignal): Promise<Answer>;
+  /** A streamed answer, a line of JSON at a time: its opening marker, its rows, and its closing one. */
+  stream?(request: QueryRequest, context: RequestContext): AsyncIterable<string>;
+  /** A live query's events, for one connection: until the server ends it or the signal aborts. */
+  subscribe?(request: QueryRequest, context: LiveContext): AsyncIterable<LiveEvent>;
 }
 
 export interface ScryOptions {
@@ -60,6 +92,8 @@ export interface ScryOptions {
    * generated from: time to generate again, or to reload a deployed app.
    */
   readonly onSchemaStale?: (stamps: { readonly client: string; readonly server: string }) => void;
+  /** When a live query asks again after its connection ends. By default at once, then backing off to thirty seconds. */
+  readonly retry?: RetryPolicy;
 }
 
 /** A page of rows, and what resumes after it. */
@@ -91,6 +125,15 @@ export interface Final<R> {
   longCount(): Promise<bigint>;
   any(): Promise<boolean>;
   page(size?: number, cursor?: string): Promise<Page<R>>;
+  /** The rows as they arrive, rather than once the last of them has. */
+  stream(): AsyncIterable<R>;
+  /** The rows, now and again whenever they change: each answer the whole current result. */
+  live(): LiveQuery<R[]>;
+  liveCount(): LiveQuery<number>;
+  liveLongCount(): LiveQuery<bigint>;
+  liveAny(): LiveQuery<boolean>;
+  liveFirstOrDefault(): LiveQuery<R | null>;
+  liveSingleOrDefault(): LiveQuery<R | null>;
   /** The request a list of the rows sends, without sending it. */
   toRequest(): QueryRequest;
 }
@@ -131,6 +174,11 @@ export interface Rows<Q, R, S> extends Final<R> {
   minBy(key: (_: Q) => scry.Expr<unknown>): Promise<R>;
   /** The row with the largest key. */
   maxBy(key: (_: Q) => scry.Expr<unknown>): Promise<R>;
+  liveCount(predicate?: (_: Q) => Condition): LiveQuery<number>;
+  liveLongCount(predicate?: (_: Q) => Condition): LiveQuery<bigint>;
+  liveAny(predicate?: (_: Q) => Condition): LiveQuery<boolean>;
+  liveFirstOrDefault(predicate?: (_: Q) => Condition): LiveQuery<R | null>;
+  liveSingleOrDefault(predicate?: (_: Q) => Condition): LiveQuery<R | null>;
 }
 
 /** Rows straight after an ordering, which a further ordering refines. */
@@ -166,17 +214,24 @@ class Client {
   readonly scope: Scope;
   serverStamp: string | undefined;
   #told = false;
+  readonly #parent: Client | undefined;
 
-  constructor(schema: ScrySchema, options: ScryOptions) {
+  constructor(schema: ScrySchema, options: ScryOptions, parent?: Client) {
     this.schema = schema;
     this.options = options;
     this.scope = new Scope(schema);
+    this.#parent = parent;
   }
 
   // Told once rather than per response: a chatty app would otherwise be told on every query for as
   // long as the drift lasts.
   observe(stamp: string | undefined): void {
     if (stamp === undefined) {
+      return;
+    }
+
+    if (this.#parent !== undefined) {
+      this.#parent.observe(stamp);
       return;
     }
 
@@ -221,7 +276,24 @@ interface State {
 }
 
 export function createScry<S>(schema: ScrySchema, options: ScryOptions = {}): Scry<S> {
-  const client = new Client(schema, options);
+  return sourcesOf(new Client(schema, options));
+}
+
+/**
+ * @internal The same client's sources, sending through another transport: what a batch collects its
+ * queries with. Drift it hears of is told as the client's own.
+ */
+export function rebind<S>(scry: Scry<S>, transport: (original: Transport | undefined) => Transport): Scry<S> {
+  const client = clients.get(scry);
+  if (client === undefined) {
+    throw new Error("Not a client createScry made.");
+  }
+
+  return sourcesOf(new Client(client.schema, { ...client.options, transport: transport(client.options.transport) }, client));
+}
+
+function sourcesOf<S>(client: Client): Scry<S> {
+  const { schema } = client;
   const sources: Record<string, unknown> = {};
   for (const [name, source] of Object.entries(schema.sources)) {
     Object.defineProperty(sources, name, {
@@ -723,11 +795,22 @@ class Query {
     }
 
     client.observe(answer.stamp);
-    const envelope = parseJson(answer.text);
-    if (typeof envelope !== "object" ||
-        envelope === null ||
-        Array.isArray(envelope) ||
-        envelope instanceof RawNumber ||
+    let json = answer.json;
+    if (json === undefined) {
+      if (answer.text === undefined) {
+        throw new ScryWireError("The transport answered with nothing.");
+      }
+
+      json = parseJson(answer.text);
+    }
+
+    return this.#read(json, kind, payload(prepared.rows));
+  }
+
+  // A response envelope's payload, read as the query's terminal answers it.
+  #read(envelope: Json, kind: ResultKind, plan: Plan): unknown {
+    const { client } = this.#state;
+    if (!isObject(envelope) ||
         !Object.hasOwn(envelope, "payload")) {
       throw new ScryWireError("The response is not a query's answer.");
     }
@@ -741,8 +824,167 @@ class Query {
       client.observe(stamp);
     }
 
-    return new Decoder(client.scope, aliases(envelope["enumAliases"])).decode(envelope["payload"]!, payload(prepared.rows));
+    return new Decoder(client.scope, aliases(envelope["enumAliases"])).decode(envelope["payload"]!, plan);
   }
+
+  // Streaming.
+
+  /** The rows as they arrive, rather than once the last of them has. */
+  stream(): AsyncIterable<unknown> {
+    const { client } = this.#state;
+    const transport = client.options.transport;
+    if (transport?.stream === undefined) {
+      throw new Error("This client's transport does not stream: httpTransport() does.");
+    }
+
+    const prepared = this.#prepare([]);
+    const open = transport.stream.bind(transport);
+    const scope = client.scope;
+    return {
+      async *[Symbol.asyncIterator]() {
+        const lines = open(prepared.request, {
+          json: serializeRequest(prepared.request),
+          sensitive: prepared.sensitive,
+          urlLimit: client.schema.queryUrlLimit
+        });
+        let decoder: Decoder | undefined;
+        let closed = false;
+        for await (const line of lines) {
+          if (line.length === 0) {
+            continue;
+          }
+
+          const json = parseJson(line);
+          // A marker's first member says so, and no row's member can start with '$'.
+          if (isObject(json) &&
+              Object.keys(json)[0] === ScryStream.MarkerProperty) {
+            const marker = json[ScryStream.MarkerProperty];
+            if (marker === ScryStream.Begin) {
+              if (typeof json["stamp"] === "string") {
+                client.observe(json["stamp"]);
+              }
+
+              decoder = new Decoder(scope, aliases(json["enumAliases"]));
+              continue;
+            }
+
+            if (marker === ScryStream.End) {
+              closed = true;
+              break;
+            }
+
+            if (marker === ScryStream.Error) {
+              throw streamFailure(json);
+            }
+
+            continue;
+          }
+
+          if (decoder === undefined) {
+            throw new ScryWireError("The stream sent a row before its opening marker.");
+          }
+
+          yield decoder.decode(json, prepared.rows);
+        }
+
+        // A stream commits to success before its first row, so one cut off part way looks complete
+        // unless its closing marker is required.
+        if (!closed) {
+          throw new ScryWireError("The stream ended without its closing marker: it was cut off part way.");
+        }
+      }
+    };
+  }
+
+  // Live queries.
+
+  live(): LiveQuery<unknown> {
+    return this.#live([], "List", rows => ({ kind: "array", element: rows }));
+  }
+
+  liveCount(predicate?: (_: never) => unknown): LiveQuery<unknown> {
+    return this.#liveScalar("count", "int", predicate);
+  }
+
+  liveLongCount(predicate?: (_: never) => unknown): LiveQuery<unknown> {
+    return this.#liveScalar("longCount", "long", predicate);
+  }
+
+  liveAny(predicate?: (_: never) => unknown): LiveQuery<unknown> {
+    return this.#liveScalar("any", "bool", predicate);
+  }
+
+  liveFirstOrDefault(predicate?: (_: never) => unknown): LiveQuery<unknown> {
+    return this.#liveElement("first", predicate);
+  }
+
+  liveSingleOrDefault(predicate?: (_: never) => unknown): LiveQuery<unknown> {
+    return this.#liveElement("single", predicate);
+  }
+
+  #liveScalar(op: "count" | "longCount" | "any", answers: Scalar, predicate: ((_: never) => unknown) | undefined): LiveQuery<unknown> {
+    let terminal: QueryOp = { $type: op };
+    let sensitive = false;
+    if (predicate !== undefined) {
+      this.#expect(["rows", "ordered"], `A condition on live${op.charAt(0).toUpperCase()}${op.slice(1)}()`);
+      const condition = this.#expression(predicate, "A condition");
+      terminal = { $type: op, predicate: condition.node };
+      sensitive = condition.sensitive;
+    }
+
+    return this.#live([terminal], "Scalar", () => valuePlan({ scalar: answers }), sensitive);
+  }
+
+  #liveElement(op: "first" | "single", predicate: ((_: never) => unknown) | undefined): LiveQuery<unknown> {
+    let terminal: QueryOp = { $type: op, orDefault: true };
+    let sensitive = false;
+    if (predicate !== undefined) {
+      this.#expect(["rows", "ordered"], `A condition on a live ${op}`);
+      const condition = this.#expression(predicate, "A condition");
+      terminal = { $type: op, orDefault: true, predicate: condition.node };
+      sensitive = condition.sensitive;
+    }
+
+    return this.#live([terminal], "Single", rows => rows, sensitive);
+  }
+
+  // The request is made now, so the values a query closes over are read once, as the C# client does.
+  #live(terminal: readonly QueryOp[], kind: ResultKind, payload: (rows: Plan) => Plan, sensitive = false): LiveQuery<unknown> {
+    const { client } = this.#state;
+    const transport = client.options.transport;
+    if (transport?.subscribe === undefined) {
+      throw new Error("This client's transport cannot hold a query open: httpTransport() can.");
+    }
+
+    const prepared = this.#prepare(terminal);
+    const json = serializeRequest(prepared.request);
+    const plan = payload(prepared.rows);
+    const subscribe = transport.subscribe.bind(transport);
+    return new LiveQuery(
+      (lastEventId, signal) => subscribe(prepared.request, {
+        json,
+        sensitive: prepared.sensitive || sensitive,
+        urlLimit: client.schema.queryUrlLimit,
+        lastEventId,
+        signal
+      }),
+      data => this.#read(parseJson(data), kind, plan),
+      client.options.retry ?? backoff);
+  }
+}
+
+// A stream's error marker, surfaced as the same failure its status would have been before the first row.
+function streamFailure(marker: { [key: string]: Json }): Error {
+  const refusal = refusalIn(marker);
+  if (refusal === undefined) {
+    return new ScryWireError("The server ended the stream early, giving no reason.");
+  }
+
+  if (refusal.code === "StaleClient") {
+    return new ScryStaleClientError(refusal.error);
+  }
+
+  return refused(statusFor(refusal.code), refusal, undefined);
 }
 
 // What an element terminal answers: its row, or none, which only an OrDefault one may answer with.
