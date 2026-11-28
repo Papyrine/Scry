@@ -4,6 +4,8 @@
 
 import type {
   AggregateNode,
+  AttachmentKey,
+  AttachmentRequest,
   CommandRequest,
   JoinMember,
   Node,
@@ -151,6 +153,17 @@ export function serializeBatch(batch: QueryBatchRequest): string {
   return object<QueryBatchRequest>({
     version: integer(batch.version),
     queries: array(batch.queries, serializeRequest)
+  });
+}
+
+/** A request for one attachment's bytes, by the source, the member and the row's key. */
+export function serializeAttachment(request: AttachmentRequest): string {
+  return object<AttachmentRequest>({
+    version: integer(request.version),
+    root: quote(request.root),
+    member: quote(request.member),
+    keys: array(request.keys, key => object<AttachmentKey>({ value: optional(key.value, quote), tag: quote(key.tag) })),
+    stamp: optional(request.stamp, quote)
   });
 }
 

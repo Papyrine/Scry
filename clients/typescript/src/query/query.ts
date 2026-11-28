@@ -17,14 +17,15 @@ import type {
 import type { Scalar, ScrySchema, ValueInfo } from "../runtime/schema.ts";
 import { serializeRequest } from "../request/json.ts";
 import { parseJson, RawNumber, type Json } from "../response/json.ts";
-import { Decoder, valuePlan, type Plan, type PlanMember } from "../response/decode.ts";
+import { Decoder, valuePlan, type Attach, type AttachmentBinding, type Plan, type PlanMember } from "../response/decode.ts";
 import { refused, ScryRequestError, ScryStaleClientError, ScryWireError, statusFor } from "../errors.ts";
 import { isObject, refusalIn } from "../response/refusal.ts";
 import { backoff, LiveQuery, type RetryPolicy } from "./live.ts";
 import type * as scry from "../runtime/types.ts";
 import { requiredVersion } from "../request/version.ts";
 import { ScryStream } from "../wire.ts";
-import { Collection, Expression, Grouping, Scope, groupKey, row, type GroupKey, type Side } from "./expression.ts";
+import { AttachmentReference, Collection, Expression, Grouping, Scope, groupKey, refuseAttachment, row, type GroupKey, type Side } from "./expression.ts";
+import { AttachmentHandle } from "./attachment.ts";
 import { projectionOf, wireName } from "./projection.ts";
 
 /** What a transport is handed beside the request. */
@@ -61,6 +62,27 @@ export interface Answer {
   readonly text?: string;
   readonly json?: Json;
   readonly stamp?: string;
+  /** The binary parts a multipart response carried before its JSON, which its placeholders index. */
+  readonly parts?: readonly Uint8Array[];
+}
+
+/**
+ * What an attachment's fetch was answered with: its bytes, or nothing where the stored value is null,
+ * and the schema stamp the response carried.
+ */
+export interface AttachmentAnswer {
+  readonly stamp?: string;
+  readonly content?: {
+    readonly contentType: string;
+    readonly length: number | undefined;
+    readonly body: ReadableStream<Uint8Array>;
+  };
+}
+
+/** A line of a stream, and the binary parts that arrived before it, which its placeholders index. */
+export interface StreamLine {
+  readonly line: string;
+  readonly parts?: readonly Uint8Array[];
 }
 
 /**
@@ -71,8 +93,11 @@ export interface Transport {
   query(request: QueryRequest, context: RequestContext): Promise<Answer>;
   /** A serialized QueryBatchRequest, answered with the batch's response. */
   batch?(json: string, signal?: AbortSignal): Promise<Answer>;
-  /** A streamed answer, a line of JSON at a time: its opening marker, its rows, and its closing one. */
-  stream?(request: QueryRequest, context: RequestContext): AsyncIterable<string>;
+  /**
+   * A streamed answer, a line of JSON at a time: its opening marker, its rows, and its closing one,
+   * each with the binary parts its row references where it has any.
+   */
+  stream?(request: QueryRequest, context: RequestContext): AsyncIterable<string | StreamLine>;
   /** A live query's events, for one connection: until the server ends it or the signal aborts. */
   subscribe?(request: QueryRequest, context: LiveContext): AsyncIterable<LiveEvent>;
   /**
@@ -84,6 +109,8 @@ export interface Transport {
   receipt?(id: string, signal: AbortSignal): AsyncIterable<Answer>;
   /** The commands this caller may send, or nothing where the server serves none. */
   capabilities?(signal?: AbortSignal): Promise<Answer | undefined>;
+  /** A serialized AttachmentRequest, answered with the attachment's bytes as they arrive. */
+  attachment?(json: string, signal?: AbortSignal): Promise<AttachmentAnswer>;
 }
 
 export interface ScryOptions {
@@ -265,6 +292,11 @@ export interface ClientState {
   observe(stamp: string | undefined): void;
 }
 
+/** @internal The handles a client's rows carry for their attachments. */
+export function attachments(client: ClientState): Attach {
+  return (root, member, keys) => new AttachmentHandle(client, root, member, keys);
+}
+
 /** @internal */
 export function clientOf(scry: object): ClientState {
   const client = clients.get(scry);
@@ -344,6 +376,19 @@ function sourcesOf<S>(client: Client): Scry<S> {
 
 const sideOps = "only filters, and an ordering bounded by skip() or take(), cross over, in that order";
 
+function carries(plan: Plan | undefined): boolean {
+  return plan?.kind === "object" &&
+         (plan.attachments?.length ?? 0) > 0;
+}
+
+function withAttachments<P extends Plan & { readonly kind: "object" | "model" }>(plan: P, bindings: readonly AttachmentBinding[]): P {
+  if (bindings.length === 0) {
+    return plan;
+  }
+
+  return { ...plan, attachments: bindings };
+}
+
 class Query {
   readonly #state: State;
 
@@ -383,6 +428,7 @@ class Query {
 
   #expression(function_: (_: never) => unknown, what: string): Expression {
     const result = (function_ as (_: unknown) => unknown)(this.#row());
+    refuseAttachment(result);
     if (!(result instanceof Expression)) {
       throw new Error(`${what} has to be an expression, and this one is ${typeof result}. JavaScript's own !, && and || ask nothing of the server: use not(), and() and or().`);
     }
@@ -486,12 +532,25 @@ class Query {
 
     this.#expect(["rows", "ordered"], "select()");
     const built = projectionOf((projection as (_: unknown) => unknown)(this.#row()), false, scope);
+    if (built.attachments.length > 0) {
+      this.#carry("selectMany()", this.#state.ops.some(_ => _.$type === "selectMany"));
+    }
+
     return this.#next({ $type: "select", projection: built.projection }, "projected", { model: undefined, plan: built.plan }, built.sensitive);
   }
 
   distinct(): Query {
     this.#expect(["rows", "ordered", "projected"], "distinct()");
+    this.#carry("distinct()", carries(this.#state.plan));
     return this.#next({ $type: "distinct" }, "final");
+  }
+
+  // Each of these rewrites what a row is, so a key returned beside an attachment no longer names one row
+  // of the source it is fetched from.
+  #carry(through: string, carried: boolean): void {
+    if (carried) {
+      throw new Error(`An attachment cannot be carried through ${through}: the rows it returns no longer correspond to single rows of the source the attachment is fetched from.`);
+    }
   }
 
   join(inner: Rows<unknown, unknown, unknown>, outerKey: (_: never) => unknown, innerKey: (_: never) => unknown, result: (outer: never, inner: never) => unknown): Query {
@@ -551,6 +610,7 @@ class Query {
   #combine(kind: SetKind, otherQuery: unknown): Query {
     this.#expect(["projected"], `${kind.toLowerCase()}()`);
     const other = asQuery(otherQuery, `The other side of ${kind.toLowerCase()}()`);
+    this.#carry(`${kind.toLowerCase()}()`, carries(this.#state.plan) || carries(other.state.plan));
     const ops = other.state.ops;
     const last = ops.at(-1);
     if (other.state.stage !== "projected" ||
@@ -771,9 +831,11 @@ class Query {
         ((terminal?.$type === "first" || terminal?.$type === "single" || terminal?.$type === "last") && terminal.predicate !== undefined) ||
         pipeline.some(_ => _.$type === "select" || _.$type === "groupBy" || _.$type === "join" || _.$type === "set")) {
       // The server projects the row itself, and a row it returns whole may hold anything marked.
-      return { plan: { kind: "model", model }, sensitive: client.scope.marks(model) };
+      return { plan: withAttachments({ kind: "model", model }, this.#wholeRow(pipeline)), sensitive: client.scope.marks(model) };
     }
 
+    // Read before the projection is added, which is the query's own and rewrites nothing.
+    const attachments = this.#wholeRow(pipeline);
     pipeline.push({
       $type: "select",
       projection: { members: members.map(_ => ({ name: _, value: { $type: "node", node: { $type: "member", path: [_] } } })) }
@@ -792,7 +854,48 @@ class Query {
       planned.push({ key, wire, plan: valuePlan(value) });
     }
 
-    return { plan: { kind: "object", members: planned }, sensitive };
+    return { plan: withAttachments({ kind: "object", members: planned }, attachments), sensitive };
+  }
+
+  // A row returned whole carries every attachment its model declares, each fetched by the key that came
+  // back with it. One whose rows were rewritten into something else carries none it could fetch.
+  #wholeRow(pipeline: readonly QueryOp[]): readonly AttachmentBinding[] {
+    const { client, model } = this.#state;
+    if (model === undefined ||
+        pipeline.some(_ => _.$type === "select" || _.$type === "groupBy" || _.$type === "join" || _.$type === "set")) {
+      return [];
+    }
+
+    const scope = client.scope;
+    const bindings: AttachmentBinding[] = [];
+    let current: string | undefined = model;
+    while (current !== undefined) {
+      const described = scope.model(current);
+      for (const [name, member] of Object.entries(described.members)) {
+        if (member.shape.kind !== "attachment") {
+          continue;
+        }
+
+        const reference = new AttachmentReference(scope, model, name, member.name, []);
+        bindings.push({
+          target: [name],
+          root: reference.root,
+          member: reference.member,
+          keys: reference.keys.map(_ => ({ path: [scope.memberNamed(model, _.member)[0]], value: _.value }))
+        });
+      }
+
+      current = described.base;
+    }
+
+    if (bindings.length > 0) {
+      const rewritten = pipeline.find(_ => _.$type === "distinct" || _.$type === "selectMany");
+      if (rewritten !== undefined) {
+        this.#carry(`${rewritten.$type}()`, true);
+      }
+    }
+
+    return bindings;
   }
 
   async #send(terminal: readonly QueryOp[], kind: ResultKind, payload: (rows: Plan) => Plan, sensitive = false): Promise<unknown> {
@@ -831,11 +934,11 @@ class Query {
       json = parseJson(answer.text);
     }
 
-    return this.#read(json, kind, payload(prepared.rows));
+    return this.#read(json, kind, payload(prepared.rows), answer.parts);
   }
 
   // A response envelope's payload, read as the query's terminal answers it.
-  #read(envelope: Json, kind: ResultKind, plan: Plan): unknown {
+  #read(envelope: Json, kind: ResultKind, plan: Plan, parts?: readonly Uint8Array[]): unknown {
     const { client } = this.#state;
     if (!isObject(envelope) ||
         !Object.hasOwn(envelope, "payload")) {
@@ -851,7 +954,7 @@ class Query {
       client.observe(stamp);
     }
 
-    return new Decoder(client.scope, aliases(envelope["enumAliases"])).decode(envelope["payload"]!, plan);
+    return new Decoder(client.scope, aliases(envelope["enumAliases"]), parts, attachments(client)).decode(envelope["payload"]!, plan);
   }
 
   // Streaming.
@@ -876,7 +979,16 @@ class Query {
         });
         let decoder: Decoder | undefined;
         let closed = false;
-        for await (const line of lines) {
+        for await (const item of lines) {
+          let line: string;
+          let parts: readonly Uint8Array[] | undefined;
+          if (typeof item === "string") {
+            line = item;
+          } else {
+            line = item.line;
+            parts = item.parts;
+          }
+
           if (line.length === 0) {
             continue;
           }
@@ -891,7 +1003,7 @@ class Query {
                 client.observe(json["stamp"]);
               }
 
-              decoder = new Decoder(scope, aliases(json["enumAliases"]));
+              decoder = new Decoder(scope, aliases(json["enumAliases"]), undefined, attachments(client));
               continue;
             }
 
@@ -911,6 +1023,7 @@ class Query {
             throw new ScryWireError("The stream sent a row before its opening marker.");
           }
 
+          decoder.parts = parts;
           yield decoder.decode(json, prepared.rows);
         }
 
@@ -1060,6 +1173,7 @@ function asQuery(value: unknown, what: string): Query {
 
 // A key built of several members joins on all of them, position by position; one of one is the member.
 function joinKey(value: unknown): Expression {
+  refuseAttachment(value);
   if (value instanceof Expression) {
     return value;
   }

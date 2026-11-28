@@ -100,7 +100,7 @@ public partial class TypeScriptFixtureTests
         return app;
     }
 
-    static async Task<Exchange> Send(HttpClient http, string name, HttpMethod method, string path, string? body)
+    static async Task<Exchange> Send(HttpClient http, string name, HttpMethod method, string path, string? body, params string[] more)
     {
         using var request = new HttpRequestMessage(method, path);
         if (body is not null)
@@ -110,7 +110,7 @@ public partial class TypeScriptFixtureTests
 
         using var response = await http.SendAsync(request);
         var bytes = await response.Content.ReadAsByteArrayAsync();
-        return Exchange.From(name, method, path, body, response, bytes);
+        return Exchange.From(name, method, path, body, response, bytes, more);
     }
 
     // Recorded with the request as the body it encodes and the parameter as what it is made from,
@@ -201,14 +201,14 @@ public partial class TypeScriptFixtureTests
         string? Body,
         string? BodyBase64)
     {
-        public static Exchange From(string name, HttpMethod method, string path, string? requestBody, HttpResponseMessage response, byte[] bytes)
+        public static Exchange From(string name, HttpMethod method, string path, string? requestBody, HttpResponseMessage response, byte[] bytes, params string[] more)
         {
             var stamp = Header(response, WireFormat.SchemaStampHeader);
             var contentType = Header(response, "Content-Type");
             var boundary = Boundary(contentType);
 
             var headers = new List<(string Name, string Value)>();
-            foreach (var header in readHeaders)
+            foreach (var header in readHeaders.Concat(more))
             {
                 if (Header(response, header) is { } value)
                 {
@@ -218,7 +218,7 @@ public partial class TypeScriptFixtureTests
 
             bytes = Opaque(bytes, stamp, boundary);
             if (contentType is not null &&
-                contentType.StartsWith("multipart/", StringComparison.Ordinal))
+                !Textual(contentType))
             {
                 return new(name, method.Method, path, requestBody, (int) response.StatusCode, headers, null, Convert.ToBase64String(bytes));
             }
@@ -257,6 +257,14 @@ public partial class TypeScriptFixtureTests
 
             writer.WriteEndObject();
         }
+
+        // A body of bytes rather than text, kept as base64: multipart, whose parts are bytes, and an
+        // attachment served as whatever its member declares.
+        static bool Textual(string contentType) =>
+            contentType.StartsWith("application/json", StringComparison.Ordinal) ||
+            contentType.StartsWith(ScryStream.ContentType, StringComparison.Ordinal) ||
+            contentType.StartsWith(ScryLive.ContentType, StringComparison.Ordinal) ||
+            contentType.StartsWith("text/", StringComparison.Ordinal);
 
         static string? Header(HttpResponseMessage response, string name)
         {

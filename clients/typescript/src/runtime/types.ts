@@ -18,6 +18,44 @@ export interface Expr<T> {
 }
 
 declare const collectionRow: unique symbol;
+declare const attachment: unique symbol;
+
+/**
+ * An `[Attachment]` member, as a query reads it: not a value, so nothing filters, orders or computes on
+ * it. A projection may return it beside its row's key, and the row then carries an `Attachment`.
+ */
+export interface AttachmentMember {
+  readonly [attachment]: true;
+}
+
+/**
+ * A handle to one attachment's bytes: the claim, not the value. A query never carries an attachment;
+ * each row comes back with a handle made from its key, which fetches the bytes when opened, through a
+ * request of its own that the server authorizes afresh.
+ */
+export interface Attachment {
+  /** The source the row was read from. */
+  readonly source: string;
+  /** The attachment member, by the name it travels under. */
+  readonly member: string;
+  /**
+   * Fetches the bytes, or null where the stored value is null. A row the server will not hand over,
+   * whether the check denied it, a row policy hides it, or it is no longer there, is a
+   * `ScryRequestError` with status 404: the three are deliberately alike.
+   */
+  open(options?: { readonly signal?: AbortSignal }): Promise<AttachmentContent | null>;
+}
+
+/** An attachment's bytes as they arrive, read once, by whichever of these is called. */
+export interface AttachmentContent {
+  /** What the member declares, or `application/octet-stream` where it declares nothing. */
+  readonly contentType: string;
+  /** The length the server declared: advisory. */
+  readonly length: number | undefined;
+  readonly body: ReadableStream<Uint8Array>;
+  bytes(): Promise<Uint8Array>;
+  blob(): Promise<Blob>;
+}
 
 /**
  * A collection member. It cannot be read as a path: it is asked about through a subquery (any, all,
@@ -58,6 +96,7 @@ export interface CollectionProjection<T> {
 /** What a projection returns, from the object a `select` function builds. */
 export type Shape<P> =
   P extends Expr<infer T> ? T :
+  P extends AttachmentMember ? Attachment :
   P extends CollectionProjection<infer E> ? E[] :
   P extends Collection<Expr<infer T>, never> ? T[] :
   P extends Date | Uint8Array ? P :

@@ -6,9 +6,10 @@ A TypeScript client for Scry, in progress. What exists so far:
 - the query builder, which writes the request a C# client sends for the same query, byte for byte;
 - the HTTP transport, and the reader that turns each answer back into what the query said it returns;
 - streams, batches, and live queries that reconnect;
-- commands, followed to their outcome, and what a caller may send.
+- commands, followed to their outcome, and what a caller may send;
+- binary members that travel as multipart parts, and attachments fetched by their row's key.
 
-Binary parts and attachments come next.
+The SignalR transport and the Blazor components the C# client ships have no counterpart here.
 
 The package is private and unpublished.
 
@@ -27,7 +28,7 @@ A request travels as a URL when it fits the server's budget and reads nothing se
 Each answer is read by a plan the query builds alongside its projection, so every value arrives as its type says:
 
 - a `long` as a `bigint` and a `decimal` as its exact text, read from the number's own text rather than a JavaScript number;
-- bytes from base64 to a `Uint8Array`;
+- bytes as a `Uint8Array`, from base64 or, for a `[BinaryTransfer]` member, from the raw multipart part its placeholder names, a placeholder naming no part failing the read;
 - an enum checked against the model, a value renamed since the client was generated mapped back through the aliases the response carries, and one with no name in the model failing as a stale client;
 - each row keyed by the names the query wrote.
 
@@ -43,7 +44,7 @@ for await (const row of scry.order.orderBy(_ => _.id).select(_ => ({ id: _.id, a
 }
 ```
 
-`stream()` reads the rows a line at a time as the server writes them. A failure after the first row throws the error its status would have been, and a stream cut off before the server's closing marker throws `ScryWireError`, so a short read is never taken for the whole answer. Leaving the loop early closes the connection. A projection of binary members streams as binary parts, which this client does not read yet: it refuses such an answer rather than misreading it.
+`stream()` reads the rows a line at a time as the server writes them. A failure after the first row throws the error its status would have been, and a stream cut off before the server's closing marker throws `ScryWireError`, so a short read is never taken for the whole answer. Leaving the loop early closes the connection. A projection of `[BinaryTransfer]` members streams as multipart, each row's parts arriving immediately before it, and reads as any other stream does.
 
 ```ts
 const batch = createBatch(scry);
@@ -68,6 +69,21 @@ A live query is one request answered whenever its answer changes. `live()` answe
 A connection that ends is asked for again naming the last answer held, so an answer that has not moved is not sent again, and the consumer sees a pause rather than an end. The server failing for the moment, a server-side limit on open subscriptions, a 5xx, 408 or 429 from something in between, and a failed connection are all asked again. A rejection, a denial, or a client the server calls stale ends the live query with its error, since asking again would not change the answer. The C# client follows the same rules.
 
 The `retry` option of `createScry` decides how long to wait before asking again. It is told how many attempts have failed since the last answer, how long that has been, and why the last one failed, and it returns milliseconds, or `undefined` to stop. The default, `backoff`, asks at once, then after a second, doubling to thirty, with a fifth either way at random so that clients cut off together do not return together.
+
+## Attachments
+
+```ts
+const lease = await scry.contract.where(_ => eq(_.id, 1)).first();
+const document = await lease.document.open();
+if (document !== null) {
+  show(document.contentType, await document.blob());
+}
+```
+
+An `[Attachment]` member never travels with a query. Each row comes back with a handle made from its key, and `open()` fetches the bytes from the attachment endpoint as a request of its own, which the server authorizes afresh. It answers `null` where the stored value is null, and throws `ScryRequestError` with status 404 where the server will not hand the bytes over: an absent row, one a policy hides and one the check refuses are answered alike. What it opens has the type the member declares, an advisory `length`, the `body` as it arrives, and `bytes()` and `blob()`, any one of which reads it.
+
+A projection returns an attachment beside its row's key, as `select(_ => ({ id: _.id, document: _.document }))` does, or one navigation down as `{ id: _.department.id, handbook: _.department.handbook }` does. The key is how the handle finds its row, so leaving it out throws when the query is written, as does filtering, ordering or grouping by an attachment, or carrying one through `distinct()`, a set operation or `selectMany()`. A handle holds only the source, the member and the key, so it outlives the response it came from.
+
 
 ## Commands
 
@@ -147,8 +163,8 @@ A description from another introspection version is refused, as is a type displa
 
 Per model, two interfaces:
 
-- `{Type}Query`, what a query reads. Every member is an `Expr` of the value it holds, a navigation is `Optional` (every value read through it may be null), and a collection is a `Collection` asked about through a subquery. An attachment is left out, since no query reads one.
-- `{Type}Row`, the row a query projecting nothing returns: the model's scalar members, a base's first.
+- `{Type}Query`, what a query reads. Every member is an `Expr` of the value it holds, a navigation is `Optional` (every value read through it may be null), and a collection is a `Collection` asked about through a subquery. An attachment is an `AttachmentMember`, which a query may only return.
+- `{Type}Row`, the row a query projecting nothing returns: the model's scalar members, a base's first, and an `Attachment` handle for each attachment.
 
 Beside them: every enum the model names (a [Flags] one as `Flags`), `Sources` and `Commands` mapping each to its types, and `schema`, which says at run time what the types cannot: the name each member travels under, what each value is, and what a query projecting nothing projects.
 
@@ -162,6 +178,7 @@ Beside them: every enum the model names (a [Flags] one as `Flags`), `Sources` an
 | `Guid` | `Guid`, its text |
 | `DateTime`, `DateOnly`, `TimeOnly`, `TimeSpan`, `DateTimeOffset` | Each as its round-trip text. A `DateTime` is a wall clock, so it is not a JavaScript `Date`. |
 | `byte[]` | `Uint8Array` |
+| `[Attachment] byte[]` | `AttachmentMember` in a query, `Attachment` in a row |
 | An enum | A union of its names |
 | `T?` | `T \| null` |
 

@@ -10,8 +10,9 @@ import type { QueryRequest } from "./wire.ts";
 import { refused, ScryNotServedError, ScryRequestError, ScryWireError, statusFor } from "./errors.ts";
 import { formFor, type Form } from "./request/url.ts";
 import { parseJson } from "./response/json.ts";
+import { boundaryOf, isBinary, readMultipart, sections } from "./response/multipart.ts";
 import { refusalIn } from "./response/refusal.ts";
-import type { Answer, LiveContext, LiveEvent, RequestContext, Transport } from "./query/query.ts";
+import type { Answer, AttachmentAnswer, LiveContext, LiveEvent, RequestContext, StreamLine, Transport } from "./query/query.ts";
 
 export interface HttpOptions {
   /** The endpoint MapScry was given: absolute, or relative to a page's own origin in a browser. */
@@ -80,6 +81,20 @@ export function httpTransport(options: HttpOptions): Transport {
 
   async function refuse(response: Response, stamp: string | undefined): Promise<never> {
     throw failure(response.status, await response.text(), stamp);
+  }
+
+  // A response's JSON, or where it carries binary parts, its parts and then the envelope after them.
+  async function read(response: Response, stamp: string | undefined): Promise<Answer> {
+    if (!response.ok) {
+      return refuse(response, stamp);
+    }
+
+    if (mediaType(response) !== ScryBinary.ContentType) {
+      return answered(await response.text(), stamp);
+    }
+
+    const { envelope, parts } = await readMultipart(bodyOf(response), boundaryOf(response.headers.get("Content-Type")!));
+    return { ...answered(envelope, stamp), parts };
   }
 
   async function get(url: string, accept: string, signal: AbortSignal | undefined): Promise<Response> {
@@ -154,37 +169,29 @@ export function httpTransport(options: HttpOptions): Transport {
         }
       }
 
-      let text = await response.text();
-
       // The server marks a member sensitive that this client was generated before, and refuses the
       // URL for it: worth one more round trip, as the same request in a body.
       if (form.kind === "url" &&
-          !response.ok &&
-          refusalIn(tryParse(text))?.requiresBody === true) {
+          !response.ok) {
+        const text = await response.text();
+        if (refusalIn(tryParse(text))?.requiresBody !== true) {
+          throw failure(response.status, text, stamp);
+        }
+
         form = { kind: "body", body: context.json };
         response = await ask(form, context.signal);
         stamp = learn(response) ?? stamp;
-        text = await response.text();
       }
 
-      if (!response.ok) {
-        throw failure(response.status, text, stamp);
-      }
-
-      return answered(text, stamp);
+      return read(response, stamp);
     },
 
     async batch(body: string, signal?: AbortSignal): Promise<Answer> {
       const response = await post(beside("batch"), body, {}, signal);
-      const stamp = learn(response);
-      if (!response.ok) {
-        return refuse(response, stamp);
-      }
-
-      return answered(await response.text(), stamp);
+      return read(response, learn(response));
     },
 
-    async *stream(_request: QueryRequest, context: RequestContext): AsyncIterable<string> {
+    async *stream(_request: QueryRequest, context: RequestContext): AsyncIterable<string | StreamLine> {
       const connection = linked(context.signal);
       try {
         const response = await post(beside("stream"), context.json, {}, connection.signal);
@@ -195,7 +202,8 @@ export function httpTransport(options: HttpOptions): Transport {
 
         const type = mediaType(response);
         if (type === ScryBinary.ContentType) {
-          throw new ScryWireError("The stream carries binary parts, in multipart, which this client does not read yet.");
+          yield* streamedParts(bodyOf(response), boundaryOf(response.headers.get("Content-Type")!), connection.signal);
+          return;
         }
 
         if (type !== ScryStream.ContentType) {
@@ -257,6 +265,38 @@ export function httpTransport(options: HttpOptions): Transport {
       }
     },
 
+    async attachment(body: string, signal?: AbortSignal): Promise<AttachmentAnswer> {
+      const response = await post(beside("attachment"), body, {}, signal);
+      const stamp = learn(response);
+      const stamped: { stamp?: string } = stamp === undefined ? {} : { stamp };
+
+      // The row was readable and the value is null.
+      if (response.status === 204) {
+        await response.body?.cancel();
+        return stamped;
+      }
+
+      // Refused, absent or hidden by a row policy, which the server answers alike and with nothing.
+      if (response.status === 404 &&
+          (await response.clone().text()).length === 0) {
+        throw new ScryRequestError(404, "Unknown", "The server would not hand the attachment over: its row is absent, hidden by a policy, or refused by the attachment's check, which it answers alike.", false, stamp);
+      }
+
+      if (!response.ok) {
+        return refuse(response, stamp);
+      }
+
+      const length = response.headers.get("Content-Length");
+      return {
+        ...stamped,
+        content: {
+          contentType: response.headers.get("Content-Type") ?? ScryBinary.PartContentType,
+          length: length === null ? undefined : Number(length),
+          body: response.body ?? new ReadableStream({ start: _ => _.close() })
+        }
+      };
+    },
+
     async capabilities(signal?: AbortSignal): Promise<Answer | undefined> {
       const response = await get(beside(ScryCommandProtocol.CapabilitiesRoute), "application/json", signal);
       const stamp = learn(response);
@@ -303,6 +343,40 @@ function linked(signal: AbortSignal | undefined): AbortController {
   }
 
   return connection;
+}
+
+function bodyOf(response: Response): ReadableStream<Uint8Array> {
+  if (response.body === null) {
+    throw new ScryWireError("A multipart response arrived with no body.");
+  }
+
+  return response.body;
+}
+
+// A stream that carries binary parts: sections of lines, markers and rows, between which come the parts
+// the next row references. A row's placeholders index the parts since the line before it.
+async function* streamedParts(body: ReadableStream<Uint8Array>, boundary: string, signal: AbortSignal): AsyncIterable<StreamLine> {
+  let parts: Uint8Array[] = [];
+  for await (const section of sections(body, boundary, signal)) {
+    if (isBinary(section)) {
+      parts.push(section.body);
+      continue;
+    }
+
+    if (section.type !== ScryStream.ContentType) {
+      throw new ScryWireError(`A streamed multipart section was '${section.type}', neither a binary part nor lines.`);
+    }
+
+    for (const line of new TextDecoder().decode(section.body).split("\n")) {
+      const text = line.replace(/\r$/, "");
+      if (text.length === 0) {
+        continue;
+      }
+
+      yield { line: text, parts };
+      parts = [];
+    }
+  }
 }
 
 function mediaType(response: Response): string {

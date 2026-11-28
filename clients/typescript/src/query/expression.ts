@@ -151,6 +151,8 @@ export function operand(value: unknown, beside: Typed | undefined, position: Pos
     throw new Error("A navigation or a collection is not a value to compare: read a member of it.");
   }
 
+  refuseAttachment(value);
+
   const enums = scope?.enumInfo ?? (() => undefined);
   const node = constant(value as Literal, beside?.value, position, enums);
   return new Expression(node, { value: beside?.value, nullable: value === null }, scope, false);
@@ -250,8 +252,80 @@ function read(state: RowState, name: string): unknown {
     case "values":
       return new Collection(state.scope, path, { value: shape.value, nullable: shape.nullable }, sensitive);
     case "attachment":
-      throw new Error(`'${name}' is an attachment, which no query reads: its bytes are fetched by the row's key.`);
+      return new AttachmentReference(state.scope, state.model, name, member.name, state.path);
   }
+}
+
+/**
+ * An attachment member read off a row. Not a value, since no query reads its bytes: a projection may
+ * return it beside the row's key, and the row comes back with a handle made from that key.
+ */
+export class AttachmentReference {
+  /** The source the attachment is fetched from: the one whose rows are this model's. */
+  readonly root: string;
+  /** Its name in a query. */
+  readonly name: string;
+  /** The name it travels under. */
+  readonly member: string;
+  /** The navigation the row was reached through: empty for the query's own row. */
+  readonly prefix: readonly string[];
+  /** The row's key members, by server name and value, in the order the key travels in. */
+  readonly keys: readonly { readonly member: string; readonly value: ValueInfo | undefined }[];
+
+  constructor(scope: Scope, model: string, name: string, member: string, prefix: readonly string[]) {
+    this.name = name;
+    this.member = member;
+    this.prefix = prefix;
+    const source = Object.values(scope.schema.sources).find(_ => _.model === model);
+    if (source === undefined) {
+      throw new Error(`'${name}' is an attachment of ${model.replace(/QueryModel$/, "")}, which no source returns rows of to fetch it from.`);
+    }
+
+    this.root = source.name;
+    let keys: readonly string[] | undefined;
+    let current: string | undefined = model;
+    while (keys === undefined &&
+           current !== undefined) {
+      const described = scope.model(current);
+      keys = described.keys;
+      current = described.base;
+    }
+
+    if (keys === undefined ||
+        keys.length === 0) {
+      throw new Error(`'${name}' is an attachment of ${model.replace(/QueryModel$/, "")}, which is described with no key to fetch it by.`);
+    }
+
+    // Ordinal by name, as the server derives them: the values travel by position.
+    this.keys = [...keys].sort(ordinal).map(key => {
+      const [, info] = scope.memberNamed(model, key);
+      let value: ValueInfo | undefined;
+      if (info.shape.kind === "value") {
+        value = info.shape.value;
+      }
+
+      return { member: key, value };
+    });
+  }
+}
+
+/** Refuses an attachment where a value is wanted: in a condition, an ordering, a key or a computation. */
+export function refuseAttachment(value: unknown): void {
+  if (value instanceof AttachmentReference) {
+    throw new Error(`'${value.name}' is an attachment, which is not a value: nothing filters, orders, groups or computes on one. A query may only return it, beside its row's key.`);
+  }
+}
+
+function ordinal(left: string, right: string): number {
+  if (left < right) {
+    return -1;
+  }
+
+  if (left > right) {
+    return 1;
+  }
+
+  return 0;
 }
 
 type Element = { readonly model: string } | { readonly value: ValueInfo; readonly nullable: boolean };
@@ -427,6 +501,7 @@ export interface GroupKey {
 }
 
 export function groupKey(scope: Scope, selected: unknown): GroupKey {
+  refuseAttachment(selected);
   if (selected instanceof Expression) {
     return { keys: [selected.node], key: keyRead(selected, 0, scope), sensitive: selected.sensitive };
   }

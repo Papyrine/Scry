@@ -178,6 +178,7 @@ export interface CallbackRow {
 export interface ContractQuery {
   readonly id: scry.Expr<number>;
   readonly name: scry.Expr<string>;
+  readonly document: scry.AttachmentMember;
   readonly canSealContract: scry.Expr<boolean>;
 }
 
@@ -185,6 +186,7 @@ export interface ContractQuery {
 export interface ContractRow {
   id: number;
   name: string;
+  document: scry.Attachment;
   canSealContract: boolean;
 }
 

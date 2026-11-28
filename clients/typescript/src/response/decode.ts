@@ -1,21 +1,41 @@
 // Reads a payload into what the query said it returns. The plan is built with the query, from what
 // each member of its projection reads, so a long becomes a bigint and a decimal keeps every digit of
-// its text, and each row's keys, which the server camel-cases, become the names the query used.
+// its text, and each row's keys, which the server camel-cases, become the names the query used. A
+// binary value that travelled as a multipart part is read from the part its placeholder names, and
+// an attachment, which no response carries, is a handle made from the key read beside it.
 
-import type { EnumAlias } from "../wire.ts";
+import { ScryBinary, type AttachmentKey, type EnumAlias } from "../wire.ts";
 import type { EnumInfo, ValueInfo } from "../runtime/schema.ts";
 import { camelCase } from "../runtime/naming.ts";
 import { ScryStaleClientError, ScryWireError } from "../errors.ts";
+import { constant, type Literal } from "../request/values.ts";
 import { RawNumber, type Json } from "./json.ts";
 import type { Scope } from "../query/expression.ts";
 
 /** What a payload, or a part of one, is. */
 export type Plan =
   | { readonly kind: "value"; readonly value: ValueInfo | undefined }
-  | { readonly kind: "object"; readonly members: readonly PlanMember[] }
+  | { readonly kind: "object"; readonly members: readonly PlanMember[]; readonly attachments?: readonly AttachmentBinding[] }
   | { readonly kind: "array"; readonly element: Plan }
   /** A row of a model, keyed as the server's own projection keys it. */
-  | { readonly kind: "model"; readonly model: string };
+  | { readonly kind: "model"; readonly model: string; readonly attachments?: readonly AttachmentBinding[] };
+
+/**
+ * An attachment a row carries: where its handle goes, what it fetches, and where in the same row each
+ * value of its key landed, in the order the key travels in.
+ */
+export interface AttachmentBinding {
+  /** By the names the query wrote. */
+  readonly target: readonly string[];
+  /** The source the attachment is fetched from. */
+  readonly root: string;
+  /** The attachment member, by the name it travels under. */
+  readonly member: string;
+  readonly keys: readonly { readonly path: readonly string[]; readonly value: ValueInfo | undefined }[];
+}
+
+/** Makes the handle an attachment is fetched through. */
+export type Attach = (root: string, member: string, keys: readonly AttachmentKey[]) => unknown;
 
 export interface PlanMember {
   /** The name the query wrote, which the row is returned under. */
@@ -36,9 +56,19 @@ export class Decoder {
   readonly #scope: Scope;
   readonly #aliases: readonly EnumAlias[];
 
-  constructor(scope: Scope, aliases: readonly EnumAlias[] | undefined) {
+  readonly #attach: Attach | undefined;
+
+  /**
+   * The binary parts the placeholders in what is read next index: a whole response's, or in a stream
+   * the parts that arrived before the row.
+   */
+  parts: readonly Uint8Array[] | undefined;
+
+  constructor(scope: Scope, aliases: readonly EnumAlias[] | undefined, parts?: readonly Uint8Array[], attach?: Attach) {
     this.#scope = scope;
     this.#aliases = aliases ?? [];
+    this.parts = parts;
+    this.#attach = attach;
   }
 
   decode(json: Json, plan: Plan, where = "the payload"): unknown {
@@ -56,10 +86,47 @@ export class Decoder {
 
         return json.map((_, index) => this.decode(_, plan.element, `${where}[${index}]`));
       case "object":
-        return this.#object(json, plan.members, where);
+        return this.#bind(this.#object(json, plan.members, where), plan.attachments);
       case "model":
-        return this.#model(json, plan.model, where);
+        return this.#bind(this.#model(json, plan.model, where), plan.attachments);
     }
+  }
+
+  // Each attachment's handle, made from the key that came back with the row. A row a navigation did not
+  // reach has no key and no object to hold a handle.
+  #bind(row: Record<string, unknown>, attachments: readonly AttachmentBinding[] | undefined): Record<string, unknown> {
+    for (const binding of attachments ?? []) {
+      if (this.#attach === undefined) {
+        throw new Error("These rows carry attachments, and this reader was given nothing to fetch them through.");
+      }
+
+      const keys: AttachmentKey[] = [];
+      for (const key of binding.keys) {
+        const value = at(row, key.path);
+        if (value === null ||
+            value === undefined) {
+          break;
+        }
+
+        const node = constant(value as Literal, key.value, "argument", this.#scope.enumInfo);
+        if (node.value === undefined) {
+          keys.push({ tag: node.tag });
+        } else {
+          keys.push({ value: node.value, tag: node.tag });
+        }
+      }
+
+      const owner = at(row, binding.target.slice(0, -1));
+      if (keys.length !== binding.keys.length ||
+          typeof owner !== "object" ||
+          owner === null) {
+        continue;
+      }
+
+      (owner as Record<string, unknown>)[binding.target.at(-1)!] = this.#attach(binding.root, binding.member, keys);
+    }
+
+    return row;
   }
 
   #object(json: Json, members: readonly PlanMember[], where: string): Record<string, unknown> {
@@ -149,13 +216,31 @@ export class Decoder {
             json !== null &&
             !Array.isArray(json) &&
             !(json instanceof RawNumber)) {
-          throw new ScryWireError(`${where} is a binary part, which arrives in a multipart response this client does not read yet.`);
+          return this.#part(json, where);
         }
 
         return fromBase64(text(json, where), where);
       default:
         return text(json, where);
     }
+  }
+
+  // A placeholder names a part by its index. One that names no part, or that arrived where no parts
+  // did, fails the read rather than standing for a guess.
+  #part(json: { [key: string]: Json }, where: string): Uint8Array {
+    const index = json[ScryBinary.PartProperty];
+    if (Object.keys(json).length !== 1 ||
+        !(index instanceof RawNumber) ||
+        !/^\d+$/.test(index.text)) {
+      throw expected("base64 text, or a binary part's placeholder", where);
+    }
+
+    const part = this.parts?.[Number(index.text)];
+    if (part === undefined) {
+      throw new ScryWireError(`${where} names binary part ${index.text}, which the response did not carry.`);
+    }
+
+    return part;
   }
 
   // A name this client's model has, or one a rename the response describes leads back to. A value the
@@ -227,6 +312,20 @@ function named(number: string, name: string, info: EnumInfo, where: string): str
   }
 
   throw new ScryStaleClientError(`${where} is ${number}, which no value of enum '${name}' in this client's generated model is. Generate the client again.`);
+}
+
+function at(row: unknown, path: readonly string[]): unknown {
+  let current = row;
+  for (const segment of path) {
+    if (typeof current !== "object" ||
+        current === null) {
+      return undefined;
+    }
+
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return current;
 }
 
 function record(json: Json, where: string): { [key: string]: Json } {

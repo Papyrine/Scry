@@ -89,10 +89,13 @@ test("a stream with no closing marker was cut off, and says so", async () => {
   await assert.rejects(() => collect(listed(scry)), (error: unknown) => error instanceof ScryWireError && /closing marker/.test(error.message));
 });
 
-test("a stream of binary parts is refused rather than misread", async () => {
-  const { scry } = client(() => new Response("", { headers: { "Content-Type": "multipart/mixed; boundary=scry0" } }));
+test("a stream of binary parts reads each row with the parts that arrived before it", async () => {
+  const streamed = framings.find(_ => _.name === "A binary member, streamed")!;
+  const { scry } = client(() => new Response(Buffer.from(streamed.bodyBase64!, "base64"), { headers: streamed.headers }));
 
-  await assert.rejects(() => collect(listed(scry)), /binary parts/);
+  const rows = await collect(scry.employee.orderBy(_ => _.id).take(2).select(_ => ({ name: _.name, avatar: _.avatar })).stream());
+
+  assert.deepEqual(rows, [{ name: "Alice", avatar: new Uint8Array([1, 2, 3]) }, { name: "Carol", avatar: new Uint8Array() }]);
 });
 
 test("stopping early ends the connection", async () => {

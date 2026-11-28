@@ -1,6 +1,9 @@
 export type {
   Expr,
   Collection,
+  AttachmentMember,
+  Attachment,
+  AttachmentContent,
   Optional,
   Decimal,
   Guid,

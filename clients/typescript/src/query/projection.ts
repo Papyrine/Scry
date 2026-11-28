@@ -4,17 +4,26 @@
 
 import type { CollectionValue, Node, Projection, ProjectionMember } from "../wire.ts";
 import { camelCase } from "../runtime/naming.ts";
-import { Collection, CollectionProjection, Expression, isRow, operand, type Scope } from "./expression.ts";
-import { valuePlan, type Plan, type PlanMember } from "../response/decode.ts";
+import { AttachmentReference, Collection, CollectionProjection, Expression, isRow, operand, type Scope } from "./expression.ts";
+import { valuePlan, type AttachmentBinding, type Plan, type PlanMember } from "../response/decode.ts";
 
 export interface Built {
   readonly projection: Projection;
   readonly sensitive: boolean;
   /** What the rows it returns are, to read them back by. */
   readonly plan: Plan;
+  /** The attachments its rows carry, which travel as nothing and come back as handles. */
+  readonly attachments: readonly AttachmentBinding[];
 }
 
-type Member = { value: ProjectionMember["value"]; sensitive: boolean; plan: Plan };
+type Member = { value: ProjectionMember["value"]; sensitive: boolean; plan: Plan; attachments?: Pending[] };
+
+// An attachment met in a projection, before its key has been looked for among the members beside it:
+// whether that key was projected is a question about the whole projection.
+interface Pending {
+  readonly target: readonly string[];
+  readonly reference: AttachmentReference;
+}
 
 /**
  * The name a key travels under: its first letter a capital, as a C# member's is, so a query sends the
@@ -83,12 +92,24 @@ export function projectionOf(value: unknown, grouped: boolean, scope: Scope): Bu
 
   const members: ProjectionMember[] = [];
   const planned: PlanMember[] = [];
+  const pending: Pending[] = [];
   let sensitive = false;
   for (const [key, member] of entries(value)) {
+    // Travels as nothing: no response carries an attachment.
+    if (member instanceof AttachmentReference) {
+      if (grouped) {
+        throw new Error(`'${key}': an attachment cannot be returned out of a group, which folds many rows into one and leaves no row key to fetch it by.`);
+      }
+
+      pending.push({ target: [key], reference: member });
+      continue;
+    }
+
     const built = memberValue(member, grouped, scope, key);
     const wire = wireName(key);
     members.push({ name: wire, value: built.value });
     planned.push({ key, wire, plan: built.plan });
+    pending.push(...built.attachments ?? []);
     sensitive ||= built.sensitive;
   }
 
@@ -96,7 +117,66 @@ export function projectionOf(value: unknown, grouped: boolean, scope: Scope): Bu
     throw new Error("A projection needs at least one member.");
   }
 
-  return { projection: { members }, sensitive, plan: { kind: "object", members: planned } };
+  const projection = { members };
+  const attachments = resolve(pending, projection, planned);
+  let plan: Plan = { kind: "object", members: planned };
+  if (attachments.length > 0) {
+    plan = { ...plan, attachments };
+  }
+
+  return { projection, sensitive, plan, attachments };
+}
+
+// Each attachment matched to where its row's key landed: a key member projected as a member of its own,
+// beside it. One left out is refused here, rather than producing a handle that fails when it is opened
+// with nothing to say why.
+function resolve(pending: readonly Pending[], projection: Projection, planned: readonly PlanMember[]): AttachmentBinding[] {
+  if (pending.length === 0) {
+    return [];
+  }
+
+  const leaves = new Map<string, readonly string[]>();
+  collectLeaves(projection, [], planned, [], leaves);
+  return pending.map(({ target, reference }) => ({
+    target,
+    root: reference.root,
+    member: reference.member,
+    keys: reference.keys.map(key => {
+      const wanted = [...reference.prefix, key.member];
+      const path = leaves.get(wanted.join("."));
+      if (path === undefined) {
+        throw new Error(`The attachment '${reference.name}' needs _.${wanted.map(camelCase).join(".")} returned beside it: an attachment is fetched by its row's key, so the key has to come back with the row.`);
+      }
+
+      return { path, value: key.value };
+    })
+  }));
+}
+
+// Every member path the projection reads as a plain member, and where in the row its value lands. A
+// computed value is not a key, whatever it was computed from.
+function collectLeaves(projection: Projection, prefix: readonly string[], planned: readonly PlanMember[], output: readonly string[], leaves: Map<string, readonly string[]>): void {
+  projection.members.forEach((member, index) => {
+    const key = planned[index]!.key;
+    if (typeof member === "string") {
+      leaves.set([...prefix, member].join("."), [...output, key]);
+      return;
+    }
+
+    const value = member.value;
+
+    if (value.$type === "node" &&
+        value.node.$type === "member") {
+      leaves.set([...prefix, ...segments(value.node.path)].join("."), [...output, key]);
+      return;
+    }
+
+    const nested = planned[index]!.plan;
+    if (value.$type === "nested" &&
+        nested.kind === "object") {
+      collectLeaves(value.projection, [...prefix, ...segments(value.path)], nested.members, [...output, key], leaves);
+    }
+  });
 }
 
 function memberValue(value: unknown, grouped: boolean, scope: Scope, key: string): Member {
@@ -133,7 +213,13 @@ function memberValue(value: unknown, grouped: boolean, scope: Scope, key: string
 // rebased onto it, and the object travels as a nested projection into it.
 function nested(value: Record<string, unknown>, key: string): Member {
   const members: [string, Expression][] = [];
+  const attachments: Pending[] = [];
   for (const [name, member] of entries(value)) {
+    if (member instanceof AttachmentReference) {
+      attachments.push({ target: [key, name], reference: member });
+      continue;
+    }
+
     if (!(member instanceof Expression)) {
       throw new Error(`'${key}.${name}' is not a value. A nested object holds values, one level deep.`);
     }
@@ -150,6 +236,10 @@ function nested(value: Record<string, unknown>, key: string): Member {
     collectPaths(member.node, paths);
   }
 
+  for (const { reference } of attachments) {
+    paths.push([...reference.prefix, reference.member]);
+  }
+
   const prefix = commonNavigationPrefix(paths);
   if (prefix.length === 0) {
     throw new Error(`'${key}' has to read from one navigation, every member sharing it (each reading, say, _.department).`);
@@ -164,7 +254,8 @@ function nested(value: Record<string, unknown>, key: string): Member {
       }
     },
     sensitive: members.some(([, member]) => member.sensitive),
-    plan: { kind: "object", members: members.map(([name, member]) => ({ key: name, wire: wireName(name), plan: valuePlan(member.value) })) }
+    plan: { kind: "object", members: members.map(([name, member]) => ({ key: name, wire: wireName(name), plan: valuePlan(member.value) })) },
+    attachments
   };
 }
 

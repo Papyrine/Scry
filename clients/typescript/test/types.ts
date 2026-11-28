@@ -60,9 +60,12 @@ export type Checks = [
 // @ts-expect-error
 export type NoNavigationInARow = EmployeeRow["manager"];
 
-// No query reads an attachment: it is fetched by the row's key.
-// @ts-expect-error
-export type NoAttachmentInAQuery = import("./generated/test-model.ts").ContractQuery["document"];
+// No query reads an attachment's bytes: a query returns the member, and a row carries the handle that
+// fetches them by the row's key.
+export type Attachments = [
+  Holds<Equal<import("./generated/test-model.ts").ContractQuery["document"], scry.AttachmentMember>>,
+  Holds<Equal<import("./generated/test-model.ts").ContractRow["document"], scry.Attachment>>
+];
 
 // The pipeline's grammar, held by the types: what the server would refuse does not compile.
 
@@ -107,7 +110,13 @@ const projected = client.order.select(_ => ({
 const grouped = client.order.groupBy(_ => _.region).select(g => ({ key: g.key, total: g.sum(_ => _.amount) }));
 const joined = client.employee.leftJoin(client.department, _ => _.departmentId, _ => _.id, (employee, department) => ({ employee: employee.name, department: department.name }));
 
+// @ts-expect-error An attachment is not a value to compare.
+client.contract.where(_ => eq(_.document, new Uint8Array()));
+
+const documents = client.contract.select(_ => ({ id: _.id, document: _.document }));
+
 export type Returns = [
+  Holds<Equal<Awaited<ReturnType<typeof documents.toList>>, { id: number; document: scry.Attachment }[]>>,
   Holds<Equal<Awaited<ReturnType<typeof client.employee.toList>>, EmployeeRow[]>>,
   Holds<Equal<Awaited<ReturnType<typeof client.employee.count>>, number>>,
   Holds<Equal<Awaited<ReturnType<typeof client.employee.longCount>>, bigint>>,

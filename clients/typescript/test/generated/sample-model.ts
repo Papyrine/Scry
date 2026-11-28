@@ -38,6 +38,7 @@ export interface DepartmentQuery {
   readonly id: scry.Expr<number>;
   readonly name: scry.Expr<string>;
   readonly logo: scry.Expr<Uint8Array>;
+  readonly handbook: scry.AttachmentMember;
   readonly employees: scry.Collection<EmployeeQuery, EmployeeRow>;
 }
 
@@ -46,6 +47,7 @@ export interface DepartmentRow {
   id: number;
   name: string;
   logo: Uint8Array;
+  handbook: scry.Attachment;
 }
 
 /** Employee, as a query reads it. */
@@ -59,6 +61,7 @@ export interface EmployeeQuery {
   readonly manager: scry.Optional<EmployeeQuery>;
   readonly departmentId: scry.Expr<number>;
   readonly department: scry.Optional<DepartmentQuery>;
+  readonly photo: scry.AttachmentMember;
   readonly password: scry.Expr<string>;
   readonly canDeleteEmployee: scry.Expr<boolean>;
   readonly canRenameEmployee: scry.Expr<boolean>;
@@ -74,6 +77,7 @@ export interface EmployeeRow {
   created: scry.DateOnly;
   managerId: number | null;
   departmentId: number;
+  photo: scry.Attachment;
   password: string;
   canDeleteEmployee: boolean;
   canRenameEmployee: boolean;

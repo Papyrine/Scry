@@ -104,7 +104,7 @@ export class Batch<S> {
       throw error;
     }
 
-    results.forEach((result, index) => settle(entries[index]!, result, answer.stamp));
+    results.forEach((result, index) => settle(entries[index]!, result, answer.stamp, answer.parts));
   }
 
   #collect(request: QueryRequest): Promise<Answer> {
@@ -112,10 +112,11 @@ export class Batch<S> {
   }
 }
 
-function settle(entry: Entry, result: Json, stamp: string | undefined): void {
+// A batch's parts are numbered across every entry, so each entry's placeholders index the same list.
+function settle(entry: Entry, result: Json, stamp: string | undefined, parts: readonly Uint8Array[] | undefined): void {
   if (isObject(result) &&
       isObject(result["response"])) {
-    entry.resolve({ json: result["response"], ...(stamp === undefined ? {} : { stamp }) });
+    entry.resolve({ json: result["response"], ...(stamp === undefined ? {} : { stamp }), ...(parts === undefined ? {} : { parts }) });
     return;
   }
 

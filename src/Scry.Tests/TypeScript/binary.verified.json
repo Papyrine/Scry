@@ -1,0 +1,69 @@
+﻿[
+  {
+    "name": "An attachment",
+    "method": "POST",
+    "path": "/api/query/attachment",
+    "requestBody": "{\"version\":1,\"root\":\"Contract\",\"member\":\"Document\",\"keys\":[{\"value\":\"1\",\"tag\":\"Int32\"}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/pdf",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096",
+      "Content-Length": "3",
+      "X-Content-Type-Options": "nosniff"
+    },
+    "bodyBase64": "ESIz"
+  },
+  {
+    "name": "An attachment holding nothing",
+    "method": "POST",
+    "path": "/api/query/attachment",
+    "requestBody": "{\"version\":1,\"root\":\"Contract\",\"member\":\"Document\",\"keys\":[{\"value\":\"2\",\"tag\":\"Int32\"}]}",
+    "status": 204,
+    "headers": {
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": ""
+  },
+  {
+    "name": "An attachment the check refuses",
+    "method": "POST",
+    "path": "/api/query/attachment",
+    "requestBody": "{\"version\":1,\"root\":\"Contract\",\"member\":\"Document\",\"keys\":[{\"value\":\"3\",\"tag\":\"Int32\"}]}",
+    "status": 404,
+    "headers": {
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": ""
+  },
+  {
+    "name": "An attachment asked for with no key",
+    "method": "POST",
+    "path": "/api/query/attachment",
+    "requestBody": "{\"version\":1,\"root\":\"Contract\",\"member\":\"Document\",\"keys\":[]}",
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "body": "{\"error\":\"\\u0027Contract\\u0027 is keyed by 1 value(s); the request carried 0.\",\"code\":\"Validation\"}"
+  },
+  {
+    "name": "A batch carrying binary parts",
+    "method": "POST",
+    "path": "/api/query/batch",
+    "requestBody": "{\"version\":2,\"queries\":[{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Id\"},\"descending\":false},{\"$type\":\"take\",\"count\":2},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",\"Avatar\"]}}]},{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"where\",\"predicate\":{\"$type\":\"member\",\"path\":\"Active\"}},{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Name\"},\"descending\":false},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\"]}}]},{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"orderBy\",\"key\":{\"$type\":\"member\",\"path\":\"Id\"},\"descending\":false},{\"$type\":\"take\",\"count\":2},{\"$type\":\"select\",\"projection\":{\"members\":[\"Name\",\"Avatar\"]}}]}]}",
+    "status": 200,
+    "headers": {
+      "Content-Type": "multipart/mixed; boundary=scry00000000000000000000000000000000",
+      "Cache-Control": "no-store",
+      "Scry-Schema-Stamp": "{stamp}",
+      "Scry-Url-Limit": "4096"
+    },
+    "bodyBase64": "LS1zY3J5MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDANCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtDQpDb250ZW50LUxlbmd0aDogMw0KDQoBAgMNCi0tc2NyeTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwDQpDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ0KQ29udGVudC1MZW5ndGg6IDANCg0KDQotLXNjcnkwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMA0KQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi9vY3RldC1zdHJlYW0NCkNvbnRlbnQtTGVuZ3RoOiAzDQoNCgECAw0KLS1zY3J5MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDANCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtDQpDb250ZW50LUxlbmd0aDogMA0KDQoNCi0tc2NyeTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwDQpDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL2pzb24NCg0KeyJ2ZXJzaW9uIjoyLCJyZXN1bHRzIjpbeyJyZXNwb25zZSI6eyJ2ZXJzaW9uIjoyLCJraW5kIjoiTGlzdCIsInBheWxvYWQiOlt7Im5hbWUiOiJBbGljZSIsImF2YXRhciI6eyIkYmluIjowfX0seyJuYW1lIjoiQ2Fyb2wiLCJhdmF0YXIiOnsiJGJpbiI6MX19XSwic3RhbXAiOiJ7c3RhbXB9In19LHsicmVzcG9uc2UiOnsidmVyc2lvbiI6Miwia2luZCI6Ikxpc3QiLCJwYXlsb2FkIjpbeyJuYW1lIjoiQWFyb24ifSx7Im5hbWUiOiJBbGljZSJ9LHsibmFtZSI6IkNhcm9sIn1dLCJzdGFtcCI6IntzdGFtcH0ifX0seyJyZXNwb25zZSI6eyJ2ZXJzaW9uIjoyLCJraW5kIjoiTGlzdCIsInBheWxvYWQiOlt7Im5hbWUiOiJBbGljZSIsImF2YXRhciI6eyIkYmluIjoyfX0seyJuYW1lIjoiQ2Fyb2wiLCJhdmF0YXIiOnsiJGJpbiI6M319XSwic3RhbXAiOiJ7c3RhbXB9In19XSwic3RhbXAiOiJ7c3RhbXB9In0NCi0tc2NyeTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwLS0NCg=="
+  }
+]

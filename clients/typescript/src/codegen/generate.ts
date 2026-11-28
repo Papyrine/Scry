@@ -166,8 +166,14 @@ class Generator {
 
       lines.push(...docs(`${stem}, as a row comes back from a query that projects nothing.`, type.obsolete));
       lines.push(`export interface ${stem}Row${extending("Row")} {`);
-      for (const member of declaredOrder(type, type.members.filter(isScalar))) {
+      for (const member of declaredOrder(type, type.members.filter(_ => isScalar(_) || (_.isAttachment ?? false)))) {
         const display = this.#display(type, member);
+        if (display.kind === "attachment") {
+          lines.push(...docs(undefined, member.obsolete).map(_ => `  ${_}`));
+          lines.push(`  ${camelCase(member.name)}: scry.Attachment;`);
+          continue;
+        }
+
         if (display.kind !== "value") {
           throw new Error(`'${type.model}.${member.name}' is a scalar to introspection but its display, '${member.typeDisplay}', is not a value.`);
         }
@@ -404,9 +410,10 @@ class Generator {
       return `scry.Optional<${stemOf(display.model)}Query>`;
     }
 
-    // No query reads an attachment: its bytes are fetched by the row's key.
+    // No query reads an attachment's bytes, which are fetched by the row's key: a query may only
+    // return the member, beside that key.
     if (display.kind === "attachment") {
-      return undefined;
+      return "scry.AttachmentMember";
     }
 
     if (display.element.kind === "model") {

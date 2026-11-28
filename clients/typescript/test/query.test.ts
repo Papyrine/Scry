@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createScry, encodeQuery, formFor, gt, not, serializeRequest } from "../src/index.ts";
+import { createScry, encodeQuery, eq, formFor, gt, not, serializeRequest } from "../src/index.ts";
 import type { QueryRequest } from "../src/wire.ts";
 import { schema, type Sources } from "./generated/test-model.ts";
 import corpus from "../../../src/Scry.Tests/TypeScript/requests.verified.json" with { type: "json" };
@@ -75,8 +75,15 @@ test("a member the model does not have is refused, naming it", () => {
   assert.throws(() => scry.employee.where(_ => (_ as unknown as Record<string, never>)["salary"]!), /'salary' is not a member of Employee/);
 });
 
-test("no query reads an attachment", () => {
-  assert.throws(() => scry.contract.select(_ => ({ document: (_ as unknown as Record<string, never>)["document"]! })), /attachment, which no query reads/);
+test("an attachment travels as nothing, and is returned only beside its row's key", async () => {
+  const request = await capture(() => scry.contract.select(_ => ({ id: _.id, document: _.document })).toList());
+
+  assert.deepEqual(request.pipeline, [{ $type: "select", projection: { members: [{ name: "Id", value: { $type: "node", node: { $type: "member", path: ["Id"] } } }] } }]);
+  assert.throws(() => scry.contract.select(_ => ({ name: _.name, document: _.document })), /needs _\.id returned beside it/);
+  assert.throws(() => scry.contract.where(_ => eq(_.document as never, 1 as never)), /'document' is an attachment, which is not a value/);
+  assert.throws(() => scry.contract.orderBy(_ => _.document as never), /'document' is an attachment, which is not a value/);
+  assert.throws(() => scry.contract.select(_ => ({ id: _.id, document: _.document })).distinct(), /cannot be carried through distinct\(\)/);
+  assert.throws(() => scry.contract.groupBy(_ => _.document as never), /'document' is an attachment, which is not a value/);
 });
 
 test("a projected name starting with $ is refused, as the server would", () => {

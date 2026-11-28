@@ -209,3 +209,36 @@ test("what a caller may send, command by command and row by row", { skip }, asyn
   assert.ok(rows.some(_ => _.deletable === false));
   assert.ok(rows.every(_ => !_.deletable || !_.active));
 });
+
+test("a binary member travels as parts and reads back as its bytes, listed or streamed", { skip }, async () => {
+  const scry = await client();
+  const logos = scry.department.orderBy(_ => _.id).select(_ => ({ id: _.id, logo: _.logo }));
+  const listed = await logos.toList();
+  const streamed = [];
+  for await (const row of logos.stream()) {
+    streamed.push(row);
+  }
+
+  assert.ok(listed.some(_ => _.logo instanceof Uint8Array && _.logo.length > 0));
+  assert.deepEqual(streamed, listed);
+});
+
+test("each row carries a handle that fetches its attachment, or opens as null where it holds none", { skip }, async () => {
+  const scry = await client();
+  const employees = await scry.employee.orderBy(_ => _.id).toList();
+  const photos = await Promise.all(employees.map(_ => _.photo.open()));
+  const shown = photos.filter(_ => _ !== null);
+
+  assert.ok(shown.length > 0);
+  assert.ok(photos.some(_ => _ === null));
+  assert.equal(shown[0]!.contentType, "image/svg+xml");
+  assert.match(new TextDecoder().decode(await shown[0]!.bytes()), /<svg/);
+});
+
+test("an attachment one navigation away is fetched by that row's key", { skip }, async () => {
+  const scry = await client();
+  const [row] = await scry.employee.orderBy(_ => _.id).select(_ => ({ name: _.name, department: { id: _.department.id, handbook: _.department.handbook } })).toList();
+  const handbook = await row!.department.handbook.open();
+
+  assert.equal(handbook === null || handbook.contentType.startsWith("text/plain"), true);
+});
