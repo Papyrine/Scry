@@ -34,5 +34,8 @@
          SupportedLinqTests pins against KnownFunction and against Queryable itself — neither of
          which the analyzer's own assembly can see. -->
     <ProjectReference Include="..\Scry.SourceGenerator\Scry.SourceGenerator.csproj" />
+    <!-- ModelDescriptionTests compares the description it writes from this project's model DLL with
+         the one the server gives. -->
+    <ProjectReference Include="..\Scry.Describe\Scry.Describe.csproj" />
   </ItemGroup>
 </Project>

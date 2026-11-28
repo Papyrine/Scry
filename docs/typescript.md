@@ -9,7 +9,14 @@ It lives in `clients/typescript`, has no dependencies, and ships as TypeScript s
 
 ## The sample
 
-`samples/Sample.TypeScriptClient` is a console client for `Sample.WebServer`, writing the queries `Sample.ConsoleClient` writes in C#. Start the server, which writes its description into the sample's folder as it starts:
+`samples/Sample.TypeScriptClient` is a console client for `Sample.WebServer`, writing the queries `Sample.ConsoleClient` writes in C#. Building the server writes its description into the sample's folder, from the model DLL, so the client is generated before the server has ever started; running the server is for the queries:
+
+```bash
+dotnet build samples/Sample.WebServer
+cd samples/Sample.TypeScriptClient
+npm install
+npm run generate
+```
 
 ```bash
 dotnet run --project samples/Sample.WebServer
@@ -17,8 +24,6 @@ dotnet run --project samples/Sample.WebServer
 
 ```bash
 cd samples/Sample.TypeScriptClient
-npm install
-npm run generate
 npm start
 ```
 
@@ -35,20 +40,77 @@ npm start
 
 ## Generating the model
 
-The model is generated from the server's description: the [introspection](explorer.md#introspection) document the explorer reads. A server can write it to a file as it starts, which lets a client be generated without a server running:
+The model is generated from a description of the server's surface: the [introspection](explorer.md#introspection) document the explorer reads. That surface is the model's alone, read from its attributes as the C# generator reads them, so the description can be written from the model DLL as part of a build, with no server started. A server can also write it as it starts, and a running server serves it. A copy of a description, saved or committed beside the app, serves as well as the one it was copied from. The generator needs one, from any one of these:
 
-<!-- snippet: writeScryDescription -->
-<a id='snippet-writeScryDescription'></a>
-```cs
-if (Environment.GetEnvironmentVariable("SAMPLE_DESCRIPTION") is { } description)
-{
-    app.WriteScryDescription(description);
-}
+```mermaid
+flowchart LR
+    subgraph build ["At build time: no server"]
+        dll["Model.dll"] --> describe["Scry.Describe,<br/>in the server's build"]
+    end
+    subgraph startup ["At startup: the server starts once"]
+        starting["the server starting,<br/>in Development"] --> write["app.WriteScryDescription"]
+    end
+    subgraph saved ["A saved copy: no server"]
+        copy["a description saved or<br/>committed beside the app"]
+    end
+    subgraph url ["From a URL: the server running"]
+        running["a running server"] --> introspect["its introspect endpoint"]
+    end
+    describe --> description{{"one description,<br/>from any one of these"}}
+    write --> description
+    copy --> description
+    introspect --> description
+    description --> generator["scry-codegen,<br/>or the Vite plugin"] --> generated["scry.generated.ts"]
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L147-L152' title='Snippet source file'>snippet source</a> | <a href='#snippet-writeScryDescription' title='Start of snippet'>anchor</a></sup>
+
+| Written by | When | Needs a server | Its limits |
+| --- | --- | --- | --- |
+| `Scry.Describe`, from the model DLL | As the server's build finishes, or any build step after the model compiles | No | As given to it, else the server's defaults |
+| `app.WriteScryDescription(path)` | As the host starts, in Development | To start once | The ones the host configured |
+| The explorer's `{route}/introspect` | Whenever it is asked | Running, while generating | The ones the host configured |
+
+The limits are the two values a description carries that are the server's configuration rather than the model's: the largest page it serves (`maxPageSize`) and the longest query it takes as a URL (`queryUrlLimit`). The client reads the URL limit only until the first response tells it the server's, and does not read the page size.
+
+### At build time
+
+<!-- snippet: describeAtBuildTime -->
+<a id='snippet-describeAtBuildTime'></a>
+```csproj
+<Target Name="WriteScryDescription" AfterTargets="Build">
+  <MSBuild Projects="..\..\src\Scry.Describe\Scry.Describe.csproj" Targets="GetTargetPath">
+    <Output TaskParameter="TargetOutputs" PropertyName="ScryDescribe" />
+  </MSBuild>
+  <PropertyGroup>
+    <ScryModel>$(TargetDir)Sample.Model.dll</ScryModel>
+    <ScryDescription>$(MSBuildProjectDirectory)\..\Sample.TypeScriptClient\scry.description.json</ScryDescription>
+  </PropertyGroup>
+  <Exec Command="dotnet &quot;$(ScryDescribe)&quot; --model &quot;$(ScryModel)&quot; --output &quot;$(ScryDescription)&quot; --max-page-size 200" />
+</Target>
+```
+<sup><a href='/samples/Sample.WebServer/Sample.WebServer.csproj#L28-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-describeAtBuildTime' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`WriteScryDescription` writes the document `{explorer route}/introspect` serves, less what only the explorer sets (whether it offers SQL), to a path resolved against the content root. It writes in Development unless `always: true` is passed, since the description is the whole allow-listed surface, and only where the contents changed, whole and then moved into place, so whatever watches the file runs when the surface moved and never reads half of one. The sample takes the path from its launch profile, so a server started from anywhere else writes nothing.
+`Scry.Describe` reads the model DLL with the source generator's own reader, never loading it, and stamps it with the generator's own stamp, so what it writes is the description the server gives of the same model: `ModelDescriptionTests` compares the two byte for byte. It writes only where the description changed, whole and then moved into place, so whatever watches the file runs when the surface moved and never reads half of one. A model that is not there, that declares nothing a client could use, or that the generator would refuse, fails the step with what is wrong.
+
+| Option | |
+| --- | --- |
+| `--model` | The model assembly the `[Queryable]` types are declared in. |
+| `--output` | Where to write the description. |
+| `--max-page-size` | `ScryOptions.MaxPageSize`, where the server sets it. |
+| `--query-url-limit` | `ScryOptions.QueryUrlLimit`, where the server sets it. |
+
+It is a project in `src` (`src/Scry.Describe`) and not yet a package, as the TypeScript client is not.
+
+### At startup
+
+```cs
+app.MapScry("/api/query");
+app.WriteScryDescription("../client/scry.description.json");
+```
+
+`WriteScryDescription` writes the document `{explorer route}/introspect` serves, less what only the explorer sets (whether it offers SQL), to a path resolved against the content root. It carries the limits the host configured, which a description written at build time is told. It writes in Development unless `always: true` is passed, since the description is the whole allow-listed surface, and as the build step does, only where the contents changed.
+
+### Running the generator
 
 ```bash
 npx scry-codegen --input ../Server/scry.description.json --output src/scry.generated.ts
@@ -56,7 +118,7 @@ npx scry-codegen --input ../Server/scry.description.json --output src/scry.gener
 
 | Option | |
 | --- | --- |
-| `--input` | The server's description: the file a server writes with `WriteScryDescription`, or the URL the explorer reads it from (`{explorer route}/introspect`, mapped in Development by default). |
+| `--input` | The description: a file written by either of the above, or a saved copy of one, or the URL the explorer reads it from (`{explorer route}/introspect`, mapped in Development by default). |
 | `--output` | Where to write the generated TypeScript. It is left alone where it already holds what the description generates. |
 | `--runtime` | The module generated code imports the client's types from. Defaults to `scry-client`. |
 
@@ -64,7 +126,7 @@ A description from another introspection version is refused, as is a type displa
 
 ### With Vite
 
-An app built with Vite can have its build do this instead, as a C# client's build regenerates from the model on every compile. The plugin is imported from `scry-client/vite`:
+An app built with Vite can have its build generate the model, as a C# client's build regenerates from the model on every compile. The plugin is imported from `scry-client/vite`:
 
 <!-- snippet: typescriptVitePlugin -->
 <a id='snippet-typescriptVitePlugin'></a>
@@ -78,7 +140,24 @@ export default defineConfig({
 <sup><a href='/clients/typescript/test/vite/vite.config.ts#L8-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptVitePlugin' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-It generates the model as a build or the dev server starts, and in the dev server again whenever the description changes, which is whenever the server starts over a model whose surface moved. It writes a real file rather than a virtual module, since the type-checker and the editor read files, and leaves it alone where it already holds what the description generates. A description not there yet, on a machine that never started the server, keeps the generated file as it is with a warning, and fails the build only where there is no generated file either. `input` may also be a running server's introspection URL, read once as the build starts. Paths are relative to Vite's root.
+It generates the model as a build or the dev server starts, and in the dev server again whenever the description changes, which is whenever the server's build, or its startup, writes a surface that moved. So a change to the model reaches a running dev server's types with nothing restarted:
+
+```mermaid
+sequenceDiagram
+    participant Build as dotnet build
+    participant Describe as Scry.Describe
+    participant File as scry.description.json
+    participant Vite as Vite dev server
+    participant Generated as scry.generated.ts
+
+    Build->>Describe: the model compiled
+    Describe->>File: written, where the surface moved
+    File-->>Vite: its watcher sees the change
+    Vite->>Generated: generated again, where it differs
+    Generated-->>Vite: what imports it is reloaded
+```
+
+It writes a real file rather than a virtual module, since the type-checker and the editor read files. A description not there yet, on a machine where the server has not been built, keeps the generated file as it is with a warning, and fails the build only where there is no generated file either. `input` may also be a running server's introspection URL, read once as the build starts. Paths are relative to Vite's root.
 
 The plugin is optional: `vite` is an optional peer dependency, and the client's own entry point imports nothing of it, so an app without Vite runs `scry-codegen` as before.
 

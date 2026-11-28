@@ -988,6 +988,7 @@ static class MetadataModelReader
                     Name = reader.GetString(property.Name),
                     Obsolete = ObsoleteOf(reader, attributes, decoder),
                     IsAttachment = attachment,
+                    ContentType = attachment ? ContentTypeOf(reader, attributes, decoder) : null,
                     HasBinaryTransfer = HasAttribute(reader, attributes, binaryTransferAttribute),
                     IsKey = HasAttribute(reader, attributes, keyAttribute),
                     IsSensitive = HasAttribute(reader, attributes, sensitiveAttribute)
@@ -1032,10 +1033,10 @@ static class MetadataModelReader
             foreach (var property in source.Properties)
             {
                 if (inherited.TryGetValue(property.Name, out var hidden) &&
-                    Scry.ScryGenerator.Display(property) != Scry.ScryGenerator.Display(hidden))
+                    ModelStamp.Display(property) != ModelStamp.Display(hidden))
                 {
                     throw new InvalidOperationException(
-                        $"'{source.ClrName}.{property.Name}' hides '{DeclaringModel(baseSource, property.Name, byModel).ClrName}.{property.Name}' with another type: '{Scry.ScryGenerator.Display(property)}' where the hidden member is '{Scry.ScryGenerator.Display(hidden)}'. A derived query model inherits its base's members, so a member it hides is read as the base's. Give it the type it hides, or rename it.");
+                        $"'{source.ClrName}.{property.Name}' hides '{DeclaringModel(baseSource, property.Name, byModel).ClrName}.{property.Name}' with another type: '{ModelStamp.Display(property)}' where the hidden member is '{ModelStamp.Display(hidden)}'. A derived query model inherits its base's members, so a member it hides is read as the base's. Give it the type it hides, or rename it.");
                 }
             }
 
@@ -1504,6 +1505,41 @@ static class MetadataModelReader
         var baseType = reader.GetTypeReference((TypeReferenceHandle)definition.BaseType);
         return reader.GetString(baseType.Namespace) == "System" &&
                reader.GetString(baseType.Name) == "Enum";
+    }
+
+    // The ContentType an [Attachment] declares, as written, as the server reads it off the attribute.
+    // Null where it declares none, or where the blob cannot be read.
+    static string? ContentTypeOf(
+        MetadataReader reader,
+        IEnumerable<CustomAttributeHandle> attributes,
+        SignatureDecoder decoder)
+    {
+        foreach (var handle in attributes)
+        {
+            var attribute = reader.GetCustomAttribute(handle);
+            if (AttributeTypeName(reader, attribute) != attachmentAttribute)
+            {
+                continue;
+            }
+
+            try
+            {
+                foreach (var argument in attribute.DecodeValue(decoder).NamedArguments)
+                {
+                    if (argument is {Name: "ContentType", Value: string contentType})
+                    {
+                        return contentType;
+                    }
+                }
+            }
+            catch (BadImageFormatException)
+            {
+            }
+
+            return null;
+        }
+
+        return null;
     }
 
     static bool HasPublicInstanceGetter(MetadataReader reader, PropertyDefinition property) =>

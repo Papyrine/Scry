@@ -398,7 +398,7 @@ Note this is the only channel for headers: they are not part of the [wire reques
 
 A transport that carries requests across a process boundary hands `ScryJson.DeserializeRequest` the bytes it received rather than binding a `QueryRequest` with a serializer of its own. What makes the wire format fail closed — an unknown member refused, a duplicated property refused, a null array element refused — is in `ScryJson.Options`, not on the types. It also calls `processor.EnsureReady(services)` once at startup, which is every check `MapScry` runs. [Scry.Server.SignalR](live-queries.md#over-signalr-instead-of-http) is a transport built this way.
 
-`processor.Describe()` returns the [introspection](explorer.md#introspection) contract. `app.WriteScryDescription(path)` writes it to a file as the host starts, in Development, for a client generated at build time rather than from a running server: see [TypeScript](typescript.md#generating-the-model).
+`processor.Describe()` returns the [introspection](explorer.md#introspection) contract. `app.WriteScryDescription(path)` writes it to a file as the host starts, in Development, and `Scry.Describe` writes the same from the model DLL as a build step, with no host started, for a client generated at build time rather than from a running server: see [TypeScript](typescript.md#generating-the-model).
 
 Because `ScryClient` takes an arbitrary transport delegate, the same processor also supports an in-process client — the whole pipeline, LINQ to rows, with no web host:
 

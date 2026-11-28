@@ -14,7 +14,7 @@ public class LockstepTests
         using (Assert.Multiple())
         {
             await Assert.That(extract.Error).IsNull();
-            await Assert.That(ScryGenerator.ComputeStamp(extract)).IsEqualTo(SharedProcessor.Instance.SchemaStamp);
+            await Assert.That(ModelStamp.Compute(extract)).IsEqualTo(SharedProcessor.Instance.SchemaStamp);
         }
     }
 
@@ -53,7 +53,7 @@ public class LockstepTests
         {
             var generated = extract.Sources.Single(_ => _.ModelName == type.Model);
             var serverMembers = type.Members.Select(_ => $"{_.Name} {_.TypeDisplay}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal);
-            var generatorMembers = generated.Properties.Select(_ => $"{_.Name} {ScryGenerator.Display(_)}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal);
+            var generatorMembers = generated.Properties.Select(_ => $"{_.Name} {ModelStamp.Display(_)}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal);
             await Assert.That(generatorMembers).IsEquivalentTo(serverMembers, CollectionOrdering.Matching).Because(type.Model);
         }
     }
@@ -143,7 +143,7 @@ public class LockstepTests
             .Single(_ => _.ModelName == "SittingQueryModel")
             .Properties
             .Where(_ => _.Name != "Id" && _.Name != "Name")
-            .Select(_ => $"{_.Name} {ScryGenerator.Display(_)}")
+            .Select(_ => $"{_.Name} {ModelStamp.Display(_)}")
             .Order(StringComparer.Ordinal);
         var served = described.Types
             .Single(_ => _.Model == "SittingQueryModel")

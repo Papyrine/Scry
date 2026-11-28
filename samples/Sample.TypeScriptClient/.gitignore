@@ -1,5 +1,5 @@
 node_modules/
-# Written by Sample.WebServer when it starts (SAMPLE_DESCRIPTION in its launchSettings.json), and
+# Written from the model DLL as Sample.WebServer builds (its WriteScryDescription target), and
 # generated from that, as an app's build generates it: npm run generate.
 scry.description.json
 src/scry.generated.ts

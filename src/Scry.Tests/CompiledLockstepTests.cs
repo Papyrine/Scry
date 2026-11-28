@@ -432,7 +432,7 @@ public class CompiledLockstepTests
             using (Assert.Multiple())
             {
                 await Assert.That(extract.Error).IsNull();
-                await Assert.That(ScryGenerator.ComputeStamp(extract)).IsEqualTo(schema.Stamp);
+                await Assert.That(ModelStamp.Compute(extract)).IsEqualTo(schema.Stamp);
             }
 
             await LockstepTests.AgreeOnEveryMember(extract, described);

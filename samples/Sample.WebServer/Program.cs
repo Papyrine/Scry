@@ -139,18 +139,6 @@
         app.MapScry("/api/query");
         // end-snippet
 
-        // The description the TypeScript sample generates its client from, written where it reads it:
-        // in Development, and only when the model's surface moved, so its generator and a Vite plugin
-        // watching the file run when there is something new. The path comes from launchSettings.json,
-        // so a server started from anywhere else, such as the browser suite's throwaway folder, writes
-        // nothing.
-        // begin-snippet: writeScryDescription
-        if (Environment.GetEnvironmentVariable("SAMPLE_DESCRIPTION") is { } description)
-        {
-            app.WriteScryDescription(description);
-        }
-        // end-snippet
-
         // The same queries over a SignalR hub, beside the HTTP endpoints rather than instead of them.
         // What the transport switch on the /live pages connects to: every live query a page holds
         // then shares the one connection. Optional — see /docs/live-queries.md.
