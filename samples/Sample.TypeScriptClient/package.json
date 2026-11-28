@@ -8,7 +8,7 @@
     "node": ">=23.6"
   },
   "scripts": {
-    "generate": "scry-codegen --input http://localhost:5000/scry/introspect --output src/scry.generated.ts",
+    "generate": "scry-codegen --input scry.description.json --output src/scry.generated.ts",
     "generate:snapshot": "scry-codegen --input ../Sample.Tests/UiSnapshotTests.ExplorerIntrospectionEndpoint.verified.txt --output src/scry.generated.ts",
     "start": "node src/main.ts",
     "typecheck": "tsc -p ."

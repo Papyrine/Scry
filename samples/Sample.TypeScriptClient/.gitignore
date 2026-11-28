@@ -1,3 +1,5 @@
 node_modules/
-# Generated from the server's description, as an app's build generates it: npm run generate.
+# Written by Sample.WebServer when it starts (SAMPLE_DESCRIPTION in its launchSettings.json), and
+# generated from that, as an app's build generates it: npm run generate.
+scry.description.json
 src/scry.generated.ts

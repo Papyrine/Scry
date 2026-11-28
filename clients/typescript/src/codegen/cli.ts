@@ -1,39 +1,19 @@
 #!/usr/bin/env node
 // scry-codegen: writes the TypeScript a client queries with from a server's introspection.
 
-import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
+import { readDescription, writeGenerated } from "./description.ts";
 import { generate } from "./generate.ts";
-import type { ScryIntrospection } from "../wire.ts";
+
+export { readDescription } from "./description.ts";
 
 const usage = `Usage: scry-codegen --input <file or URL> --output <file> [--runtime <module>]
 
-  --input    The server's introspection: a JSON file, or the URL the explorer reads it from
-             ({explorer route}/introspect, mapped in Development by default).
+  --input    The server's description: the file a server writes with WriteScryDescription, or
+             the URL the explorer reads it from ({explorer route}/introspect, mapped in
+             Development by default).
   --output   Where to write the generated TypeScript.
   --runtime  The module the generated code imports the client's types from. Default: scry-client.`;
-
-/** Reads a description from a file, or from a URL. */
-export async function readDescription(input: string): Promise<ScryIntrospection> {
-  let text: string;
-  if (/^https?:\/\//i.test(input)) {
-    const response = await fetch(input);
-    if (!response.ok) {
-      throw new Error(`${input} answered ${response.status} ${response.statusText}.`);
-    }
-
-    text = await response.text();
-  } else {
-    text = await readFile(input, "utf8");
-  }
-
-  // A description saved by a .NET tool may start with a byte-order mark, which JSON does not allow.
-  if (text.charCodeAt(0) === 0xfeff) {
-    text = text.slice(1);
-  }
-
-  return JSON.parse(text) as ScryIntrospection;
-}
 
 async function main(args: string[]): Promise<number> {
   const { values } = parseArgs({
@@ -59,7 +39,11 @@ async function main(args: string[]): Promise<number> {
 
   const description = await readDescription(values.input);
   const code = generate(description, { runtime: values.runtime, from: values.input });
-  await writeFile(values.output, code);
+  if (!await writeGenerated(values.output, code)) {
+    console.log(`${values.output} is already what ${values.input} generates (schema stamp ${description.schemaStamp}).`);
+    return 0;
+  }
+
   console.log(`Wrote ${values.output} from ${values.input} (schema stamp ${description.schemaStamp}).`);
   return 0;
 }

@@ -20,7 +20,7 @@ import type {
 } from "../runtime/schema.ts";
 import { parseDisplay } from "./display.ts";
 import type { Display, Known } from "./display.ts";
-import bclEnums from "../../../../src/Scry.Tests/TypeScript/bcl-enums.verified.json" with { type: "json" };
+import { bclEnums } from "../../../../src/Scry.Tests/TypeScript/bcl-enums.verified.mts";
 
 export interface GenerateOptions {
   /** The module the generated code imports the runtime's types from. */

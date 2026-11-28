@@ -9,7 +9,7 @@ It lives in `clients/typescript`, has no dependencies, and ships as TypeScript s
 
 ## The sample
 
-`samples/Sample.TypeScriptClient` is a console client for `Sample.WebServer`, writing the queries `Sample.ConsoleClient` writes in C#. With the server running:
+`samples/Sample.TypeScriptClient` is a console client for `Sample.WebServer`, writing the queries `Sample.ConsoleClient` writes in C#. Start the server, which writes its description into the sample's folder as it starts:
 
 ```bash
 dotnet run --project samples/Sample.WebServer
@@ -30,22 +30,57 @@ npm start
 | `npm start -- --photos` | Opens each employee's photo, an attachment no query carried. |
 | `npm start -- --server <url>` | Points at a server other than `Sample.WebServer`. |
 
-`npm run generate` writes `src/scry.generated.ts` from the running server, as an app's build would, and it is not committed. CI writes it from the sample model's committed description instead (`npm run generate:snapshot`) and type-checks the sample against it, which compiles every example on this page.
+`npm run generate` writes `src/scry.generated.ts` from that description, as an app's build would; neither file is committed. CI writes the model from the sample model's committed description instead (`npm run generate:snapshot`) and type-checks the sample against it, which compiles every example on this page.
 
 
 ## Generating the model
 
+The model is generated from the server's description: the [introspection](explorer.md#introspection) document the explorer reads. A server can write it to a file as it starts, which lets a client be generated without a server running:
+
+<!-- snippet: writeScryDescription -->
+<a id='snippet-writeScryDescription'></a>
+```cs
+if (Environment.GetEnvironmentVariable("SAMPLE_DESCRIPTION") is { } description)
+{
+    app.WriteScryDescription(description);
+}
+```
+<sup><a href='/samples/Sample.WebServer/Program.cs#L147-L152' title='Snippet source file'>snippet source</a> | <a href='#snippet-writeScryDescription' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`WriteScryDescription` writes the document `{explorer route}/introspect` serves, less what only the explorer sets (whether it offers SQL), to a path resolved against the content root. It writes in Development unless `always: true` is passed, since the description is the whole allow-listed surface, and only where the contents changed, whole and then moved into place, so whatever watches the file runs when the surface moved and never reads half of one. The sample takes the path from its launch profile, so a server started from anywhere else writes nothing.
+
 ```bash
-npx scry-codegen --input http://localhost:5000/scry/introspect --output src/scry.generated.ts
+npx scry-codegen --input ../Server/scry.description.json --output src/scry.generated.ts
 ```
 
 | Option | |
 | --- | --- |
-| `--input` | The server's introspection: the URL the explorer reads it from (`{explorer route}/introspect`, mapped in Development by default), or a file holding it. |
-| `--output` | Where to write the generated TypeScript. |
+| `--input` | The server's description: the file a server writes with `WriteScryDescription`, or the URL the explorer reads it from (`{explorer route}/introspect`, mapped in Development by default). |
+| `--output` | Where to write the generated TypeScript. It is left alone where it already holds what the description generates. |
 | `--runtime` | The module generated code imports the client's types from. Defaults to `scry-client`. |
 
 A description from another introspection version is refused, as is a type display the generator does not know: generating against a newer server fails loudly rather than guessing. The generated file carries the description's schema stamp, which every request sends and every response is compared with, so a client generated against one model and talking to another is told so, once, through `onSchemaStale`.
+
+### With Vite
+
+An app built with Vite can have its build do this instead, as a C# client's build regenerates from the model on every compile. The plugin is imported from `scry-client/vite`:
+
+<!-- snippet: typescriptVitePlugin -->
+<a id='snippet-typescriptVitePlugin'></a>
+```ts
+export default defineConfig({
+  plugins: [
+    scry({ input: "scry.description.json", output: "src/scry.generated.ts" })
+  ]
+});
+```
+<sup><a href='/clients/typescript/test/vite/vite.config.ts#L8-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptVitePlugin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+It generates the model as a build or the dev server starts, and in the dev server again whenever the description changes, which is whenever the server starts over a model whose surface moved. It writes a real file rather than a virtual module, since the type-checker and the editor read files, and leaves it alone where it already holds what the description generates. A description not there yet, on a machine that never started the server, keeps the generated file as it is with a warning, and fails the build only where there is no generated file either. `input` may also be a running server's introspection URL, read once as the build starts. Paths are relative to Vite's root.
+
+The plugin is optional: `vite` is an optional peer dependency, and the client's own entry point imports nothing of it, so an app without Vite runs `scry-codegen` as before.
 
 Per model, two interfaces:
 

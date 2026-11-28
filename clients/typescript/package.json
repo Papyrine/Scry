@@ -8,7 +8,8 @@
     "node": ">=23.6"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./vite": "./src/vite.ts"
   },
   "bin": {
     "scry-codegen": "./src/codegen/cli.ts"
@@ -21,6 +22,15 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.11",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.4.0"
+  },
+  "peerDependencies": {
+    "vite": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   }
 }
