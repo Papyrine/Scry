@@ -20,10 +20,17 @@ const scry = createScry<Sources>(schema, {
 export async function where(): Promise<void> {
   // begin-snippet: typescriptWhere
   const rows = await scry.employee
-    .where(_ => and(_.active, eq(_.status, "FullTime"), startsWith(_.manager.name, "A")))
-    .orderBy(_ => _.name)
-    .select(_ => ({ name: _.name, manager: _.manager.name, department: { name: _.department.name } }))
-    .toList();
+      .where(_ => and(_.active, eq(_.status, "FullTime"), startsWith(_.manager.name, "A")))
+      .orderBy(_ => _.name)
+      .select(_ => (
+          {
+            name: _.name,
+            manager: _.manager.name,
+            department: {
+              name: _.department.name
+            }
+          }))
+      .toList();
   // { name: string; manager: string | null; department: { name: string | null } }[]
   // end-snippet
   show(JSON.stringify(rows));
@@ -31,11 +38,12 @@ export async function where(): Promise<void> {
 
 export async function stream(): Promise<void> {
   // begin-snippet: typescriptStream
-  for await (const order of
-      scry
-          .order
-          .orderBy(_ => _.id)
-          .select(_ => ({ id: _.id, amount: _.amount })).stream()) {
+  let stream = scry
+      .order
+      .orderBy(_ => _.id)
+      .select(_ => ({id: _.id, amount: _.amount}))
+      .stream();
+  for await (const order of stream) {
     show(`${order.id}: ${order.amount}`);
   }
   // end-snippet

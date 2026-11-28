@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Logging;
 
@@ -121,7 +120,7 @@ public partial class TypeScriptFixtureTests
     {
         const string path = "/api/query/command";
         script.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var cancel = new CancelSource(TimeSpan.FromSeconds(30));
         using var request = new HttpRequestMessage(HttpMethod.Post, path);
         request.Content = JsonBody(body);
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel.Token);

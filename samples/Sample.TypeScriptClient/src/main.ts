@@ -82,19 +82,20 @@ async function main(): Promise<number> {
 // begin-snippet: typescriptQuery
 async function showActiveEmployees(): Promise<void> {
   const rows = await scry.employee
-    .where(_ => _.active)
-    .orderBy(_ => _.name)
-    .select(_ =>
-        ({
-          name: _.name,
-          status: _.status,
-          manager: _.manager.name,
-          department: _.department.name }))
-    .toList();
+      .where(_ => _.active)
+      .orderBy(_ => _.name)
+      .select(_ =>
+          ({
+            name: _.name,
+            status: _.status,
+            manager: _.manager.name,
+            department: _.department.name
+          }))
+      .toList();
 
   writeTable(
-    ["Name", "Status", "Manager", "Department"],
-    rows.map(_ => [_.name, _.status, _.manager ?? "", _.department ?? ""]));
+      ["Name", "Status", "Manager", "Department"],
+      rows.map(_ => [_.name, _.status, _.manager ?? "", _.department ?? ""]));
 }
 // end-snippet
 
@@ -103,17 +104,18 @@ async function showActiveEmployees(): Promise<void> {
 // begin-snippet: typescriptGroupBy
 async function showRegions(): Promise<void> {
   const rows = await scry.order
-    .groupBy(_ => _.region)
-    .select(group =>
-        ({
-          region: group.key,
-          total: group.sum(_ => _.amount),
-          count: group.count() }))
-    .toList();
+      .groupBy(_ => _.region)
+      .select(group =>
+          ({
+            region: group.key,
+            total: group.sum(_ => _.amount),
+            count: group.count()
+          }))
+      .toList();
 
   writeTable(
-    ["Region", "Total", "Orders"],
-    rows.map(_ => [_.region, _.total, String(_.count)]));
+      ["Region", "Total", "Orders"],
+      rows.map(_ => [_.region, _.total, String(_.count)]));
 }
 // end-snippet
 

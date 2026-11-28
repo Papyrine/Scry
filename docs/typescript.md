@@ -377,22 +377,23 @@ A request travels as a URL when it fits the server's budget and reads nothing se
 ```ts
 async function showActiveEmployees(): Promise<void> {
   const rows = await scry.employee
-    .where(_ => _.active)
-    .orderBy(_ => _.name)
-    .select(_ =>
-        ({
-          name: _.name,
-          status: _.status,
-          manager: _.manager.name,
-          department: _.department.name }))
-    .toList();
+      .where(_ => _.active)
+      .orderBy(_ => _.name)
+      .select(_ =>
+          ({
+            name: _.name,
+            status: _.status,
+            manager: _.manager.name,
+            department: _.department.name
+          }))
+      .toList();
 
   writeTable(
-    ["Name", "Status", "Manager", "Department"],
-    rows.map(_ => [_.name, _.status, _.manager ?? "", _.department ?? ""]));
+      ["Name", "Status", "Manager", "Department"],
+      rows.map(_ => [_.name, _.status, _.manager ?? "", _.department ?? ""]));
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L82-L99' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L82-L100' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A member is read as a path, so `_.manager.name` is the `Manager.Name` the server reads, and a value read through a navigation may be null. Comparison, logic and arithmetic are functions (`eq`, `gt`, `and`, `not`, `add`, `coalesce`, `cond`, `concat`, `isIn` and the rest), as is every function the wire carries (`startsWith`, `year`, `addDays`, `round`, `toDouble` and the others):
@@ -401,13 +402,20 @@ A member is read as a path, so `_.manager.name` is the `Manager.Name` the server
 <a id='snippet-typescriptWhere'></a>
 ```ts
 const rows = await scry.employee
-  .where(_ => and(_.active, eq(_.status, "FullTime"), startsWith(_.manager.name, "A")))
-  .orderBy(_ => _.name)
-  .select(_ => ({ name: _.name, manager: _.manager.name, department: { name: _.department.name } }))
-  .toList();
+    .where(_ => and(_.active, eq(_.status, "FullTime"), startsWith(_.manager.name, "A")))
+    .orderBy(_ => _.name)
+    .select(_ => (
+        {
+          name: _.name,
+          manager: _.manager.name,
+          department: {
+            name: _.department.name
+          }
+        }))
+    .toList();
 // { name: string; manager: string | null; department: { name: string | null } }[]
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L21-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWhere' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L21-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWhere' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A collection is asked about through its own methods: `_.lines.any(l => gt(l.quantity, 1))`, `_.tags.contains("urgent")`. Grouping, joins and set operations follow LINQ's shape:
@@ -417,20 +425,21 @@ A collection is asked about through its own methods: `_.lines.any(l => gt(l.quan
 ```ts
 async function showRegions(): Promise<void> {
   const rows = await scry.order
-    .groupBy(_ => _.region)
-    .select(group =>
-        ({
-          region: group.key,
-          total: group.sum(_ => _.amount),
-          count: group.count() }))
-    .toList();
+      .groupBy(_ => _.region)
+      .select(group =>
+          ({
+            region: group.key,
+            total: group.sum(_ => _.amount),
+            count: group.count()
+          }))
+      .toList();
 
   writeTable(
-    ["Region", "Total", "Orders"],
-    rows.map(_ => [_.region, _.total, String(_.count)]));
+      ["Region", "Total", "Orders"],
+      rows.map(_ => [_.region, _.total, String(_.count)]));
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L103-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L104-L120' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A terminal with a condition of its own takes it as LINQ's does:
@@ -444,7 +453,7 @@ async function showActiveCount(): Promise<void> {
   console.log();
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L121-L127' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCount' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L123-L129' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCount' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The types follow the server's pipeline grammar, so an ordering the server would refuse does not compile: `thenBy` follows an ordering, a grouped query projects, nothing filters after a projection, and a terminal's own condition comes before any projection. A row's type is inferred from the projection.
@@ -479,7 +488,7 @@ async function showPagesByOffset(): Promise<void> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L183-L202' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptPaging' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L185-L204' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Handed back, the cursor resumes past the last row, so the server seeks rather than counting the rows before it, and a row added or removed earlier on does not shift the pages after it ([Paging](paging.md)):
@@ -507,7 +516,7 @@ async function showPagesByCursor(): Promise<void> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L206-L226' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptKeyset' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L208-L228' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptKeyset' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `page()` with no size asks for the server's own.
@@ -526,7 +535,7 @@ const rows = await scry.order
   .select(_ => ({ id: _.id, amount: _.amount }))
   .toList();
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L61-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptHeaders' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L69-L76' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptHeaders' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 They are the transport's, not the query's: nothing of them enters the request, so a query is the same bytes with them or without, and where in the chain they are written makes no difference. `withHeaders` runs once per request, so a query sent again as a body carries the headers the first attempt was given; a live query writes them for each connection. `onResponseHeaders` reads a refusal's headers too, before the refusal is thrown, and a stream's before its first row. A query in a batch cannot carry headers of its own, since the batch is one request, and is refused when added. A query's header is written over the transport's of the same name.
@@ -552,15 +561,16 @@ A refusal throws `ScryRequestError` with the server's status, `code` and message
 <!-- snippet: typescriptStream -->
 <a id='snippet-typescriptStream'></a>
 ```ts
-for await (const order of
-    scry
-        .order
-        .orderBy(_ => _.id)
-        .select(_ => ({ id: _.id, amount: _.amount })).stream()) {
+let stream = scry
+    .order
+    .orderBy(_ => _.id)
+    .select(_ => ({id: _.id, amount: _.amount}))
+    .stream();
+for await (const order of stream) {
   show(`${order.id}: ${order.amount}`);
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L33-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L40-L49' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `stream()` reads the rows a line at a time as the server writes them. A failure after the first row throws the error its status would have been, and a stream cut off before the server's closing marker throws `ScryWireError`, so a short read is never taken for the whole answer. Leaving the loop early closes the connection. A projection of `[BinaryTransfer]` members streams as multipart, each row's parts arriving immediately before it, and reads as any other stream does.
@@ -579,7 +589,7 @@ await batch.send();
 
 show(`${await count} employees, the first ${(await names)[0]?.name}`);
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L45-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptBatch' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L53-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptBatch' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A batch sends its queries as one request ([Batching](batching.md)). Each entry is answered as it would have been alone, so one refused entry rejects its own promise and the others resolve. A batch is sent once, and each entry is one query ended by its terminal.
@@ -604,7 +614,7 @@ const first =
         .select(_ => ({ name: _.name }))
         .page(20, { signal });
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L74-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCancel' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L82-L94' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCancel' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An aborted signal abandons the request: the fetch stops, the server sees its connection close, and the terminal rejects with the signal's reason (a `TimeoutError` for `AbortSignal.timeout`). A signal already aborted sends nothing. The options come after the condition where a terminal has one, and take its place where it is left out, so `count({ signal })` counts every row; `page` takes them in place of the size or the cursor, as `page({ signal })`, `page(20, { signal })` or `page(20, cursor, { signal })`. A query sent with a signal is the same request, byte for byte, as without one.
@@ -644,7 +654,7 @@ async function watchOrders(): Promise<void> {
   });
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L132-L159' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L134-L161' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Read in a loop, the next answer waits until the loop comes back for it, so a slow reader is never handed a queue of them, and leaving the loop ends the subscription:
@@ -668,7 +678,7 @@ async function readOrders(): Promise<void> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L164-L180' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveLoop' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L166-L182' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveLoop' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A [live query](live-queries.md) is one request answered whenever its answer changes. `live()` answers with the rows, and `liveCount`, `liveLongCount`, `liveAny`, `liveFirstOrDefault` and `liveSingleOrDefault` with the scalar:
@@ -682,7 +692,7 @@ const stop = scry.employee
     active => show(`${active} active`),
     error => show(`The live query ended: ${(error as Error).message}`));
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L91-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveCount' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L99-L105' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveCount' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A live query is an `AsyncIterable` that runs until the loop leaves it, and `subscribe` calls back until the function it returns is called. A connection that ends is asked for again naming the last answer held, so an answer that has not moved is not sent again, and the consumer sees a pause rather than an end. The server failing for the moment, a server-side limit on open subscriptions, a 5xx, 408 or 429 from something in between, and a failed connection are all asked again. A rejection, a denial, or a client the server calls stale ends the live query with its error, since asking again would not change the answer. The C# client follows the same rules.
@@ -715,7 +725,7 @@ async function repriceOrder(id: number): Promise<number> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L232-L252' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommand' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L234-L254' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommand' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `createCommands` takes the sources `createScry` made, and `send` holds one function per [command](commands.md) the model declares, typed by its payload and its result. A payload is written as a query's constant is, so a date may be a `Date` or its text, and a `[Flags]` value its names. It travels camel-cased, each value in the JSON type the server binds it from: a `long` and a `decimal` as numbers, every enum by its name. A member the command does not have, or a null it cannot hold, is refused before anything is sent.
@@ -749,7 +759,7 @@ const deletable =
         .select(_ => ({name: _.name, deletable: _.canDeleteEmployee}))
         .single();
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L102-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommandResult' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L110-L127' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommandResult' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The server answers at once where it decides a command within its sync window, and otherwise answers pending and streams the outcome on the same response. The client waits `wait` milliseconds (three seconds unless set; `Infinity` waits for the outcome) before answering `Pending`. A pending command's connection that ends first is asked for again by the command's id, under the `retry` policy live queries use. `commands.pending` lists each command from going pending until its outcome has been seen: a completed one leaves after `completedLinger` milliseconds (eight seconds unless set), and a failed or unknown one stays until `clearFinished()`, since it says something somebody should read. `onPendingChanged` says when the list moves. `close()` stops following, and each command still followed ends `Unknown`; the server finishes what it accepted either way.
@@ -787,7 +797,7 @@ async function showPhotos(): Promise<void> {
   writeTable(["Name", "Photo"], rows);
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L256-L277' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptAttachment' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L258-L279' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptAttachment' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each row comes back with a handle made from its key, and `open()` fetches the bytes from the attachment endpoint as a request of its own, which the server authorizes afresh. It answers `null` where the stored value is null, and throws `ScryRequestError` with status 404 where the server will not hand the bytes over: an absent row, one a policy hides and one the check refuses are answered alike. What it opens has the type the member declares, an advisory `length`, the `body` as it arrives, and `bytes()` and `blob()`, any one of which reads it.

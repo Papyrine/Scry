@@ -20,8 +20,8 @@ static partial class TypeScriptVocabulary
         typeof(Guid),
         typeof(DateTime),
         typeof(DateTimeOffset),
-        typeof(DateOnly),
-        typeof(TimeOnly),
+        typeof(Date),
+        typeof(Time),
         typeof(TimeSpan),
         // Base64, as BinaryConverter writes it.
         typeof(byte[])
