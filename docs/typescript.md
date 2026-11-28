@@ -35,6 +35,8 @@ npm start
 | --- | --- |
 | `npm start` | Prints the active employees, the order totals per region, and how many employees are active. |
 | `npm start -- --live` | Watches the orders until Ctrl+C, printing the whole table each time it changes. |
+| `npm start -- --live --loop` | The same, read with `for await` rather than handed to a callback. |
+| `npm start -- --pages` | Every employee two at a time: by offset, then by cursor. |
 | `npm start -- --reprice <id>` | Sends the `RepriceOrder` command and prints its outcome: the write to make in one terminal while another runs `--live`. |
 | `npm start -- --photos` | Opens each employee's photo, an attachment no query carried. |
 | `npm start -- --server <url>` | Points at a server other than `Sample.WebServer`. |
@@ -43,7 +45,18 @@ npm start
 
 ### In a browser
 
-`samples/Sample.TypeScriptWeb` is the same queries as a page: the tables, each employee's photo drawn from the attachment handle its row came back with, and a live table of orders with a Reprice button on each row, enabled where the server says the row may be repriced. With the server running:
+`samples/Sample.TypeScriptWeb` is the Blazor sample's pages written in TypeScript, one HTML page each:
+
+| Page | Shows |
+| --- | --- |
+| Queries | The active employees, a filter on values the page holds, a projection that nests, the order totals per region, and each employee's photo drawn from the attachment handle its row came back with. |
+| Paging | `page()` after `skip()`, with Previous and Next. |
+| Keyset | `page(size, cursor)`, resuming past the last row, and starting over. |
+| Cached policy | A row policy the server decides once per row and remembers: the counter of decisions stays on a repeated query, goes up by one for a revised order, and by every row when a grant moves. |
+| Live | One live query of the orders, handed to `subscribe` or read with `for await`, with a Reprice command on each row and a bulk reprice that is no command. |
+| Commands | Hire, rename, deactivate and delete against a live table of employees, each button enabled by what the server says this caller may send, and a slow rename waiting in pending work until it lands. |
+
+Every page offers a reload where a response shows the server is on another model than the one the page was built from. With the server running:
 
 ```bash
 cd samples/Sample.TypeScriptWeb
@@ -64,21 +77,51 @@ export default defineConfig({
     proxy: {
       "/api": process.env["SCRY_SERVER"] ?? "http://localhost:5000"
     }
+  },
+  // A page per sample, as the Blazor sample has.
+  build: {
+    rolldownOptions: {
+      input: ["index.html", "paging.html", "keyset.html", "permissions.html", "live.html", "commands.html"]
+    }
   }
 });
 ```
-<sup><a href='/samples/Sample.TypeScriptWeb/vite.config.ts#L12-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWebViteConfig' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptWeb/vite.config.ts#L12-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWebViteConfig' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`SCRY_SERVER` points the forward at a server other than the one `Sample.WebServer`'s launch profile starts. The client is created with a path rather than a URL:
+`SCRY_SERVER` points the forward at a server other than the one `Sample.WebServer`'s launch profile starts. The pages share one client, created with a path rather than a URL, and told when the server's model has moved on:
 
 <!-- snippet: typescriptWebSetup -->
 <a id='snippet-typescriptWebSetup'></a>
 ```ts
-const scry = createScry<Sources>(schema, { transport: httpTransport({ endpoint: "/api/query" }) });
-const commands = createCommands<Commands>(scry);
+export const scry = createScry<Sources>(schema, {
+  transport: httpTransport({ endpoint: "/api/query" }),
+  onSchemaStale: offerReload
+});
+export const commands = createCommands<Commands>(scry);
 ```
-<sup><a href='/samples/Sample.TypeScriptWeb/src/main.ts#L10-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWebSetup' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptWeb/src/client.ts#L10-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWebSetup' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The queries still answer when it has, so the page offers a reload rather than taking one:
+
+<!-- snippet: typescriptWebStale -->
+<a id='snippet-typescriptWebStale'></a>
+```ts
+function offerReload(): void {
+  const banner = document.createElement("div");
+  banner.id = "stale";
+  banner.className = "stale";
+  banner.setAttribute("role", "alert");
+  banner.textContent = "The server has been updated since this page was built. ";
+  const reload = document.createElement("button");
+  reload.textContent = "Reload";
+  reload.addEventListener("click", () => location.reload());
+  banner.append(reload);
+  document.body.prepend(banner);
+}
+```
+<sup><a href='/samples/Sample.TypeScriptWeb/src/client.ts#L21-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWebStale' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An attachment's content is read as a blob, which is what an image shows:
@@ -115,10 +158,30 @@ async function showPhotos(): Promise<void> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptWeb/src/main.ts#L29-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWebPhotos' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptWeb/src/index.ts#L50-L79' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWebPhotos' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Its test serves the page with Vite's dev server and drives it in Edge or Chrome, as installed, through `playwright-core`, which downloads no browser: the tables load, the photos are drawn, and a reprice reaches the live table. It runs in `integration.ps1`, against the server the script starts, after Vite's production build; CI's TypeScript job builds the sample from the committed description and type-checks it.
+The cached-policy page asks its orders with a header of their own, so that the server decides afresh rather than answering 304 from what the browser holds ([Headers](#headers)):
+
+<!-- snippet: typescriptWebNoCache -->
+<a id='snippet-typescriptWebNoCache'></a>
+```ts
+async function showOrders(): Promise<void> {
+  const orders = await scry.order
+    .withHeader("Cache-Control", "no-cache")
+    .orderBy(_ => _.region)
+    .thenBy(_ => _.amount)
+    .select(_ => ({ id: _.id, region: _.region, amount: _.amount }))
+    .toList();
+
+  first = orders[0]?.id;
+  fill("orders", orders.map(_ => [_.region, _.amount]));
+}
+```
+<sup><a href='/samples/Sample.TypeScriptWeb/src/permissions.ts#L19-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptWebNoCache' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Its test serves the pages with Vite's dev server and drives each in Edge or Chrome, as installed, through `playwright-core`, which downloads no browser, as the Blazor sample's tests drive its pages; a console error fails the page it came from. It leaves the data as it found it. It runs in `integration.ps1`, against the server the script starts, after Vite's production build; CI's TypeScript job builds the sample from the committed description and type-checks it.
 
 
 ## Generating the model
@@ -283,7 +346,7 @@ const scry = createScry<Sources>(schema, {
 });
 const commands = createCommands<Commands>(scry);
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L19-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptClientSetup' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L21-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptClientSetup' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `httpTransport` sends to the endpoint `MapScry` was given, over `fetch`, and to the routes beside it for streams, batches, live queries, commands and attachments. Headers every request carries, such as an authorization, are given as an object or a function asked each time:
@@ -323,7 +386,7 @@ async function showActiveEmployees(): Promise<void> {
     rows.map(_ => [_.name, _.status, _.manager ?? "", _.department ?? ""]));
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L68-L80' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L81-L93' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A member is read as a path, so `_.manager.name` is the `Manager.Name` the server reads, and a value read through a navigation may be null. Comparison, logic and arithmetic are functions (`eq`, `gt`, `and`, `not`, `add`, `coalesce`, `cond`, `concat`, `isIn` and the rest), as is every function the wire carries (`startsWith`, `year`, `addDays`, `round`, `toDouble` and the others):
@@ -357,7 +420,7 @@ async function showRegions(): Promise<void> {
     rows.map(_ => [_.region, _.total, String(_.count)]));
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L84-L95' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L97-L108' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A terminal with a condition of its own takes it as LINQ's does:
@@ -371,7 +434,7 @@ async function showActiveCount(): Promise<void> {
   console.log();
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L98-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCount' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L111-L117' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCount' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The types follow the server's pipeline grammar, so an ordering the server would refuse does not compile: `thenBy` follows an ordering, a grouped query projects, nothing filters after a projection, and a terminal's own condition comes before any projection. A row's type is inferred from the projection.
@@ -379,6 +442,61 @@ The types follow the server's pipeline grammar, so an ordering the server would 
 A constant is typed by what stands beside it, as C# would type it, so a query sends the bytes the same C# query sends: `gt(_.amount, 90)` sends `90` as a `Decimal` because `Amount` is one. A projected key travels with its first letter capitalized, as a C# member is named, and rows read back under the key as written.
 
 JavaScript's own operators ask nothing of the server, since a member is an expression rather than a value. `>`, `+` and a template literal on one throw. `&&`, `||`, `!` and `? :` cannot be caught at run time: `where(_ => a && b)` would send `b` alone. Turn on `@typescript-eslint/strict-boolean-expressions` for code that writes queries.
+
+### Paging
+
+`page(size)` answers with one page of an ordered query: its `items`, `hasMore`, and a `cursor` where there is more. After `skip()` it pages by offset:
+
+<!-- snippet: typescriptPaging -->
+<a id='snippet-typescriptPaging'></a>
+```ts
+async function showPagesByOffset(): Promise<void> {
+  const size = 2;
+  for (let index = 0; ; index++) {
+    const page = await scry.employee
+      .orderBy(_ => _.name)
+      .skip(index * size)
+      .select(_ => ({ name: _.name, status: _.status }))
+      .page(size);
+
+    console.log(`Page ${index + 1}, by offset`);
+    writeTable(["Name", "Status"], page.items.map(_ => [_.name, _.status]));
+    if (!page.hasMore) {
+      return;
+    }
+  }
+}
+```
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L169-L186' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptPaging' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Handed back, the cursor resumes past the last row, so the server seeks rather than counting the rows before it, and a row added or removed earlier on does not shift the pages after it ([Paging](paging.md)):
+
+<!-- snippet: typescriptKeyset -->
+<a id='snippet-typescriptKeyset'></a>
+```ts
+async function showPagesByCursor(): Promise<void> {
+  let cursor: string | undefined;
+  for (let number = 1; ; number++) {
+    const page = await scry.employee
+      .orderBy(_ => _.name)
+      .select(_ => ({ name: _.name, status: _.status }))
+      .page(2, cursor);
+
+    console.log(`Page ${number}, by cursor`);
+    writeTable(["Name", "Status"], page.items.map(_ => [_.name, _.status]));
+    if (!page.hasMore) {
+      return;
+    }
+
+    cursor = page.cursor;
+  }
+}
+```
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L190-L208' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptKeyset' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`page()` with no size asks for the server's own.
 
 ### Headers
 
@@ -494,7 +612,29 @@ async function watchOrders(): Promise<void> {
   });
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L109-L134' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L122-L147' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLive' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Read in a loop, the next answer waits until the loop comes back for it, so a slow reader is never handed a queue of them, and leaving the loop ends the subscription:
+
+<!-- snippet: typescriptLiveLoop -->
+<a id='snippet-typescriptLiveLoop'></a>
+```ts
+async function readOrders(): Promise<void> {
+  console.log("Watching orders. Ctrl+C to stop.");
+  console.log();
+  const orders = scry.order
+    .orderBy(_ => _.id)
+    .select(_ => ({ id: _.id, region: _.region, amount: _.amount }))
+    .live();
+
+  for await (const answer of orders) {
+    console.log(new Date().toLocaleTimeString());
+    writeTable(["Id", "Region", "Amount"], answer.map(_ => [String(_.id), _.region, _.amount]));
+  }
+}
+```
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L152-L166' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveLoop' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A [live query](live-queries.md) is one request answered whenever its answer changes. `live()` answers with the rows, and `liveCount`, `liveLongCount`, `liveAny`, `liveFirstOrDefault` and `liveSingleOrDefault` with the scalar:
@@ -541,7 +681,7 @@ async function repriceOrder(id: number): Promise<number> {
   }
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L140-L160' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommand' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L214-L234' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommand' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `createCommands` takes the sources `createScry` made, and `send` holds one function per [command](commands.md) the model declares, typed by its payload and its result. A payload is written as a query's constant is, so a date may be a `Date` or its text, and a `[Flags]` value its names. It travels camel-cased, each value in the JSON type the server binds it from: a `long` and a `decimal` as numbers, every enum by its name. A member the command does not have, or a null it cannot hold, is refused before anything is sent.
@@ -609,7 +749,7 @@ async function showPhotos(): Promise<void> {
   writeTable(["Name", "Photo"], rows);
 }
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L164-L185' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptAttachment' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/main.ts#L238-L259' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptAttachment' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each row comes back with a handle made from its key, and `open()` fetches the bytes from the attachment endpoint as a request of its own, which the server authorizes afresh. It answers `null` where the stored value is null, and throws `ScryRequestError` with status 404 where the server will not hand the bytes over: an absent row, one a policy hides and one the check refuses are answered alike. What it opens has the type the member declares, an advisory `length`, the `body` as it arrives, and `bytes()` and `blob()`, any one of which reads it.

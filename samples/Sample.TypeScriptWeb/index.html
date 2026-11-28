@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Scry from TypeScript</title>
+    <title>Scry from TypeScript: queries</title>
     <link rel="icon" href="data:," />
   </head>
   <body>
@@ -23,6 +23,24 @@
       </section>
 
       <section>
+        <h2>The first two full-timers</h2>
+        <p>The status and the count are values the page holds, sent as the request's constants.</p>
+        <table id="full-timers" data-testid="full-timers">
+          <thead><tr><th>Name</th><th>Department</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Employee cards</h2>
+        <p>The department is projected as an object of its own, so each row comes back nested.</p>
+        <table id="cards" data-testid="cards">
+          <thead><tr><th>Name</th><th>Department name</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section>
         <h2>Employee photos</h2>
         <p>Each photo is an attachment: the query brought back a handle, and opening it fetched the bytes.</p>
         <div id="photos" data-testid="photos" class="photos"></div>
@@ -36,16 +54,8 @@
         </table>
       </section>
 
-      <section>
-        <h2>Orders, live</h2>
-        <p>A live query: each reprice is a command, and the table changes because the rows it reads did.</p>
-        <table id="orders" data-testid="orders">
-          <thead><tr><th>Id</th><th>Region</th><th>Amount</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <p id="status" data-testid="status" class="status"></p>
-      </section>
+      <p id="status" data-testid="status" class="status" role="status"></p>
     </main>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/index.ts"></script>
   </body>
 </html>

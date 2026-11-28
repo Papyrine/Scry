@@ -18,6 +18,12 @@ export default defineConfig({
     proxy: {
       "/api": process.env["SCRY_SERVER"] ?? "http://localhost:5000"
     }
+  },
+  // A page per sample, as the Blazor sample has.
+  build: {
+    rolldownOptions: {
+      input: ["index.html", "paging.html", "keyset.html", "permissions.html", "live.html", "commands.html"]
+    }
   }
 });
 // end-snippet

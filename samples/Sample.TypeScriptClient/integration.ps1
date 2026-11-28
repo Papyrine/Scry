@@ -147,6 +147,7 @@ try {
         Invoke-Checked 'Type-checking the sample' { npm run typecheck }
         Invoke-Checked 'Running the sample' { node src/main.ts --server $server }
         Invoke-Checked "Opening the sample's photos" { node src/main.ts --server $server --photos }
+        Invoke-Checked "Paging through the sample's employees" { node src/main.ts --server $server --pages }
     }
     finally {
         Pop-Location

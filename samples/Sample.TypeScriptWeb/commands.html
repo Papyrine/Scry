@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scry from TypeScript: commands</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main>
+      <h1>Commands</h1>
+      <p>
+        Every button sends a command, and none of them refreshes the table: it is a live query, so
+        what a command writes arrives as its next answer, here, in a second window, or from anyone
+        else. Only an inactive employee may be deleted; a name containing "slow" takes a while, and
+        waits in pending work until it lands.
+      </p>
+
+      <form id="create">
+        <input id="create-name" placeholder="Name" aria-label="Name to hire" />
+        <button id="create-submit" type="submit" disabled>Hire</button>
+      </form>
+      <p>
+        <label>Rename to <input id="rename-to" value="Renamed" aria-label="Rename to" /></label>
+      </p>
+
+      <table id="employees" data-testid="employees">
+        <thead><tr><th>Id</th><th>Name</th><th>Active</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <p id="status" data-testid="status" class="status" role="status"></p>
+
+      <section id="pending-work" class="pending" hidden>
+        <h2>Pending work</h2>
+        <ul id="pending"></ul>
+        <button id="clear-finished">Clear finished</button>
+      </section>
+    </main>
+    <script type="module" src="/src/commands.ts"></script>
+  </body>
+</html>

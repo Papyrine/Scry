@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scry from TypeScript: cached row policy</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main>
+      <h1>Cached row policy</h1>
+      <p>
+        Orders are scoped by a policy whose decision is too slow to run per row in SQL: it asks
+        another system which regions this caller may see. So it runs on the server, once per row, and
+        the server remembers the answers; the query carries only a membership test over the rows this
+        caller may see. The counter is what that saves: it goes up when a decision is made.
+      </p>
+
+      <h2>Orders this caller can see</h2>
+      <table id="orders" data-testid="orders">
+        <thead><tr><th>Region</th><th>Amount</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <p>Decisions made so far: <strong id="decisions"></strong></p>
+      <p id="actions"></p>
+
+      <h3>Grants</h3>
+      <p>
+        Revoking a region changes nothing about any order, so no version column could notice. The
+        server tells the cache, and the next query decides every row again.
+      </p>
+      <ul id="grants"></ul>
+
+      <h3>What to try</h3>
+      <ul>
+        <li><strong>Run the query again.</strong> The rows come back and the counter stays: every row was decided already.</li>
+        <li><strong>Revise an order.</strong> Its revision moves past the one this caller was decided up to, so the next query decides that row alone: the counter goes up by one.</li>
+        <li><strong>Revoke a region.</strong> Its rows go, and the counter goes up by every row: the caller's answers were made again.</li>
+      </ul>
+
+      <p id="status" data-testid="status" class="status" role="status"></p>
+    </main>
+    <script type="module" src="/src/permissions.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scry from TypeScript: keyset paging</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main>
+      <h1>Keyset paging</h1>
+      <p>
+        Employees with <code>page(size, cursor)</code>. Each page returns an opaque cursor, and Next
+        hands it back, so the server seeks past the last row rather than counting an offset. A cursor
+        goes forward only.
+      </p>
+
+      <table id="employees" data-testid="employees">
+        <thead><tr><th>Name</th><th>Status</th><th>Department</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p>
+        <button id="next" disabled>Next</button>
+        <button id="start-over">Start over</button>
+      </p>
+
+      <p id="status" data-testid="status" class="status" role="status"></p>
+    </main>
+    <script type="module" src="/src/keyset.ts"></script>
+  </body>
+</html>

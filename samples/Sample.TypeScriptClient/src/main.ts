@@ -3,6 +3,8 @@
 //
 //   node src/main.ts                  the tables, then exit
 //   node src/main.ts --live           watch the orders until Ctrl+C
+//   node src/main.ts --live --loop    the same, read with for await rather than handed to a callback
+//   node src/main.ts --pages          every employee, two at a time: by offset, then by cursor
 //   node src/main.ts --reprice <id>   send the RepriceOrder command, and print its outcome: the write to
 //                                     make in one terminal while another runs --live
 //   node src/main.ts --photos         open each employee's photo, an attachment no query carried
@@ -27,7 +29,18 @@ const commands = createCommands<Commands>(scry);
 async function main(): Promise<number> {
   try {
     if (process.argv.includes("--live")) {
+      if (process.argv.includes("--loop")) {
+        await readOrders();
+        return 0;
+      }
+
       await watchOrders();
+      return 0;
+    }
+
+    if (process.argv.includes("--pages")) {
+      await showPagesByOffset();
+      await showPagesByCursor();
       return 0;
     }
 
@@ -130,6 +143,67 @@ async function watchOrders(): Promise<void> {
       resolve();
     });
   });
+}
+// end-snippet
+
+// The same live query read in a loop. The next answer is not read until the loop comes back for it,
+// so a slow reader is never handed a queue of them; leaving the loop ends the subscription, and so
+// does Ctrl+C, which ends the process.
+// begin-snippet: typescriptLiveLoop
+async function readOrders(): Promise<void> {
+  console.log("Watching orders. Ctrl+C to stop.");
+  console.log();
+  const orders = scry.order
+    .orderBy(_ => _.id)
+    .select(_ => ({ id: _.id, region: _.region, amount: _.amount }))
+    .live();
+
+  for await (const answer of orders) {
+    console.log(new Date().toLocaleTimeString());
+    writeTable(["Id", "Region", "Amount"], answer.map(_ => [String(_.id), _.region, _.amount]));
+  }
+}
+// end-snippet
+
+// Offset paging: skip to each page's start, and stop where a page says there is no more.
+// begin-snippet: typescriptPaging
+async function showPagesByOffset(): Promise<void> {
+  const size = 2;
+  for (let index = 0; ; index++) {
+    const page = await scry.employee
+      .orderBy(_ => _.name)
+      .skip(index * size)
+      .select(_ => ({ name: _.name, status: _.status }))
+      .page(size);
+
+    console.log(`Page ${index + 1}, by offset`);
+    writeTable(["Name", "Status"], page.items.map(_ => [_.name, _.status]));
+    if (!page.hasMore) {
+      return;
+    }
+  }
+}
+// end-snippet
+
+// Keyset paging: each page's cursor is where the next one starts, so the server seeks past the last
+// row rather than counting the rows before it.
+// begin-snippet: typescriptKeyset
+async function showPagesByCursor(): Promise<void> {
+  let cursor: string | undefined;
+  for (let number = 1; ; number++) {
+    const page = await scry.employee
+      .orderBy(_ => _.name)
+      .select(_ => ({ name: _.name, status: _.status }))
+      .page(2, cursor);
+
+    console.log(`Page ${number}, by cursor`);
+    writeTable(["Name", "Status"], page.items.map(_ => [_.name, _.status]));
+    if (!page.hasMore) {
+      return;
+    }
+
+    cursor = page.cursor;
+  }
 }
 // end-snippet
 
