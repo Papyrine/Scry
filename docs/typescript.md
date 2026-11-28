@@ -597,4 +597,32 @@ A projection returns an attachment beside its row's key, as the one above does, 
 
 ## Developing the client
 
-`clients/typescript/readme.md` covers running the client's own tests, the fixtures the .NET side keeps for it, and running them against a live server.
+The client has no build step: Node 23.6 or later runs its TypeScript as it is.
+
+```bash
+cd clients/typescript
+npm ci
+npm run check
+```
+
+`check` type-checks, which also holds the assertions in `test/types.ts`, and runs the tests. None of it needs a server: the tests read fixtures the .NET side keeps as Verify snapshots in `src/Scry.Tests/TypeScript` (the wire vocabulary, the test model's description, the request corpus, and the HTTP exchanges each endpoint answers with), so a change there reaches the client as a failing test. A changed snapshot is accepted as any other is, and then the client made to agree.
+
+`test/server.test.ts` is the one exception, on purpose: an end-to-end run against a live `Sample.WebServer`. It generates the model from that server's introspection URL, to check it against what the server serves, and then sends real queries, streams, batches, live queries, commands and attachment fetches through it. It needs the server for that round trip, not for generating, and is skipped unless `SCRY_SERVER` names the server:
+
+```bash
+SCRY_SERVER=http://localhost:5249 node --test test/server.test.ts
+```
+
+It writes to the sample's database, commands and a bulk reprice among them, so whatever reads the seeded rows after it reads them changed. `Sample.WebServer` builds its database afresh each time it starts.
+
+`samples/Sample.TypeScriptClient/integration.ps1` runs the whole of it end to end, as CI's Windows job does after the suites. It builds `Sample.WebServer`, whose build writes the description, and starts it. It generates one client from the build's description, one from the description the server writes as it starts, and one from its introspection endpoint, and fails unless all three are the same. It then runs the console sample, drives the browser sample headless in Edge or Chrome, and runs the server tests, all against that server. It needs LocalDB, as the .NET suites do.
+
+```powershell
+./samples/Sample.TypeScriptClient/integration.ps1
+```
+
+What is generated for the two fixture descriptions is committed under `clients/typescript/test/generated`. After a change to the generator, or after the .NET side accepts a new description, write it again and review the difference as the generator change it is:
+
+```bash
+npm run fixtures
+```
