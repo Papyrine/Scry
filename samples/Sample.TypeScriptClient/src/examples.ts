@@ -47,6 +47,15 @@ export async function batch(): Promise<void> {
   // end-snippet
 }
 
+export async function cancel(): Promise<void> {
+  // begin-snippet: typescriptCancel
+  const signal = AbortSignal.timeout(5_000);
+  const active = await scry.employee.count(_ => _.active, { signal });
+  const first = await scry.employee.orderBy(_ => _.name).select(_ => ({ name: _.name })).page(20, { signal });
+  // end-snippet
+  show(`${active} active, the first page starting at ${first.items[0]?.name}`);
+}
+
 export function liveCount(): () => void {
   // begin-snippet: typescriptLiveCount
   const stop = scry.employee

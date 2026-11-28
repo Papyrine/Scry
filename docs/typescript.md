@@ -423,6 +423,25 @@ show(`${await count} employees, the first ${(await names)[0]?.name}`);
 A batch sends its queries as one request ([Batching](batching.md)). Each entry is answered as it would have been alone, so one refused entry rejects its own promise and the others resolve. A batch is sent once, and each entry is one query ended by its terminal.
 
 
+## Cancelling
+
+Every terminal that answers once, and `stream()`, takes `{ signal }` last, as each C# terminal takes a `CancellationToken`:
+
+<!-- snippet: typescriptCancel -->
+<a id='snippet-typescriptCancel'></a>
+```ts
+const signal = AbortSignal.timeout(5_000);
+const active = await scry.employee.count(_ => _.active, { signal });
+const first = await scry.employee.orderBy(_ => _.name).select(_ => ({ name: _.name })).page(20, { signal });
+```
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L51-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCancel' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+An aborted signal abandons the request: the fetch stops, the server sees its connection close, and the terminal rejects with the signal's reason (a `TimeoutError` for `AbortSignal.timeout`). A signal already aborted sends nothing. The options come after the condition where a terminal has one, and take its place where it is left out, so `count({ signal })` counts every row; `page` takes them in place of the size or the cursor, as `page({ signal })`, `page(20, { signal })` or `page(20, cursor, { signal })`. A query sent with a signal is the same request, byte for byte, as without one.
+
+A stream whose signal aborts ends with the reason, whether it was waiting for a row or holding one, rather than as a stream the server cut off. A query in a batch goes with the batch: the signal handed to `send` abandons it, and every entry rejects with the reason, while a signal handed to an entry's own terminal is not read. A live query ends when its loop is left or the function `subscribe` returned is called. A command's sender takes `{ signal }` too, as `send.repriceOrder(payload, { signal })`: it stops waiting, but once the server has answered it never stops the command, which goes on being followed as pending work ([Commands](#commands)). An attachment's `open({ signal })` abandons its fetch.
+
+
 ## Live queries
 
 <!-- snippet: typescriptLive -->
@@ -467,7 +486,7 @@ const stop = scry.employee
     active => show(`${active} active`),
     error => show(`The live query ended: ${(error as Error).message}`));
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L51-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveCount' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L60-L66' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptLiveCount' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A live query is an `AsyncIterable` that runs until the loop leaves it, and `subscribe` calls back until the function it returns is called. A connection that ends is asked for again naming the last answer held, so an answer that has not moved is not sent again, and the consumer sees a pause rather than an end. The server failing for the moment, a server-side limit on open subscriptions, a 5xx, 408 or 429 from something in between, and a failed connection are all asked again. A rejection, a denial, or a client the server calls stale ends the live query with its error, since asking again would not change the answer. The C# client follows the same rules.
@@ -530,7 +549,7 @@ const deletable = await scry.employee
   .select(_ => ({ name: _.name, deletable: _.canDeleteEmployee }))
   .single();
 ```
-<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L62-L75' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommandResult' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.TypeScriptClient/src/examples.ts#L71-L84' title='Snippet source file'>snippet source</a> | <a href='#snippet-typescriptCommandResult' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The server answers at once where it decides a command within its sync window, and otherwise answers pending and streams the outcome on the same response. The client waits `wait` milliseconds (three seconds unless set; `Infinity` waits for the outcome) before answering `Pending`. A pending command's connection that ends first is asked for again by the command's id, under the `retry` policy live queries use. `commands.pending` lists each command from going pending until its outcome has been seen: a completed one leaves after `completedLinger` milliseconds (eight seconds unless set), and a failed or unknown one stays until `clearFinished()`, since it says something somebody should read. `onPendingChanged` says when the list moves. `close()` stops following, and each command still followed ends `Unknown`; the server finishes what it accepted either way.

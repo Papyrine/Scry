@@ -139,6 +139,16 @@ export interface Page<R> {
   readonly cursor?: string;
 }
 
+/** What a terminal is sent with. */
+export interface QueryOptions {
+  /**
+   * Abandons the request: the terminal rejects with the signal's reason, and a stream ends with it. A
+   * query added to a batch is sent with the batch, so the signal handed to its `send` is the one that
+   * counts there.
+   */
+  readonly signal?: AbortSignal;
+}
+
 type Shape<P> = scry.Shape<P>;
 
 type Condition = scry.Expr<boolean> | scry.Expr<boolean | null>;
@@ -149,20 +159,24 @@ type RowOf<T> = T extends scry.SourceTypes<unknown, infer R> ? R : never;
 
 /** What every query can end with. */
 export interface Final<R> {
-  toList(): Promise<R[]>;
-  first(): Promise<R>;
-  firstOrDefault(): Promise<R | null>;
-  single(): Promise<R>;
-  singleOrDefault(): Promise<R | null>;
-  last(): Promise<R>;
-  lastOrDefault(): Promise<R | null>;
-  elementAt(index: number): Promise<R>;
-  count(): Promise<number>;
-  longCount(): Promise<bigint>;
-  any(): Promise<boolean>;
-  page(size?: number, cursor?: string): Promise<Page<R>>;
+  toList(options?: QueryOptions): Promise<R[]>;
+  first(options?: QueryOptions): Promise<R>;
+  firstOrDefault(options?: QueryOptions): Promise<R | null>;
+  single(options?: QueryOptions): Promise<R>;
+  singleOrDefault(options?: QueryOptions): Promise<R | null>;
+  last(options?: QueryOptions): Promise<R>;
+  lastOrDefault(options?: QueryOptions): Promise<R | null>;
+  elementAt(index: number, options?: QueryOptions): Promise<R>;
+  count(options?: QueryOptions): Promise<number>;
+  longCount(options?: QueryOptions): Promise<bigint>;
+  any(options?: QueryOptions): Promise<boolean>;
+  /** A page of the server's size. */
+  page(options?: QueryOptions): Promise<Page<R>>;
+  /** A page of `size` rows, or the server's size where it is undefined: the first, or the one after `cursor`. */
+  page(size: number | undefined, options?: QueryOptions): Promise<Page<R>>;
+  page(size: number | undefined, cursor: string | undefined, options?: QueryOptions): Promise<Page<R>>;
   /** The rows as they arrive, rather than once the last of them has. */
-  stream(): AsyncIterable<R>;
+  stream(options?: QueryOptions): AsyncIterable<R>;
   /** The rows, now and again whenever they change: each answer the whole current result. */
   live(): LiveQuery<R[]>;
   liveCount(): LiveQuery<number>;
@@ -192,24 +206,33 @@ export interface Rows<Q, R, S> extends Final<R> {
   leftJoin<IQ, IR, K, P>(inner: Rows<IQ, IR, S>, outerKey: (_: Q) => K, innerKey: (_: IQ) => K, result: (outer: Q, inner: scry.Optional<IQ>) => P): Final<Shape<P>>;
   rightJoin<IQ, IR, K, P>(inner: Rows<IQ, IR, S>, outerKey: (_: Q) => K, innerKey: (_: IQ) => K, result: (outer: scry.Optional<Q>, inner: IQ) => P): Final<Shape<P>>;
   groupJoin<IQ, IR, K, P>(inner: Rows<IQ, IR, S>, outerKey: (_: Q) => K, innerKey: (_: IQ) => K, result: (outer: Q, inner: scry.Group<IQ>) => P): Final<Shape<P>>;
-  first(predicate?: (_: Q) => Condition): Promise<R>;
-  firstOrDefault(predicate?: (_: Q) => Condition): Promise<R | null>;
-  single(predicate?: (_: Q) => Condition): Promise<R>;
-  singleOrDefault(predicate?: (_: Q) => Condition): Promise<R | null>;
-  last(predicate?: (_: Q) => Condition): Promise<R>;
-  lastOrDefault(predicate?: (_: Q) => Condition): Promise<R | null>;
-  count(predicate?: (_: Q) => Condition): Promise<number>;
-  longCount(predicate?: (_: Q) => Condition): Promise<bigint>;
-  any(predicate?: (_: Q) => Condition): Promise<boolean>;
-  all(predicate: (_: Q) => Condition): Promise<boolean>;
-  sum<T>(selector: (_: Q) => scry.Expr<T>): Promise<T>;
-  average<T>(selector: (_: Q) => scry.Expr<T>): Promise<Average<T>>;
-  min<T>(selector: (_: Q) => scry.Expr<T>): Promise<T>;
-  max<T>(selector: (_: Q) => scry.Expr<T>): Promise<T>;
+  first(options?: QueryOptions): Promise<R>;
+  first(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<R>;
+  firstOrDefault(options?: QueryOptions): Promise<R | null>;
+  firstOrDefault(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<R | null>;
+  single(options?: QueryOptions): Promise<R>;
+  single(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<R>;
+  singleOrDefault(options?: QueryOptions): Promise<R | null>;
+  singleOrDefault(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<R | null>;
+  last(options?: QueryOptions): Promise<R>;
+  last(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<R>;
+  lastOrDefault(options?: QueryOptions): Promise<R | null>;
+  lastOrDefault(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<R | null>;
+  count(options?: QueryOptions): Promise<number>;
+  count(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<number>;
+  longCount(options?: QueryOptions): Promise<bigint>;
+  longCount(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<bigint>;
+  any(options?: QueryOptions): Promise<boolean>;
+  any(predicate: ((_: Q) => Condition) | undefined, options?: QueryOptions): Promise<boolean>;
+  all(predicate: (_: Q) => Condition, options?: QueryOptions): Promise<boolean>;
+  sum<T>(selector: (_: Q) => scry.Expr<T>, options?: QueryOptions): Promise<T>;
+  average<T>(selector: (_: Q) => scry.Expr<T>, options?: QueryOptions): Promise<Average<T>>;
+  min<T>(selector: (_: Q) => scry.Expr<T>, options?: QueryOptions): Promise<T>;
+  max<T>(selector: (_: Q) => scry.Expr<T>, options?: QueryOptions): Promise<T>;
   /** The row with the smallest key. */
-  minBy(key: (_: Q) => scry.Expr<unknown>): Promise<R>;
+  minBy(key: (_: Q) => scry.Expr<unknown>, options?: QueryOptions): Promise<R>;
   /** The row with the largest key. */
-  maxBy(key: (_: Q) => scry.Expr<unknown>): Promise<R>;
+  maxBy(key: (_: Q) => scry.Expr<unknown>, options?: QueryOptions): Promise<R>;
   liveCount(predicate?: (_: Q) => Condition): LiveQuery<number>;
   liveLongCount(predicate?: (_: Q) => Condition): LiveQuery<bigint>;
   liveAny(predicate?: (_: Q) => Condition): LiveQuery<boolean>;
@@ -375,6 +398,29 @@ function sourcesOf<S>(client: Client): Scry<S> {
 }
 
 const sideOps = "only filters, and an ordering bounded by skip() or take(), cross over, in that order";
+
+// A condition a terminal may be given or not, or in its place the options, where it has none.
+type Optional = ((_: never) => unknown) | QueryOptions | undefined;
+
+function conditionOf(predicate: Optional, options: QueryOptions | undefined): [((_: never) => unknown) | undefined, QueryOptions | undefined] {
+  if (typeof predicate === "function") {
+    return [predicate, options];
+  }
+
+  if (predicate === undefined) {
+    return [undefined, options];
+  }
+
+  return [undefined, predicate];
+}
+
+function signalOf(options: QueryOptions | undefined): { signal?: AbortSignal } {
+  if (options?.signal === undefined) {
+    return {};
+  }
+
+  return { signal: options.signal };
+}
 
 function carries(plan: Plan | undefined): boolean {
   return plan?.kind === "object" &&
@@ -652,60 +698,62 @@ class Query {
     return this.#prepare([]).request;
   }
 
-  toList(): Promise<unknown> {
-    return this.#send([], "List", rows => ({ kind: "array", element: rows }));
+  toList(options?: QueryOptions): Promise<unknown> {
+    return this.#send([], "List", rows => ({ kind: "array", element: rows }), options);
   }
 
-  async #element(op: "first" | "single" | "last", orDefault: boolean, predicate: ((_: never) => unknown) | undefined): Promise<unknown> {
+  async #element(op: "first" | "single" | "last", orDefault: boolean, predicate: Optional, options: QueryOptions | undefined): Promise<unknown> {
+    const [condition, sent] = conditionOf(predicate, options);
     let terminal: QueryOp = { $type: op, orDefault };
     let sensitive = false;
-    if (predicate !== undefined) {
+    if (condition !== undefined) {
       this.#expect(["rows", "ordered"], `A condition on ${op}()`);
-      const condition = this.#expression(predicate, "A condition");
-      terminal = { $type: op, orDefault, predicate: condition.node };
-      sensitive = condition.sensitive;
+      const expression = this.#expression(condition, "A condition");
+      terminal = { $type: op, orDefault, predicate: expression.node };
+      sensitive = expression.sensitive;
     }
 
-    return present(await this.#send([terminal], "Single", rows => rows, sensitive), orDefault);
+    return present(await this.#send([terminal], "Single", rows => rows, sent, sensitive), orDefault);
   }
 
-  first(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#element("first", false, predicate);
+  first(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#element("first", false, predicate, options);
   }
 
-  firstOrDefault(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#element("first", true, predicate);
+  firstOrDefault(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#element("first", true, predicate, options);
   }
 
-  single(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#element("single", false, predicate);
+  single(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#element("single", false, predicate, options);
   }
 
-  singleOrDefault(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#element("single", true, predicate);
+  singleOrDefault(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#element("single", true, predicate, options);
   }
 
-  last(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#element("last", false, predicate);
+  last(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#element("last", false, predicate, options);
   }
 
-  lastOrDefault(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#element("last", true, predicate);
+  lastOrDefault(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#element("last", true, predicate, options);
   }
 
-  async elementAt(index: number): Promise<unknown> {
-    return present(await this.#send([{ $type: "skip", count: index }, { $type: "first", orDefault: false }], "Single", rows => rows), false);
+  async elementAt(index: number, options?: QueryOptions): Promise<unknown> {
+    return present(await this.#send([{ $type: "skip", count: index }, { $type: "first", orDefault: false }], "Single", rows => rows, options), false);
   }
 
-  minBy(key: (_: never) => unknown): Promise<unknown> {
-    return this.orderBy(key).first();
+  minBy(key: (_: never) => unknown, options?: QueryOptions): Promise<unknown> {
+    return this.orderBy(key).first(undefined, options);
   }
 
-  maxBy(key: (_: never) => unknown): Promise<unknown> {
-    return this.orderByDescending(key).first();
+  maxBy(key: (_: never) => unknown, options?: QueryOptions): Promise<unknown> {
+    return this.orderByDescending(key).first(undefined, options);
   }
 
-  #scalar(op: "count" | "longCount" | "any" | "all", predicate: ((_: never) => unknown) | undefined): Promise<unknown> {
+  #scalar(op: "count" | "longCount" | "any" | "all", predicate: Optional, options: QueryOptions | undefined): Promise<unknown> {
+    const [condition, sent] = conditionOf(predicate, options);
     let answers: Scalar = "bool";
     if (op === "count") {
       answers = "int";
@@ -716,36 +764,36 @@ class Query {
     }
 
     const plan = () => valuePlan({ scalar: answers });
-    if (predicate === undefined) {
+    if (condition === undefined) {
       if (op === "all") {
         throw new Error("all() asks whether every row meets a condition, so it needs one.");
       }
 
-      return this.#send([{ $type: op }], "Scalar", plan);
+      return this.#send([{ $type: op }], "Scalar", plan, sent);
     }
 
     this.#expect(["rows", "ordered"], `A condition on ${op}()`);
-    const condition = this.#expression(predicate, "A condition");
-    return this.#send([{ $type: op, predicate: condition.node }], "Scalar", plan, condition.sensitive);
+    const expression = this.#expression(condition, "A condition");
+    return this.#send([{ $type: op, predicate: expression.node }], "Scalar", plan, sent, expression.sensitive);
   }
 
-  count(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#scalar("count", predicate);
+  count(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#scalar("count", predicate, options);
   }
 
-  longCount(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#scalar("longCount", predicate);
+  longCount(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#scalar("longCount", predicate, options);
   }
 
-  any(predicate?: (_: never) => unknown): Promise<unknown> {
-    return this.#scalar("any", predicate);
+  any(predicate?: Optional, options?: QueryOptions): Promise<unknown> {
+    return this.#scalar("any", predicate, options);
   }
 
-  all(predicate: (_: never) => unknown): Promise<unknown> {
-    return this.#scalar("all", predicate);
+  all(predicate: (_: never) => unknown, options?: QueryOptions): Promise<unknown> {
+    return this.#scalar("all", predicate, options);
   }
 
-  #fold(function_: "Sum" | "Average" | "Min" | "Max", selector: (_: never) => unknown): Promise<unknown> {
+  #fold(function_: "Sum" | "Average" | "Min" | "Max", selector: (_: never) => unknown, options: QueryOptions | undefined): Promise<unknown> {
     this.#expect(["rows", "ordered"], `${function_.toLowerCase()}()`);
     const selected = this.#expression(selector, "What to fold");
     let value = selected.value;
@@ -758,26 +806,39 @@ class Query {
       value = { scalar: "double" };
     }
 
-    return this.#send([{ $type: "aggregate", function: function_, selector: selected.node }], "Scalar", () => valuePlan(value), selected.sensitive);
+    return this.#send([{ $type: "aggregate", function: function_, selector: selected.node }], "Scalar", () => valuePlan(value), options, selected.sensitive);
   }
 
-  sum(selector: (_: never) => unknown): Promise<unknown> {
-    return this.#fold("Sum", selector);
+  sum(selector: (_: never) => unknown, options?: QueryOptions): Promise<unknown> {
+    return this.#fold("Sum", selector, options);
   }
 
-  average(selector: (_: never) => unknown): Promise<unknown> {
-    return this.#fold("Average", selector);
+  average(selector: (_: never) => unknown, options?: QueryOptions): Promise<unknown> {
+    return this.#fold("Average", selector, options);
   }
 
-  min(selector: (_: never) => unknown): Promise<unknown> {
-    return this.#fold("Min", selector);
+  min(selector: (_: never) => unknown, options?: QueryOptions): Promise<unknown> {
+    return this.#fold("Min", selector, options);
   }
 
-  max(selector: (_: never) => unknown): Promise<unknown> {
-    return this.#fold("Max", selector);
+  max(selector: (_: never) => unknown, options?: QueryOptions): Promise<unknown> {
+    return this.#fold("Max", selector, options);
   }
 
-  page(size?: number, cursor?: string): Promise<unknown> {
+  // The options may stand in for the size, or for the cursor, as the overloads of Final.page have them.
+  page(size?: number | QueryOptions, cursor?: string | QueryOptions, options?: QueryOptions): Promise<unknown> {
+    if (typeof size === "object") {
+      return this.#page(undefined, undefined, size);
+    }
+
+    if (typeof cursor === "object") {
+      return this.#page(size, undefined, cursor);
+    }
+
+    return this.#page(size, cursor, options);
+  }
+
+  #page(size: number | undefined, cursor: string | undefined, options: QueryOptions | undefined): Promise<unknown> {
     return this.#send([{
       $type: "page",
       ...(size === undefined ? {} : { size }),
@@ -789,7 +850,7 @@ class Query {
         { key: "hasMore", wire: "HasMore", plan: valuePlan({ scalar: "bool" }) },
         { key: "cursor", wire: "Cursor", plan: valuePlan({ scalar: "string" }), optional: true }
       ]
-    }));
+    }), options);
   }
 
   // The request a terminal sends, whether it reads anything sensitive, and what its rows are.
@@ -898,7 +959,7 @@ class Query {
     return bindings;
   }
 
-  async #send(terminal: readonly QueryOp[], kind: ResultKind, payload: (rows: Plan) => Plan, sensitive = false): Promise<unknown> {
+  async #send(terminal: readonly QueryOp[], kind: ResultKind, payload: (rows: Plan) => Plan, options: QueryOptions | undefined, sensitive = false): Promise<unknown> {
     const { client } = this.#state;
     const prepared = this.#prepare(terminal);
     const transport = client.options.transport;
@@ -911,7 +972,8 @@ class Query {
       answer = await transport.query(prepared.request, {
         json: serializeRequest(prepared.request),
         sensitive: prepared.sensitive || sensitive,
-        urlLimit: client.schema.queryUrlLimit
+        urlLimit: client.schema.queryUrlLimit,
+        ...signalOf(options)
       });
     } catch (error) {
       if (error instanceof ScryRequestError) {
@@ -960,7 +1022,7 @@ class Query {
   // Streaming.
 
   /** The rows as they arrive, rather than once the last of them has. */
-  stream(): AsyncIterable<unknown> {
+  stream(options?: QueryOptions): AsyncIterable<unknown> {
     const { client } = this.#state;
     const transport = client.options.transport;
     if (transport?.stream === undefined) {
@@ -970,63 +1032,73 @@ class Query {
     const prepared = this.#prepare([]);
     const open = transport.stream.bind(transport);
     const scope = client.scope;
+    const signal = options?.signal;
     return {
       async *[Symbol.asyncIterator]() {
         const lines = open(prepared.request, {
           json: serializeRequest(prepared.request),
           sensitive: prepared.sensitive,
-          urlLimit: client.schema.queryUrlLimit
+          urlLimit: client.schema.queryUrlLimit,
+          ...signalOf(options)
         });
         let decoder: Decoder | undefined;
         let closed = false;
-        for await (const item of lines) {
-          let line: string;
-          let parts: readonly Uint8Array[] | undefined;
-          if (typeof item === "string") {
-            line = item;
-          } else {
-            line = item.line;
-            parts = item.parts;
-          }
+        try {
+          for await (const item of lines) {
+            let line: string;
+            let parts: readonly Uint8Array[] | undefined;
+            if (typeof item === "string") {
+              line = item;
+            } else {
+              line = item.line;
+              parts = item.parts;
+            }
 
-          if (line.length === 0) {
-            continue;
-          }
-
-          const json = parseJson(line);
-          // A marker's first member says so, and no row's member can start with '$'.
-          if (isObject(json) &&
-              Object.keys(json)[0] === ScryStream.MarkerProperty) {
-            const marker = json[ScryStream.MarkerProperty];
-            if (marker === ScryStream.Begin) {
-              if (typeof json["stamp"] === "string") {
-                client.observe(json["stamp"]);
-              }
-
-              decoder = new Decoder(scope, aliases(json["enumAliases"]), undefined, attachments(client));
+            if (line.length === 0) {
               continue;
             }
 
-            if (marker === ScryStream.End) {
-              closed = true;
-              break;
+            const json = parseJson(line);
+            // A marker's first member says so, and no row's member can start with '$'.
+            if (isObject(json) &&
+                Object.keys(json)[0] === ScryStream.MarkerProperty) {
+              const marker = json[ScryStream.MarkerProperty];
+              if (marker === ScryStream.Begin) {
+                if (typeof json["stamp"] === "string") {
+                  client.observe(json["stamp"]);
+                }
+
+                decoder = new Decoder(scope, aliases(json["enumAliases"]), undefined, attachments(client));
+                continue;
+              }
+
+              if (marker === ScryStream.End) {
+                closed = true;
+                break;
+              }
+
+              if (marker === ScryStream.Error) {
+                throw streamFailure(json);
+              }
+
+              continue;
             }
 
-            if (marker === ScryStream.Error) {
-              throw streamFailure(json);
+            if (decoder === undefined) {
+              throw new ScryWireError("The stream sent a row before its opening marker.");
             }
 
-            continue;
+            decoder.parts = parts;
+            yield decoder.decode(json, prepared.rows);
           }
-
-          if (decoder === undefined) {
-            throw new ScryWireError("The stream sent a row before its opening marker.");
-          }
-
-          decoder.parts = parts;
-          yield decoder.decode(json, prepared.rows);
+        } catch (error) {
+          // A connection abandoned part way fails however it was cut, and it was cut by the signal.
+          signal?.throwIfAborted();
+          throw error;
         }
 
+        // Nor is a stream that stopped at the signal one the server cut off.
+        signal?.throwIfAborted();
         // A stream commits to success before its first row, so one cut off part way looks complete
         // unless its closing marker is required.
         if (!closed) {

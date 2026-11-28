@@ -333,15 +333,23 @@ function signalled(signal: AbortSignal | undefined): { signal?: AbortSignal } {
   return { signal };
 }
 
-// A connection of its own, ended when the caller's signal is or when what reads it stops reading.
+// A connection of its own, ended when the caller's signal is, for its reason, or when what reads it
+// stops reading.
 function linked(signal: AbortSignal | undefined): AbortController {
   const connection = new AbortController();
-  if (signal?.aborted === true) {
-    connection.abort();
-  } else {
-    signal?.addEventListener("abort", () => connection.abort(), { once: true });
+  if (signal === undefined) {
+    return connection;
   }
 
+  if (signal.aborted) {
+    connection.abort(signal.reason);
+    return connection;
+  }
+
+  const forward = () => connection.abort(signal.reason);
+  signal.addEventListener("abort", forward, { once: true });
+  // Each reader aborts its connection once done with it, which lets go of a signal that outlives it.
+  connection.signal.addEventListener("abort", () => signal.removeEventListener("abort", forward), { once: true });
   return connection;
 }
 

@@ -127,6 +127,44 @@ export type Returns = [
   Holds<Equal<Awaited<ReturnType<typeof joined.toList>>, { employee: string; department: string | null }[]>>
 ];
 
+// A terminal takes its signal last, after the condition where it has one, which it may then leave out.
+
+declare const signal: AbortSignal;
+
+const counted = client.employee.count({ signal });
+const countedWhere = client.employee.count(_ => _.active, { signal });
+const foundWhere = client.employee.firstOrDefault(_ => _.active, { signal });
+const summed = client.order.sum(_ => _.amount, { signal });
+const pagedAtTheServersSize = client.employee.page({ signal });
+const pagedBySize = client.employee.page(10, { signal });
+const pagedAfter = client.employee.page(10, "eyJrIjpbXX0.c2ln", { signal });
+const streamed = client.employee.stream({ signal });
+const projectedFirst = projected.first({ signal });
+
+// @ts-expect-error all() needs its condition, signal or not.
+void client.employee.all({ signal });
+
+// @ts-expect-error A projection's rows take no condition, so a function is not their options.
+void projected.first(_ => _.count);
+
+// @ts-expect-error A signal is an AbortSignal.
+void client.employee.toList({ signal: true });
+
+// @ts-expect-error A cursor follows a size, even one left to the server.
+void client.employee.page("eyJrIjpbXX0.c2ln", { signal });
+
+export type Cancellable = [
+  Holds<Equal<typeof counted, Promise<number>>>,
+  Holds<Equal<typeof countedWhere, Promise<number>>>,
+  Holds<Equal<typeof foundWhere, Promise<EmployeeRow | null>>>,
+  Holds<Equal<typeof summed, Promise<scry.Decimal>>>,
+  Holds<Equal<typeof pagedAtTheServersSize, Promise<Page<EmployeeRow>>>>,
+  Holds<Equal<typeof pagedBySize, Promise<Page<EmployeeRow>>>>,
+  Holds<Equal<typeof pagedAfter, Promise<Page<EmployeeRow>>>>,
+  Holds<Equal<typeof streamed, AsyncIterable<EmployeeRow>>>,
+  Holds<Equal<typeof projectedFirst, Promise<{ region: string; tags: string[]; lines: { sku: string }[]; count: number; department: { name: string } }>>>
+];
+
 // A command is sent with its payload, written as a constant is, and completes with its result.
 
 declare const commands: ScryCommands<Commands>;
