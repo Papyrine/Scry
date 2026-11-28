@@ -1,6 +1,6 @@
 # Scry for TypeScript
 
-The TypeScript client: a generator that writes typed models from a server's introspection, and a client whose queries are the C# client's bytes for the same query. [docs/typescript.md](../../docs/typescript.md) documents it, and `samples/Sample.TypeScriptClient` runs it against `Sample.WebServer`.
+The TypeScript client: a generator that writes typed models from a server's introspection, and a client whose queries are the C# client's bytes for the same query. [docs/typescript.md](../../docs/typescript.md) documents it, and two samples run it against `Sample.WebServer`: `samples/Sample.TypeScriptClient` on Node, and `samples/Sample.TypeScriptWeb` in a browser.
 
 The package is private and unpublished.
 
@@ -61,7 +61,7 @@ npm run check
 SCRY_SERVER=http://localhost:5249 node --test test/server.test.ts
 ```
 
-`samples/Sample.TypeScriptClient/integration.ps1` runs the whole of it end to end, as CI's Windows job does after the suites: it builds `Sample.WebServer`, whose build writes the description, starts it, generates one client from the build's description, from the one the server writes as it starts, and from its introspection endpoint, and fails unless all three are the same. It then runs the sample, and these server tests, against it. It needs LocalDB, as the .NET suites do.
+`samples/Sample.TypeScriptClient/integration.ps1` runs the whole of it end to end, as CI's Windows job does after the suites: it builds `Sample.WebServer`, whose build writes the description, starts it, generates one client from the build's description, from the one the server writes as it starts, and from its introspection endpoint, and fails unless all three are the same. It then runs the console sample, drives the browser sample headless in Edge or Chrome, and runs these server tests, all against it. It needs LocalDB, as the .NET suites do.
 
 ```powershell
 ./samples/Sample.TypeScriptClient/integration.ps1

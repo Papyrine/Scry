@@ -1,8 +1,9 @@
 # The TypeScript client end to end, against a real Sample.WebServer. The same client generated three
 # ways: from the description the server's build writes from the model DLL, from the one the server
 # writes as it starts, and from its introspection endpoint; the three are compared, as are the two
-# files. Then the sample generated from the build's file, type-checked and run, and the client's own
-# server tests run against the same server.
+# files. Then the console sample generated from the build's file, type-checked and run; the browser
+# sample built by Vite, type-checked, and driven headless in Edge or Chrome; and the client's own
+# server tests, all against the same server.
 #
 # CI runs it after the suites, on the Windows job that has LocalDB. It runs the same way locally:
 #   ./samples/Sample.TypeScriptClient/integration.ps1
@@ -14,6 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '../..')
 $sample = $PSScriptRoot
+$web = Join-Path $root 'samples/Sample.TypeScriptWeb'
 $client = Join-Path $root 'clients/typescript'
 $server = "http://localhost:$Port"
 $introspect = "$server/scry/introspect"
@@ -42,8 +44,15 @@ try {
         dotnet build (Join-Path $root 'samples/Sample.WebServer') -c $Configuration -p:GeneratePackageOnBuild=false
     }
     $built = Join-Path $sample 'scry.description.json'
-    if (-not (Test-Path $built)) {
-        throw "The build wrote no $built."
+    $builtForWeb = Join-Path $web 'scry.description.json'
+    foreach ($path in $built, $builtForWeb) {
+        if (-not (Test-Path $path)) {
+            throw "The build wrote no $path."
+        }
+    }
+
+    if ((Get-FileHash $built).Hash -ne (Get-FileHash $builtForWeb).Hash) {
+        throw "The build wrote the two samples different descriptions."
     }
 
     Push-Location $client
@@ -57,6 +66,14 @@ try {
     Push-Location $sample
     try {
         Invoke-Checked 'Installing the sample' { npm ci --no-audit --no-fund }
+    }
+    finally {
+        Pop-Location
+    }
+
+    Push-Location $web
+    try {
+        Invoke-Checked 'Installing the browser sample' { npm ci --no-audit --no-fund }
     }
     finally {
         Pop-Location
@@ -135,14 +152,30 @@ try {
         Pop-Location
     }
 
-    Push-Location $client
+    # The plugin generates the browser sample's model as Vite's build starts; the test then serves the
+    # page with Vite's dev server, forwarding /api to this server, and drives it in a real browser.
     $env:SCRY_SERVER = $server
     try {
-        Invoke-Checked "Running the client's server tests" { node --test test/server.test.ts }
+        Push-Location $web
+        try {
+            Invoke-Checked 'Building the browser sample' { npm run build }
+            Invoke-Checked 'Type-checking the browser sample' { npm run typecheck }
+            Invoke-Checked 'Driving the browser sample in a browser' { npm test }
+        }
+        finally {
+            Pop-Location
+        }
+
+        Push-Location $client
+        try {
+            Invoke-Checked "Running the client's server tests" { node --test test/server.test.ts }
+        }
+        finally {
+            Pop-Location
+        }
     }
     finally {
         Remove-Item Env:SCRY_SERVER
-        Pop-Location
     }
 }
 finally {

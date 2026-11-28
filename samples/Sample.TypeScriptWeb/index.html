@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scry from TypeScript</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main>
+      <h1>Scry from TypeScript</h1>
+      <p>
+        The queries below are written in TypeScript against a model generated from Sample.WebServer's
+        description, sent as the requests a C# client sends, and read back as their types say.
+      </p>
+
+      <section>
+        <h2>Active employees</h2>
+        <table id="employees" data-testid="employees">
+          <thead><tr><th>Name</th><th>Status</th><th>Manager</th><th>Department</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Employee photos</h2>
+        <p>Each photo is an attachment: the query brought back a handle, and opening it fetched the bytes.</p>
+        <div id="photos" data-testid="photos" class="photos"></div>
+      </section>
+
+      <section>
+        <h2>Orders by region</h2>
+        <table id="regions" data-testid="regions">
+          <thead><tr><th>Region</th><th>Total</th><th>Orders</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Orders, live</h2>
+        <p>A live query: each reprice is a command, and the table changes because the rows it reads did.</p>
+        <table id="orders" data-testid="orders">
+          <thead><tr><th>Id</th><th>Region</th><th>Amount</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="status" data-testid="status" class="status"></p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

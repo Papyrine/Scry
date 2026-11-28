@@ -137,6 +137,7 @@ jobs:
           cache-dependency-path: |
             clients/typescript/package-lock.json
             samples/Sample.TypeScriptClient/package-lock.json
+            samples/Sample.TypeScriptWeb/package-lock.json
       - name: Run the TypeScript client end to end
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh
@@ -193,6 +194,7 @@ jobs:
           cache-dependency-path: |
             clients/typescript/package-lock.json
             samples/Sample.TypeScriptClient/package-lock.json
+            samples/Sample.TypeScriptWeb/package-lock.json
 
       - name: Install
         run: npm ci
@@ -218,6 +220,22 @@ jobs:
 
       - name: Type-check the sample
         working-directory: samples/Sample.TypeScriptClient
+        run: npm run typecheck
+
+      # The browser sample, built by Vite from the same committed description, so the plugin generates
+      # its model; then type-checked. Its browser test needs a server, so it runs in the Windows job.
+      - name: Install the browser sample
+        working-directory: samples/Sample.TypeScriptWeb
+        run: npm ci
+
+      - name: Build the browser sample
+        working-directory: samples/Sample.TypeScriptWeb
+        env:
+          SCRY_DESCRIPTION: ../Sample.Tests/UiSnapshotTests.ExplorerIntrospectionEndpoint.verified.txt
+        run: npm run build
+
+      - name: Type-check the browser sample
+        working-directory: samples/Sample.TypeScriptWeb
         run: npm run typecheck
 
   # Trusted publishing: no stored API key. nuget.org validates GitHub's OIDC token against the
